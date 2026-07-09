@@ -1,0 +1,21 @@
+/* Fonts — Inter (sans) + IBM Plex Mono (mono), available as fallback */
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+@import "@palot/ui/styles/globals.css";
+
+/* Quadrangle — brand wordmark font (Larabie freeware, commercial OK) */
+@font-face {
+	font-family: "Quadrangle";
+	src: url("./Quadrangle.ttf") format("truetype");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+}
