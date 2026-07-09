@@ -55,6 +55,7 @@ import { BranchPicker } from "./branch-picker"
 import { PromptAttachmentPreview } from "./chat/prompt-attachments"
 import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
 import { PalotWordmark } from "./palot-wordmark"
+import { HrambleLogo } from "./hramble-logo"
 
 // ============================================================
 // Worktree mode toggle
@@ -601,9 +602,9 @@ export function NewChat() {
 			{/* Hero area — vertically centered */}
 			<div className="flex flex-1 flex-col items-center justify-center px-0 sm:px-6">
 				<div className="w-full max-w-4xl space-y-8">
-					{/* Wordmark */}
+					{/* Brand logo */}
 					<div className="flex justify-center">
-						<PalotWordmark className="h-4 w-auto text-foreground" />
+						<HrambleLogo />
 					</div>
 
 					{/* "Build what's next" + project name */}

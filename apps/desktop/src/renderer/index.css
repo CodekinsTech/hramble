@@ -19,3 +19,46 @@ body {
 	margin: 0;
 	min-height: 100vh;
 }
+
+/* ---- Hramble animated logo (second logo from the brand preview) ---- */
+.hramble-logo { display:flex; flex-direction:column; align-items:center; gap:14px; }
+.hramble-stage { position:relative; width:110px; height:110px; animation:hramble-spectrum 10s ease-in-out infinite; }
+.hramble-stage img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+.hramble-dim { position:absolute; border-radius:12%; background:rgba(8,22,14,0.28); pointer-events:none; }
+.hramble-dim.left { left:26%; top:56.5%; width:16%; height:6.5%; }
+.hramble-dim.right { left:58%; top:56.5%; width:16%; height:6.5%; }
+.hramble-lid { position:absolute; border-radius:12%; background:rgba(2,10,5,0.97); filter:blur(1px); opacity:0; pointer-events:none; animation:hramble-blink 4s infinite; }
+.hramble-lid.left { left:26%; top:56.5%; width:16%; height:6.5%; }
+.hramble-lid.right { left:58%; top:56.5%; width:16%; height:6.5%; }
+.hramble-glow { position:absolute; left:42%; top:33.5%; width:10%; height:11%; border-radius:18%;
+  background:radial-gradient(circle at 50% 45%, rgba(210,255,220,0.55) 0%, rgba(90,245,140,0.3) 100%);
+  mix-blend-mode:screen; pointer-events:none; overflow:hidden; animation:hramble-pulse 2.4s ease-in-out infinite; }
+.hramble-mark { display:flex; flex-direction:column; align-items:center; line-height:1; }
+.hramble-word { font-family:"Quadrangle",sans-serif; font-size:40px; letter-spacing:1px; color:#12c24f; animation:hramble-hue 10s ease-in-out infinite; }
+.hramble-code { font-family:"Quadrangle",sans-serif; font-size:16px; letter-spacing:3px; color:#8a94a3; margin-top:4px; }
+
+@keyframes hramble-spectrum {
+  0%,12%  { filter:drop-shadow(0 6px 16px rgba(90,100,110,0.2)) hue-rotate(0deg)   saturate(1) brightness(1); }
+  24%,36% { filter:drop-shadow(0 6px 16px rgba(90,100,110,0.2)) hue-rotate(95deg)  saturate(1) brightness(1); }
+  48%,60% { filter:drop-shadow(0 6px 16px rgba(90,100,110,0.2)) hue-rotate(265deg) saturate(1) brightness(1); }
+  72%,84% { filter:drop-shadow(0 6px 16px rgba(90,100,110,0.2)) hue-rotate(265deg) saturate(0.08) brightness(1.5) contrast(1.08); }
+  100%    { filter:drop-shadow(0 6px 16px rgba(90,100,110,0.2)) hue-rotate(360deg) saturate(1) brightness(1); }
+}
+@keyframes hramble-blink { 0%,90%{opacity:0} 93%{opacity:1} 96%{opacity:1} 99%,100%{opacity:0} }
+@keyframes hramble-pulse { 0%,100%{opacity:.1} 50%{opacity:.32} }
+@keyframes hramble-hue { 0%,12%{filter:hue-rotate(0deg)} 24%,36%{filter:hue-rotate(95deg)} 48%,60%{filter:hue-rotate(265deg)} 72%,100%{filter:hue-rotate(360deg)} }
+
+/* ---- Sidebar brand: static green, a little larger ---- */
+.hramble-side { display:flex; align-items:center; gap:9px; padding:12px 12px 6px; }
+.hramble-side-cat { position:relative; width:40px; height:40px; flex-shrink:0; filter:drop-shadow(0 3px 8px rgba(0,150,70,0.25)); }
+.hramble-side-cat img { width:100%; height:100%; object-fit:contain; }
+.hramble-side-cat .g { position:absolute; left:42%; top:33.5%; width:10%; height:11%; border-radius:18%;
+  background:radial-gradient(circle at 50% 45%, rgba(210,255,220,0.55) 0%, rgba(90,245,140,0.3) 100%);
+  mix-blend-mode:screen; overflow:hidden; animation:hramble-pulse 2.4s ease-in-out infinite; }
+.hramble-side-cat .dim { position:absolute; border-radius:12%; background:rgba(8,22,14,0.28); }
+.hramble-side-cat .dim.l { left:26%; top:56.5%; width:16%; height:6.5%; }
+.hramble-side-cat .dim.r { left:58%; top:56.5%; width:16%; height:6.5%; }
+.hramble-side-cat .lid { position:absolute; border-radius:12%; background:rgba(2,10,5,0.97); filter:blur(1px); opacity:0; animation:hramble-blink 4s infinite; }
+.hramble-side-cat .lid.l { left:26%; top:56.5%; width:16%; height:6.5%; }
+.hramble-side-cat .lid.r { left:58%; top:56.5%; width:16%; height:6.5%; }
+.hramble-side-word { font-family:"Quadrangle",sans-serif; font-size:27px; color:#12c24f; letter-spacing:0.5px; line-height:1; }

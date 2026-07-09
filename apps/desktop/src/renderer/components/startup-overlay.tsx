@@ -17,7 +17,7 @@ import { useAtomValue } from "jotai"
 import { useEffect, useRef, useState } from "react"
 import type { DiscoveryPhase } from "../atoms/discovery"
 import { discoveryPhaseAtom } from "../atoms/discovery"
-import { PalotWordmark } from "./palot-wordmark"
+import { HrambleLogo } from "./hramble-logo"
 
 // ============================================================
 // Constants
@@ -103,8 +103,8 @@ export function StartupOverlay() {
 				WebkitAppRegion: "drag",
 			}}
 		>
-			{/* Wordmark */}
-			<PalotWordmark className="h-5 w-auto text-foreground" />
+			{/* Brand logo */}
+			<HrambleLogo />
 
 			{/* Status area, fixed height to prevent layout shift */}
 			<div className="mt-6 flex h-8 flex-col items-center justify-center gap-3">
