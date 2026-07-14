@@ -48,7 +48,7 @@ import { appStore } from "../atoms/store"
 import type { Agent, AgentStatus, SidebarProject } from "../lib/types"
 import { loadMoreProjectSessions, loadProjectSessions } from "../services/connection-manager"
 import { ServerIndicator } from "./server-indicator"
-import { HrambleSidebarLogo } from "./hramble-logo"
+import { HrambleAvatar } from "./hramble-avatar"
 
 // ============================================================
 // Constants
@@ -177,8 +177,6 @@ export function AppSidebarContent({
 		<>
 			{/* Scrollable content */}
 			<SidebarContent>
-				{/* Brand logo */}
-				<HrambleSidebarLogo />
 				{/* Empty state */}
 				{showEmptyState && (
 					<div className="flex flex-1 items-center justify-center p-4">
@@ -199,6 +197,9 @@ export function AppSidebarContent({
 						</div>
 					</div>
 				)}
+
+			{/* Avatar companion — docked here, click to pop out & drag anywhere */}
+			<HrambleAvatar />
 
 			{/* New Session + Automations */}
 			<SidebarGroup>
