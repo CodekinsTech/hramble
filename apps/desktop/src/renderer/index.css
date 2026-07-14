@@ -81,14 +81,17 @@ body {
   cursor: grab; touch-action: none;
 }
 .hramble-av-float:active { cursor: grabbing; }
-.hramble-av-body { display: flex; align-items: center; gap: 8px; position: relative; }
-.hramble-av-float .hramble-av-body { flex-direction: column; gap: 6px; padding: 2px; }
-.hramble-av-cat {
-  width: 38px; height: 38px; object-fit: contain; flex-shrink: 0;
-  filter: drop-shadow(0 2px 6px rgba(0,150,70,0.25));
+.hramble-av-body { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+.hramble-av-stage-wrap { width: 100%; height: 132px; }
+.hramble-av-float .hramble-av-stage-wrap { width: 152px; height: 200px; }
+.hramble-vrm-stage { width: 100%; height: 100%; }
+.hramble-av-tabs { display: flex; gap: 5px; }
+.hramble-av-tab {
+  font-family: "Quadrangle", sans-serif; font-size: 12px; letter-spacing: 0.5px;
+  padding: 2px 11px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.6); color: #5b6470;
 }
-.hramble-av-float .hramble-av-cat { width: 68px; height: 68px; }
-.hramble-av-name { font-family: "Quadrangle", sans-serif; font-size: 17px; color: #12c24f; line-height: 1; }
+.hramble-av-tab.active { background: #12c24f; border-color: #12c24f; color: #fff; }
 .hramble-av-btn {
   position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
   border-radius: 50%; border: 1px solid #dde3ec; background: #fff; color: #5b6470;
@@ -96,3 +99,7 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 .hramble-av-btn:hover { background: #f2f5fa; color: #12c24f; }
+
+/* Avatar box cursor hints: zoom+pan in box, grab in float */
+.hramble-av-dock .hramble-vrm-stage { cursor: ns-resize; }
+.hramble-av-float .hramble-vrm-stage { cursor: grab; }
