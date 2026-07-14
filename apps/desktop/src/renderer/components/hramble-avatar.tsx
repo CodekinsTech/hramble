@@ -1,6 +1,7 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { AVATARS, type AvatarKey, VrmStage } from "./vrm-stage"
+import { speak, warmupTTS } from "../tts/supertonic"
 
 const PopOutIcon = () => (
 	<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -25,7 +26,24 @@ export function HrambleAvatar() {
 	const [floating, setFloating] = useState(false)
 	const [pos, setPos] = useState({ x: 320, y: 120 })
 	const [avatar, setAvatar] = useState<AvatarKey>("flora")
+	const [speaking, setSpeaking] = useState(false)
 	const drag = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
+
+	// Warm up the TTS models for the selected avatar's voice (they are large).
+	useEffect(() => {
+		warmupTTS(AVATARS[avatar].voice)
+	}, [avatar])
+
+	const testSpeak = () => {
+		if (speaking) return
+		setSpeaking(true)
+		const a = AVATARS[avatar]
+		speak(`Hi! I'm ${a.name}. Your code is ready.`, {
+			voice: a.voice,
+			lang: a.lang,
+			onEnd: () => setSpeaking(false),
+		}).catch(() => setSpeaking(false))
+	}
 
 	const startDrag = (e: React.PointerEvent) => {
 		if (!floating) return
@@ -65,6 +83,17 @@ export function HrambleAvatar() {
 						{AVATARS[k].name}
 					</button>
 				))}
+				<button
+					type="button"
+					className={`hramble-av-tab hramble-av-speak${speaking ? " active" : ""}`}
+					title="Test speak (Supertonic)"
+					onClick={(e) => {
+						e.stopPropagation()
+						testSpeak()
+					}}
+				>
+					{speaking ? "…" : "🔊"}
+				</button>
 			</div>
 			<button
 				type="button"

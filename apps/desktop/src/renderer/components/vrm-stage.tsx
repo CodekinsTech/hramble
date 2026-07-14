@@ -6,6 +6,7 @@ import { VRMAnimationLoaderPlugin, createVRMAnimationClip } from "@pixiv/three-v
 import floraUrl from "../avatars/flora.vrm?url"
 import liboUrl from "../avatars/libo.vrm?url"
 import idleUrl from "../avatars/idle_stand1.vrma?url"
+import { lipsync } from "../tts/supertonic"
 
 export type StageMode = "box" | "float"
 
@@ -15,6 +16,8 @@ export const AVATARS = {
 		url: floraUrl,
 		offsetY: 0,
 		name: "Flora",
+		voice: "F1",
+		lang: "en",
 		box: { camY: 1.1, camDist: 2.6 },
 		float: { camY: 0.9, camDist: 3.9 },
 	},
@@ -22,6 +25,8 @@ export const AVATARS = {
 		url: liboUrl,
 		offsetY: -0.2,
 		name: "Libo",
+		voice: "F7-gb",
+		lang: "en",
 		box: { camY: 1.05, camDist: 2.36 },
 		float: { camY: 0.85, camDist: 3.5 },
 	},
@@ -212,6 +217,8 @@ export function VrmStage({ avatar, mode }: { avatar: AvatarKey; mode: StageMode 
 						bTimer = 0
 					}
 				}
+				// Lipsync: open the mouth to the current speech amplitude
+				vrm.expressionManager?.setValue("aa", lipsync.level)
 				mixer?.update(dt)
 				vrm.update(dt)
 			}
