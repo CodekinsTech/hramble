@@ -1,0 +1,15 @@
+{
+  "name": "window-bounds-native",
+  "version": "1.0.0",
+  "description": "In-process macOS window bounds via Accessibility API",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "install": "node-gyp rebuild"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.1.0",
+    "node-gyp": "^11.0.0"
+  },
+  "gypfile": true
+}

@@ -47,3 +47,4 @@ AGENTS.local.md
 
 # Local working directory
 .local/
+apps/desktop/native/window-bounds/build/
