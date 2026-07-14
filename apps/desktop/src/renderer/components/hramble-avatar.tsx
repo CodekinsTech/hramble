@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { useAtomValue } from "jotai"
 import { AVATARS, type AvatarKey, VrmStage } from "./vrm-stage"
 import { speak, warmupTTS } from "../tts/supertonic"
+import { anyBusyAtom } from "../atoms/sessions"
+
+const DONE_PHRASES = [
+	"All done — your code is ready.",
+	"Finished! Take a look.",
+	"Done. I've made the changes.",
+	"That's ready for you.",
+]
 
 const PopOutIcon = () => (
 	<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -27,6 +36,7 @@ export function HrambleAvatar() {
 	const [pos, setPos] = useState({ x: 320, y: 120 })
 	const [avatar, setAvatar] = useState<AvatarKey>("flora")
 	const [speaking, setSpeaking] = useState(false)
+	const [muted, setMuted] = useState(false)
 	const drag = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
 
 	// Warm up the TTS models for the selected avatar's voice (they are large).
@@ -34,15 +44,42 @@ export function HrambleAvatar() {
 		warmupTTS(AVATARS[avatar].voice)
 	}, [avatar])
 
-	const testSpeak = () => {
-		if (speaking) return
-		setSpeaking(true)
-		const a = AVATARS[avatar]
-		speak(`Hi! I'm ${a.name}. Your code is ready.`, {
-			voice: a.voice,
-			lang: a.lang,
-			onEnd: () => setSpeaking(false),
-		}).catch(() => setSpeaking(false))
+	// Narrate when the agent finishes a turn (busy -> idle).
+	const anyBusy = useAtomValue(anyBusyAtom)
+	const wasBusy = useRef(false)
+	const phraseIdx = useRef(0)
+	const mutedRef = useRef(muted)
+	mutedRef.current = muted
+	const avatarRef = useRef(avatar)
+	avatarRef.current = avatar
+	useEffect(() => {
+		if (wasBusy.current && !anyBusy && !mutedRef.current) {
+			const a = AVATARS[avatarRef.current]
+			const phrase = DONE_PHRASES[phraseIdx.current % DONE_PHRASES.length]
+			phraseIdx.current++
+			setSpeaking(true)
+			speak(phrase, { voice: a.voice, lang: a.lang, onEnd: () => setSpeaking(false) }).catch(() =>
+				setSpeaking(false),
+			)
+		}
+		wasBusy.current = anyBusy
+	}, [anyBusy])
+
+	const toggleMute = () => {
+		setMuted((m) => {
+			const next = !m
+			// Unmuting → quick voice test so you know it works.
+			if (!next && !speaking) {
+				const a = AVATARS[avatar]
+				setSpeaking(true)
+				speak(`Hi! I'm ${a.name}.`, {
+					voice: a.voice,
+					lang: a.lang,
+					onEnd: () => setSpeaking(false),
+				}).catch(() => setSpeaking(false))
+			}
+			return next
+		})
 	}
 
 	const startDrag = (e: React.PointerEvent) => {
@@ -86,13 +123,13 @@ export function HrambleAvatar() {
 				<button
 					type="button"
 					className={`hramble-av-tab hramble-av-speak${speaking ? " active" : ""}`}
-					title="Test speak (Supertonic)"
+					title={muted ? "Narration off — click to enable" : "Narration on — click to mute"}
 					onClick={(e) => {
 						e.stopPropagation()
-						testSpeak()
+						toggleMute()
 					}}
 				>
-					{speaking ? "…" : "🔊"}
+					{speaking ? "…" : muted ? "🔇" : "🔊"}
 				</button>
 			</div>
 			<button

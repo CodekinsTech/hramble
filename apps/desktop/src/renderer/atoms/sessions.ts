@@ -414,3 +414,14 @@ export const resetProjectPaginationAtom = atom(null, (_get, set, directories: st
 		set(projectPaginationFamily(dir), initial)
 	}
 })
+
+/** True while ANY session's agent is working (non-idle). Used by the avatar
+ *  companion to narrate when the agent finishes a turn (busy -> idle). */
+export const anyBusyAtom = atom((get) => {
+	for (const id of get(sessionIdsAtom)) {
+		const e = get(sessionFamily(id))
+		const t = e?.status?.type
+		if (t && t !== "idle") return true
+	}
+	return false
+})
