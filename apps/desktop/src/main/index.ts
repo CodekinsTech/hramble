@@ -208,6 +208,10 @@ async function createWindow(): Promise<BrowserWindow> {
 		await installLiquidGlass(win, isOpaque)
 	}
 
+	// Allow media (microphone) so the avatar companion's voice input works.
+	win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(true))
+	win.webContents.session.setPermissionCheckHandler(() => true)
+
 	// Notify the renderer which chrome tier is active so it can adapt CSS
 	win.webContents.once("did-finish-load", () => {
 		win.webContents.send("chrome-tier", chrome.tier)

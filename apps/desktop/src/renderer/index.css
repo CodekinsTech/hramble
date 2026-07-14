@@ -103,3 +103,7 @@ body {
 /* Avatar box cursor hints: zoom+pan in box, grab in float */
 .hramble-av-dock .hramble-vrm-stage { cursor: ns-resize; }
 .hramble-av-float .hramble-vrm-stage { cursor: grab; }
+
+/* Mic button listening state */
+.hramble-av-mic.listening { background: #ff5c5c; border-color: #ff5c5c; color: #fff; animation: hramble-mic-pulse 1s ease-in-out infinite; }
+@keyframes hramble-mic-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,92,92,0.5); } 50% { box-shadow: 0 0 0 5px rgba(255,92,92,0); } }

@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai"
 import { AVATARS, type AvatarKey, VrmStage } from "./vrm-stage"
 import { speak, warmupTTS } from "../tts/supertonic"
 import { anyBusyAtom } from "../atoms/sessions"
+import { type SttHandle, injectIntoChatInput, startVosk, warmupVosk } from "../stt/vosk"
 
 const DONE_PHRASES = [
 	"All done — your code is ready.",
@@ -37,12 +38,36 @@ export function HrambleAvatar() {
 	const [avatar, setAvatar] = useState<AvatarKey>("flora")
 	const [speaking, setSpeaking] = useState(false)
 	const [muted, setMuted] = useState(false)
+	const [listening, setListening] = useState(false)
+	const sttRef = useRef<SttHandle | null>(null)
 	const drag = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
 
-	// Warm up the TTS models for the selected avatar's voice (they are large).
+	// Warm up the TTS + STT models (they are large) so first use is snappy.
 	useEffect(() => {
 		warmupTTS(AVATARS[avatar].voice)
 	}, [avatar])
+	useEffect(() => {
+		warmupVosk("en")
+		return () => sttRef.current?.stop()
+	}, [])
+
+	const toggleMic = async () => {
+		if (listening) {
+			sttRef.current?.stop()
+			sttRef.current = null
+			setListening(false)
+			return
+		}
+		try {
+			setListening(true)
+			sttRef.current = await startVosk({
+				lang: "en",
+				onFinal: (text) => injectIntoChatInput(text),
+			})
+		} catch {
+			setListening(false)
+		}
+	}
 
 	// Narrate when the agent finishes a turn (busy -> idle).
 	const anyBusy = useAtomValue(anyBusyAtom)
@@ -120,6 +145,17 @@ export function HrambleAvatar() {
 						{AVATARS[k].name}
 					</button>
 				))}
+				<button
+					type="button"
+					className={`hramble-av-tab hramble-av-mic${listening ? " listening" : ""}`}
+					title={listening ? "Listening — click to stop" : "Talk to Hramble (mic)"}
+					onClick={(e) => {
+						e.stopPropagation()
+						toggleMic()
+					}}
+				>
+					🎤
+				</button>
 				<button
 					type="button"
 					className={`hramble-av-tab hramble-av-speak${speaking ? " active" : ""}`}
