@@ -150,10 +150,16 @@ interface ModelOption {
 	reasoning: boolean
 }
 
+// Models that can't do chat completions (speech-to-text, text-to-speech, safety
+// classifiers, etc.). Providers like Groq expose these alongside chat models, and
+// picking one gives a confusing "does not support chat completions" error.
+const NON_CHAT_MODEL = /whisper|orpheus|\btts\b|text-to-speech|speech|prompt-guard|guard|embedding|moderation|rerank/i
+
 function flattenModels(providers: SdkProvider[]): ModelOption[] {
 	const models: ModelOption[] = []
 	for (const provider of providers) {
 		for (const [key, model] of Object.entries(provider.models)) {
+			if (NON_CHAT_MODEL.test(key) || NON_CHAT_MODEL.test(model.name ?? "")) continue
 			models.push({
 				value: `${provider.id}/${key}`,
 				providerID: provider.id,

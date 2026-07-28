@@ -20,6 +20,7 @@ import {
 	ChevronDownIcon,
 	CodeIcon,
 	FileTextIcon,
+	FolderPlusIcon,
 	GitForkIcon,
 	GitPullRequestIcon,
 	MonitorIcon,
@@ -51,6 +52,7 @@ import {
 } from "../hooks/use-opencode-data"
 import { useAgentActions } from "../hooks/use-server"
 import type { FileAttachment } from "../lib/types"
+import { pickDirectory } from "../services/backend"
 import { createWorktree, randomWorktreeName } from "../services/worktree-service"
 import { useSetAppBarContent } from "./app-bar-context"
 import { BranchPicker } from "./branch-picker"
@@ -295,6 +297,24 @@ export function NewChat() {
 		() => projects.find((p) => p.directory === selectedDirectory),
 		[projects, selectedDirectory],
 	)
+
+	// The current working folder — where the agent reads/writes files. Shown
+	// prominently (like Claude Code needing a directory) so files never land in
+	// a surprise location.
+	const folderSegs = selectedDirectory.split("/").filter(Boolean)
+	const folderName = selectedProject?.name || folderSegs.at(-1) || ""
+	// A bad working dir: filesystem root or the user's home folder — files would
+	// scatter there instead of a project folder.
+	const badFolder =
+		!selectedDirectory || selectedDirectory === "/" || (folderSegs.length <= 2 && folderSegs[0] === "Users")
+
+	const chooseFolder = useCallback(async () => {
+		const dir = await pickDirectory()
+		if (dir) {
+			setSelectedDirectory(dir)
+			setProjectPickerOpen(false)
+		}
+	}, [])
 
 	const { data: providers } = useProviders(selectedDirectory || null)
 	const { data: config } = useConfig(selectedDirectory || null)
@@ -665,44 +685,59 @@ export function NewChat() {
 								Press Escape any time to stop.
 							</p>
 						)}
-						{projects.length > 1 ? (
-							<Popover open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
-								<PopoverTrigger
-									render={
-										<button
-											type="button"
-											className="mt-1 inline-flex items-center gap-1 text-xl text-muted-foreground transition-colors hover:text-foreground"
-										/>
-									}
+						{/* Working-folder picker — always a clickable control (like Claude
+						    Code needing a directory). Lists projects + "Choose a folder…". */}
+						<Popover open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
+							<PopoverTrigger
+								render={
+									<button
+										type="button"
+										className={`mt-1 inline-flex items-center gap-1 text-xl transition-colors ${
+											badFolder
+												? "text-amber-600 hover:text-amber-700 dark:text-amber-400"
+												: "text-muted-foreground hover:text-foreground"
+										}`}
+									/>
+								}
+							>
+								📁 {folderName || "Choose a folder"}
+								<ChevronDownIcon className="size-4" />
+							</PopoverTrigger>
+							<PopoverContent className="w-72 p-1" align="center">
+								{projects.map((p) => (
+									<button
+										key={p.directory}
+										type="button"
+										onClick={() => {
+											setSelectedDirectory(p.directory)
+											setProjectPickerOpen(false)
+										}}
+										className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+											p.directory === selectedDirectory
+												? "bg-muted text-foreground"
+												: "text-muted-foreground"
+										}`}
+									>
+										<span className="truncate font-medium">{p.name}</span>
+										<span className="ml-auto text-xs text-muted-foreground/60">{p.agentCount}</span>
+									</button>
+								))}
+								<div className="my-1 border-border border-t" />
+								<button
+									type="button"
+									onClick={chooseFolder}
+									className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left font-medium text-primary text-sm transition-colors hover:bg-muted"
 								>
-									{selectedProject?.name ?? "select project"}
-									<ChevronDownIcon className="size-4" />
-								</PopoverTrigger>
-								<PopoverContent className="w-64 p-1" align="center">
-									{projects.map((p) => (
-										<button
-											key={p.directory}
-											type="button"
-											onClick={() => {
-												setSelectedDirectory(p.directory)
-												setProjectPickerOpen(false)
-											}}
-											className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
-												p.directory === selectedDirectory
-													? "bg-muted text-foreground"
-													: "text-muted-foreground"
-											}`}
-										>
-											<span className="truncate font-medium">{p.name}</span>
-											<span className="ml-auto text-xs text-muted-foreground/60">
-												{p.agentCount}
-											</span>
-										</button>
-									))}
-								</PopoverContent>
-							</Popover>
-						) : (
-							<p className="mt-1 text-xl text-muted-foreground">{selectedProject?.name ?? ""}</p>
+									<FolderPlusIcon className="size-4" />
+									Choose a folder…
+								</button>
+							</PopoverContent>
+						</Popover>
+						{badFolder && (
+							<p className="mx-auto mt-2 max-w-md text-amber-600 text-sm dark:text-amber-400">
+								This is your home folder — files would scatter here. Click above to choose a project
+								folder first.
+							</p>
 						)}
 					</div>
 

@@ -1,0 +1,4 @@
+{
+  "prompt": "Create a single self-contained index.html for a modern landing page for a fictional AI coding app called 'Hramble'. Include: a hero section with a headline, subtext and a call-to-action button; a 3-column features section; and a footer. Use inline CSS only, a clean modern look with a nice color scheme, good spacing and rounded cards. One file, no external assets.",
+  "verify": { "cmd": "test -f index.html && grep -qi 'hero\\|features\\|<section' index.html && echo ok" }
+}
