@@ -19,6 +19,7 @@ import {
 	CopyIcon,
 	ExternalLinkIcon,
 	FileDiffIcon,
+	FolderTreeIcon,
 	GitForkIcon,
 	PencilIcon,
 	TerminalIcon,
@@ -42,6 +43,8 @@ import { useSetAppBarContent } from "./app-bar-context"
 import { ChatView } from "./chat"
 import { PalotWordmark } from "./palot-wordmark"
 import { ReviewPanel } from "./review/review-panel"
+import { fileExplorerOpenAtom } from "../atoms/file-explorer"
+import { FileExplorer } from "./file-explorer"
 import { SessionMetricsBar } from "./session-metrics-bar"
 import { WorktreeActions } from "./worktree-actions"
 
@@ -142,10 +145,16 @@ export function AgentDetail({
 	// Review panel state
 	const [reviewPanelOpen, setReviewPanelOpen] = useAtom(reviewPanelOpenAtom)
 	const [reviewSettings, setReviewSettings] = useAtom(reviewPanelSettingsAtom)
+	// File explorer panel state (left side).
+	const [fileExplorerOpen, setFileExplorerOpen] = useAtom(fileExplorerOpenAtom)
 
-	// Keyboard shortcut: Cmd+Shift+D to toggle review panel
+	// Keyboard shortcut: Cmd+Shift+D toggles review; Cmd+Shift+E toggles files.
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
+				e.preventDefault()
+				setFileExplorerOpen((prev) => !prev)
+			}
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "d") {
 				e.preventDefault()
 				setReviewPanelOpen((prev) => !prev)
@@ -159,7 +168,7 @@ export function AgentDetail({
 		}
 		document.addEventListener("keydown", handleKeyDown)
 		return () => document.removeEventListener("keydown", handleKeyDown)
-	}, [setReviewPanelOpen, setReviewSettings, reviewPanelOpen])
+	}, [setReviewPanelOpen, setReviewSettings, reviewPanelOpen, setFileExplorerOpen])
 
 	// Close review panel when navigating to a session with no diffs
 	const prevSessionIdRef = useRef(agent.sessionId)
@@ -215,6 +224,8 @@ export function AgentDetail({
 				projectSlug={projectSlug}
 				reviewPanelOpen={reviewPanelOpen}
 				onToggleReviewPanel={() => setReviewPanelOpen((prev) => !prev)}
+				fileExplorerOpen={fileExplorerOpen}
+				onToggleFileExplorer={() => setFileExplorerOpen((prev) => !prev)}
 			/>,
 		)
 
@@ -232,6 +243,8 @@ export function AgentDetail({
 		setAppBarContent,
 		reviewPanelOpen,
 		setReviewPanelOpen,
+		fileExplorerOpen,
+		setFileExplorerOpen,
 	])
 
 	const chatContent = (
@@ -294,6 +307,16 @@ export function AgentDetail({
 
 	return (
 		<div className="flex h-full">
+			{/* File explorer -- slides in/out from the left */}
+			<div
+				className="shrink-0 overflow-hidden transition-[width] duration-200 ease-in-out"
+				style={{ width: fileExplorerOpen ? 240 : 0 }}
+			>
+				<div className="h-full" style={{ width: 240 }}>
+					<FileExplorer directory={agent.directory} />
+				</div>
+			</div>
+
 			{/* Chat panel -- takes remaining space */}
 			<div className="min-w-0 flex-1 flex flex-col">{chatContent}</div>
 
@@ -328,6 +351,8 @@ function SessionAppBarContent({
 	projectSlug,
 	reviewPanelOpen,
 	onToggleReviewPanel,
+	fileExplorerOpen,
+	onToggleFileExplorer,
 }: {
 	agent: Agent
 	isEditingTitle: boolean
@@ -341,6 +366,8 @@ function SessionAppBarContent({
 	projectSlug?: string
 	reviewPanelOpen: boolean
 	onToggleReviewPanel: () => void
+	fileExplorerOpen: boolean
+	onToggleFileExplorer: () => void
 }) {
 	const navigate = useNavigate()
 	const diffStats = useAtomValue(sessionDiffStatsFamily(agent.sessionId))
@@ -421,6 +448,29 @@ function SessionAppBarContent({
 				{agent.worktreePath && <WorktreeActions agent={agent} />}
 
 				{agent.worktreePath && <div className="hidden h-3 w-px shrink-0 bg-border/60 md:block" />}
+
+				{/* File explorer toggle */}
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<button
+								type="button"
+								onClick={onToggleFileExplorer}
+								className={cn(
+									"flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+									fileExplorerOpen
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							/>
+						}
+					>
+						<FolderTreeIcon className="size-3.5" />
+					</TooltipTrigger>
+					<TooltipContent>
+						{fileExplorerOpen ? "Hide files" : "Show files"} (Cmd+Shift+E)
+					</TooltipContent>
+				</Tooltip>
 
 				{/* Review panel toggle with change stats badge */}
 				<Tooltip>
