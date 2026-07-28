@@ -691,6 +691,15 @@ export const ChatTurnComponent = memo(
 			setTimeout(() => setCopied(false), 2000)
 		}, [responseText])
 
+		// Copy the user's own command text (separate from copying the response).
+		const [cmdCopied, setCmdCopied] = useState(false)
+		const handleCopyCommand = useCallback(async () => {
+			if (!userText) return
+			await navigator.clipboard.writeText(userText)
+			setCmdCopied(true)
+			setTimeout(() => setCmdCopied(false), 2000)
+		}, [userText])
+
 		const handleRevertHere = useCallback(async () => {
 			if (!onRevertToMessage) return
 			await onRevertToMessage(turn.userMessage.info.id)
@@ -756,6 +765,31 @@ export const ChatTurnComponent = memo(
 								/>
 							)}
 							<p className="whitespace-pre-wrap">{userText}</p>
+							{/* Actions on YOUR command: copy the prompt, fork, or rewind here. */}
+							{!isSynthetic && userText && (
+								<MessageActions className="mt-1 opacity-50 transition-opacity group-hover/turn:opacity-100">
+									<MessageAction
+										tooltip={cmdCopied ? "Copied" : "Copy command"}
+										onClick={handleCopyCommand}
+									>
+										{cmdCopied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+									</MessageAction>
+									{onForkFromTurn && !working && (
+										<MessageAction
+											tooltip={forking ? "Forking..." : "Fork from here"}
+											onClick={handleFork}
+											disabled={forking}
+										>
+											<GitForkIcon className="size-3" />
+										</MessageAction>
+									)}
+									{onRevertToMessage && !working && (
+										<MessageAction tooltip="Rewind to here" onClick={handleRevertHere}>
+											<Undo2Icon className="size-3" />
+										</MessageAction>
+									)}
+								</MessageActions>
+							)}
 							{(isQueued || isQueuedLast) && (
 								<span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground/60">
 									<ListOrderedIcon className="size-3" />
