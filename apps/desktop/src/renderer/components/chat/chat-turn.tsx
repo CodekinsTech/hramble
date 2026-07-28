@@ -1011,9 +1011,11 @@ export const ChatTurnComponent = memo(
 						</div>
 					)}
 
-				{/* Turn-level message actions — visible on hover across all display modes */}
+				{/* Turn-level message actions (copy / fork / undo). Kept subtly visible
+				    always — hover-only hid them so users didn't know they existed —
+				    and brightened to full on hover. */}
 				{responseText && (
-					<MessageActions className="opacity-0 transition-opacity group-hover/turn:opacity-100">
+					<MessageActions className="opacity-50 transition-opacity group-hover/turn:opacity-100">
 						<MessageAction tooltip="Scroll to top" onClick={handleScrollToTop}>
 							<ArrowUpToLineIcon className="size-3" />
 						</MessageAction>
