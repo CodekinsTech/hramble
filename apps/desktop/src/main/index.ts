@@ -12,6 +12,7 @@ import { startMdnsScanner, stopMdnsScanner } from "./mdns-scanner"
 import { stopServer } from "./opencode-manager"
 import { initSettingsStore } from "./settings-store"
 import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
+import { registerConnectors } from "./connectors" // MCP connectors management
 import { registerOllama } from "./ollama" // local models (free tier)
 import { registerStore } from "./store" // avatar store — proxy to the shared Worker
 import { startEnvResolution } from "./shell-env"
@@ -301,6 +302,7 @@ if (!gotLock) {
 		})
 		registerStore()
 		registerOllama()
+		registerConnectors()
 		initAutomations().catch(console.error)
 		startMdnsScanner().catch((err) => log.warn("mDNS scanner failed to start", err))
 		createWindow()

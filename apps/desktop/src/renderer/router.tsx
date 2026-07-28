@@ -19,6 +19,7 @@ import { GeneralSettings } from "./components/settings/general-settings"
 import { NotificationSettings } from "./components/settings/notification-settings"
 import { ProviderSettings } from "./components/settings/provider-settings"
 import { ServerSettings } from "./components/settings/server-settings"
+import { ConnectorsSettings } from "./components/settings/connectors-settings"
 import { SettingsPage } from "./components/settings/settings-page"
 import { SetupSettings } from "./components/settings/setup-settings"
 import { StoreSettings } from "./components/settings/store-settings"
@@ -114,6 +115,12 @@ const settingsWorktreesRoute = createRoute({
 	component: WorktreeSettings,
 })
 
+const settingsConnectorsRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: "connectors",
+	component: ConnectorsSettings,
+})
+
 const settingsStoreRoute = createRoute({
 	getParentRoute: () => settingsRoute,
 	path: "store",
@@ -169,6 +176,7 @@ const routeTree = rootRoute.addChildren([
 			settingsServersRoute,
 			settingsNotificationsRoute,
 			settingsProvidersRoute,
+			settingsConnectorsRoute,
 			settingsWorktreesRoute,
 			settingsStoreRoute,
 			settingsSetupRoute,

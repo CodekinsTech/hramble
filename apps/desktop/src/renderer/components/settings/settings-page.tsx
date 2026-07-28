@@ -13,6 +13,7 @@ import {
 	GitForkIcon,
 	InfoIcon,
 	PlugIcon,
+	PlugZapIcon,
 	ServerIcon,
 	SettingsIcon,
 	StoreIcon,
@@ -30,6 +31,7 @@ type SettingsTab =
 	| "servers"
 	| "notifications"
 	| "providers"
+	| "connectors"
 	| "worktrees"
 	| "store"
 	| "setup"
@@ -40,6 +42,7 @@ const tabs: { id: SettingsTab; label: string; icon: typeof SettingsIcon }[] = [
 	{ id: "servers", label: "Servers", icon: ServerIcon },
 	{ id: "notifications", label: "Notifications", icon: BellIcon },
 	{ id: "providers", label: "Providers", icon: PlugIcon },
+	{ id: "connectors", label: "Connectors", icon: PlugZapIcon },
 	{ id: "worktrees", label: "Worktrees", icon: GitForkIcon },
 	{ id: "store", label: "Store", icon: StoreIcon },
 	{ id: "setup", label: "Setup", icon: WrenchIcon },
