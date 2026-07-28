@@ -20,6 +20,7 @@ import { Separator } from "@palot/ui/components/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
 import { cn } from "@palot/ui/lib/utils"
 import { useAtomValue } from "jotai"
+import { type ChatMode, CHAT_MODES } from "../../atoms/chat-mode"
 import {
 	CheckIcon,
 	ChevronDownIcon,
@@ -467,8 +468,12 @@ export interface PromptToolbarProps {
 	selectedVariant: string | undefined
 	onSelectVariant: (variant: string | undefined) => void
 
-	/** Plan mode: think-first (plan) then act (build). Optional so existing
-	 *  consumers that don't wire it simply don't render the toggle. */
+	/** Permission mode (Plan / Manual / Accept Edits / Auto / Bypass). */
+	chatMode?: ChatMode
+	onCycleMode?: () => void
+
+	/** Think-first (plan) then act (build). Optional so existing consumers that
+	 *  don't wire it simply don't render the toggle. */
 	planMode?: boolean
 	onTogglePlanMode?: (value: boolean) => void
 
@@ -495,6 +500,8 @@ export function PromptToolbar({
 	recentModels,
 	selectedVariant,
 	onSelectVariant,
+	chatMode,
+	onCycleMode,
 	planMode,
 	onTogglePlanMode,
 	hyperloop,
@@ -510,8 +517,40 @@ export function PromptToolbar({
 	const hasAgents = agents.length > 0
 	const hasVariants = variants.length > 0
 
+	const mode = chatMode ? CHAT_MODES[chatMode] : null
+
 	return (
 		<div className="flex min-w-0 flex-wrap items-center gap-0.5">
+			{onCycleMode && mode && (
+				<>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								disabled={disabled}
+								onClick={onCycleMode}
+								className={cn(
+									"flex items-center gap-1 rounded-md px-2 py-1 font-medium text-xs transition-colors",
+									chatMode === "bypass"
+										? "bg-red-500/15 text-red-600 dark:text-red-400"
+										: chatMode === "plan"
+											? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+											: chatMode === "manual"
+												? "bg-muted text-foreground"
+												: "text-muted-foreground hover:bg-accent hover:text-foreground",
+								)}
+							>
+								{mode.label}
+							</button>
+						</TooltipTrigger>
+						<TooltipContent className="max-w-60 text-center">
+							{mode.blurb}
+							<span className="mt-1 block text-muted-foreground">Click to change mode.</span>
+						</TooltipContent>
+					</Tooltip>
+					<Separator orientation="vertical" className="mx-0.5 my-2 self-stretch" />
+				</>
+			)}
 			{hasAgents && (
 				<AgentSelector
 					agents={agents}
@@ -537,12 +576,11 @@ export function PromptToolbar({
 							)}
 						>
 							<ListIcon className="size-3.5" />
-							Plan
+							Think
 						</button>
 					</TooltipTrigger>
 					<TooltipContent className="max-w-56 text-center">
-						Plan mode: writes a plan first, then does the work. More reliable (best for local
-						models), a bit slower.
+						Think first: drafts a plan, then does the work. More reliable (best for local models), a bit slower.
 					</TooltipContent>
 				</Tooltip>
 			)}

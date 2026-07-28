@@ -359,12 +359,19 @@ export function useAgentActions() {
 		[],
 	)
 
-	const createSession = useCallback(async (directory: string, title?: string) => {
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
-		log.debug("createSession", { directory, title })
-		try {
-			const result = await client.session.create({ title })
+	const createSession = useCallback(
+		async (
+			directory: string,
+			title?: string,
+			// Permission preset for the chosen mode (Manual / Accept Edits / Bypass…).
+			// Applied at creation because permissions are a session-level setting.
+			permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>,
+		) => {
+			const client = getProjectClient(directory)
+			if (!client) throw new Error("Not connected to OpenCode server")
+			log.debug("createSession", { directory, title, hasPermission: !!permission })
+			try {
+				const result = await client.session.create(permission ? { title, permission } : { title })
 			const session = result.data
 			if (session) {
 				appStore.set(upsertSessionAtom, { session, directory })

@@ -15,7 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@palot/ui/components/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
 import { useNavigate, useParams } from "@tanstack/react-router"
-import { useAtomValue } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import {
 	ChevronDownIcon,
 	CodeIcon,
@@ -34,6 +34,7 @@ import {
 	upsertSessionAtom,
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
+import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
 import { markHyperloopSession, workspaceModeAtom } from "../atoms/workspace"
 import { useAgents, useProjectList } from "../hooks/use-agents"
 import { NEW_CHAT_DRAFT_KEY, useDraftActions, useDraftSnapshot } from "../hooks/use-draft"
@@ -250,6 +251,16 @@ export function NewChat() {
 	const workspaceMode = useAtomValue(workspaceModeAtom)
 	const hyperloop = workspaceMode === "hyperloop"
 
+	// Permission mode (Plan / Manual / Accept Edits / Auto / Bypass) — cycles like
+	// Claude's Shift+Tab. Applied as a session permission preset at creation.
+	const chatMode = useAtomValue(chatModeAtom)
+	const setChatMode = useSetAtom(chatModeAtom)
+	const cycleMode = useCallback(() => {
+		const i = CHAT_MODE_ORDER.indexOf(chatMode)
+		setChatMode(CHAT_MODE_ORDER[(i + 1) % CHAT_MODE_ORDER.length])
+	}, [chatMode, setChatMode])
+	const modeSpec = CHAT_MODES[chatMode]
+
 	// Mention popover state
 	const [mentionOpen, setMentionOpen] = useState(false)
 	const [mentionQuery, setMentionQuery] = useState("")
@@ -454,7 +465,7 @@ export function NewChat() {
 	/** Launch a session in local mode (no worktree). */
 	const launchLocal = useCallback(
 		async (promptText: string, files?: FileAttachment[]) => {
-			const session = await createSession(selectedDirectory)
+			const session = await createSession(selectedDirectory, undefined, modeSpec.permission ?? undefined)
 			if (!session) return
 
 			// Tag Hyperloop runs so they show under the Hyperloop workspace only.
@@ -469,7 +480,8 @@ export function NewChat() {
 
 			await sendPrompt(selectedDirectory, session.id, promptText, {
 				model: effectiveModel ?? undefined,
-				agent: selectedAgent ?? undefined,
+				// Plan mode forces the read-only `plan` agent; other modes keep the user's pick.
+				agent: modeSpec.agent ?? selectedAgent ?? undefined,
 				variant: selectedVariant,
 				files,
 				planMode,
@@ -487,6 +499,7 @@ export function NewChat() {
 			selectedVariant,
 			planMode,
 			hyperloop,
+			modeSpec,
 			clearDraft,
 			persistProjectModel,
 			navigateToSession,
@@ -543,7 +556,7 @@ export function NewChat() {
 						sessionId: stubId,
 						setupPhase: "starting-session",
 					})
-					const session = await createSession(sdkDirectory)
+					const session = await createSession(sdkDirectory, undefined, modeSpec.permission ?? undefined)
 					if (!session) {
 						throw new Error("Failed to create session in worktree")
 					}
@@ -572,7 +585,7 @@ export function NewChat() {
 					// Phase 3: Send the prompt
 					await sendPrompt(sdkDirectory, session.id, promptText, {
 						model: effectiveModel ?? undefined,
-						agent: selectedAgent ?? undefined,
+						agent: modeSpec.agent ?? selectedAgent ?? undefined,
 						variant: selectedVariant,
 						files,
 						planMode,
@@ -598,6 +611,7 @@ export function NewChat() {
 			selectedVariant,
 			planMode,
 			hyperloop,
+			modeSpec,
 			clearDraft,
 			persistProjectModel,
 			navigateToSession,
@@ -779,6 +793,8 @@ export function NewChat() {
 											recentModels={recentModels}
 											selectedVariant={selectedVariant}
 											onSelectVariant={setSelectedVariant}
+											chatMode={chatMode}
+											onCycleMode={cycleMode}
 											planMode={planMode}
 											onTogglePlanMode={togglePlanMode}
 										/>
