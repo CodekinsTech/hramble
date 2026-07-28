@@ -1,0 +1,2853 @@
+{
+  "avatars": [
+    {
+      "id": "raya",
+      "name": "Raya",
+      "type": "glb",
+      "file": "raya_compressed.glb",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "retarget": {
+        "scaleToEyesLevel": 1,
+        "origin": {
+          "y": -0.15
+        }
+      },
+      "baseline": {
+        "headRotateX": -0.03,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "fantasy",
+      "price": 0,
+      "badge": "free",
+      "downloads": 2240,
+      "desc": "Elven warrior princess with ancient magic and powerful presence.",
+      "tags": [
+        "fantasy",
+        "warrior",
+        "free"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.4332,
+          8
+        ],
+        "t": [
+          0,
+          1.2332,
+          0
+        ]
+      }
+    },
+    {
+      "id": "drake",
+      "name": "Drake",
+      "type": "glb",
+      "file": "drake.glb",
+      "body": "M",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "retarget": {
+        "scaleToEyesLevel": 1,
+        "origin": {
+          "y": -0.15
+        }
+      },
+      "baseline": {
+        "headRotateX": -0.03,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 0,
+      "badge": "free",
+      "downloads": 670,
+      "desc": "Energetic dancer with smooth moves and street-style charm.",
+      "tags": [
+        "energetic",
+        "style",
+        "free"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.4688,
+          8
+        ],
+        "t": [
+          0,
+          1.2688,
+          0
+        ]
+      }
+    },
+    {
+      "id": "lee",
+      "name": "Lee",
+      "type": "glb",
+      "file": "lee.glb",
+      "body": "M",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "defaultView": "mid",
+      "cameraOpt": {
+        "cameraDistance": 1,
+        "cameraY": -0.3
+      },
+      "retarget": {
+        "scaleToEyesLevel": 1,
+        "origin": {
+          "y": -0.15
+        }
+      },
+      "baseline": {
+        "headRotateX": -0.03,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 350,
+      "badge": null,
+      "downloads": 560,
+      "desc": "Calm and approachable — a reliable everyday companion.",
+      "tags": [
+        "calm",
+        "everyday"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.4092,
+          9
+        ],
+        "t": [
+          0,
+          1.5092,
+          0
+        ]
+      }
+    },
+    {
+      "id": "lili",
+      "name": "Lili",
+      "type": "glb",
+      "file": "lilifinal.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "retarget": {},
+      "baseline": {
+        "headRotateX": -0.03,
+        "bodyRotateX": 0,
+        "bodyRotateY": 0,
+        "bodyRotateZ": 0,
+        "pose": "straight",
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "kids",
+      "price": 700,
+      "badge": null,
+      "downloads": 740,
+      "desc": "Sweet and curious kid with big eyes and an adventurous spirit.",
+      "tags": [
+        "sweet",
+        "kids"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.4394,
+          8
+        ],
+        "t": [
+          0,
+          1.2394,
+          0
+        ]
+      }
+    },
+    {
+      "id": "neo",
+      "name": "Neo",
+      "type": "glb",
+      "file": "cyberpunk_girl.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "retarget": {
+        "scaleToEyesLevel": 1,
+        "origin": {
+          "y": -0.05
+        }
+      },
+      "defaultView": "mid",
+      "baseline": {
+        "headRotateX": -0.08,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "fantasy",
+      "price": 400,
+      "badge": null,
+      "downloads": 1890,
+      "desc": "Neon-lit futuristic warrior with holographic accessories.",
+      "tags": [
+        "sci-fi",
+        "bold"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.4964,
+          8
+        ],
+        "t": [
+          0,
+          1.4964,
+          0
+        ]
+      }
+    },
+    {
+      "id": "hayley",
+      "name": "Hayley",
+      "type": "glb",
+      "file": "hayley.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "retarget": {},
+      "defaultView": "mid",
+      "baseline": {
+        "headRotateX": -0.05
+      },
+      "cat": "adult",
+      "price": 130,
+      "badge": null,
+      "downloads": 820,
+      "desc": "Upbeat and bubbly personality with a modern casual look.",
+      "tags": [
+        "friendly",
+        "casual"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.3074,
+          8
+        ],
+        "t": [
+          0,
+          1.0074,
+          0
+        ]
+      },
+      "comingSoon": true
+    },
+    {
+      "id": "rumi",
+      "name": "Zara",
+      "type": "glb",
+      "file": "rumi.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "rigType": "ue5",
+      "defaultView": "mid",
+      "cat": "adult",
+      "price": 130,
+      "badge": "new",
+      "downloads": 120,
+      "desc": "Stylish and modern with cinematic Unreal Engine quality.",
+      "tags": [
+        "realistic",
+        "premium"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.2384,
+          8
+        ],
+        "t": [
+          0,
+          1.2384,
+          0
+        ],
+        "fov": 6.4
+      },
+      "comingSoon": true
+    },
+    {
+      "id": "jinu",
+      "name": "Axel",
+      "type": "glb",
+      "file": "jinu.glb",
+      "body": "M",
+      "mood": "cool",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-D",
+      "rigType": "ue5",
+      "defaultView": "mid",
+      "cat": "adult",
+      "price": 130,
+      "badge": "new",
+      "downloads": 95,
+      "desc": "Bold and edgy UE5 character with a cool, modern edge.",
+      "tags": [
+        "realistic",
+        "cool"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.2345,
+          8
+        ],
+        "t": [
+          0,
+          1.2345,
+          0
+        ],
+        "fov": 6.4
+      },
+      "comingSoon": true
+    },
+    {
+      "id": "gabby",
+      "name": "Gabby",
+      "type": "glb",
+      "file": "nanny.glb",
+      "body": "F",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "baseline": {
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 250,
+      "badge": null,
+      "downloads": 760,
+      "desc": "Natural brunette with a friendly, professional look.",
+      "tags": [
+        "natural",
+        "everyday"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.3473,
+          8
+        ],
+        "t": [
+          0,
+          1.0473,
+          0
+        ]
+      }
+    },
+    {
+      "id": "emeka",
+      "name": "Emeka",
+      "type": "glb",
+      "file": "emeka.glb",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "retarget": {},
+      "defaultView": "mid",
+      "cat": "adult",
+      "price": 200,
+      "badge": null,
+      "downloads": 340,
+      "desc": "Warm and grounded — a dependable African companion full of heart.",
+      "tags": [
+        "realistic",
+        "everyday"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.3011,
+          8
+        ],
+        "t": [
+          0,
+          1.0011,
+          0
+        ]
+      }
+    },
+    {
+      "id": "cole",
+      "name": "Cole",
+      "type": "glb",
+      "file": "cole.glb",
+      "body": "M",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "retarget": {},
+      "defaultView": "mid",
+      "cat": "adult",
+      "price": 200,
+      "badge": null,
+      "downloads": 210,
+      "desc": "Easy-going American with a confident, approachable charm.",
+      "tags": [
+        "casual",
+        "reliable"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.28,
+          8
+        ],
+        "t": [
+          0,
+          0.98,
+          0
+        ]
+      }
+    },
+    {
+      "id": "barbie",
+      "name": "Barbie",
+      "type": "glb",
+      "file": "barbie.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "kokoroVoice": "af_heart",
+      "kokoroLock": true,
+      "retarget": {
+        "scaleToEyesLevel": 1,
+        "origin": {
+          "y": -0.05
+        }
+      },
+      "baseline": {
+        "headRotateX": 0,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 1000,
+      "badge": null,
+      "downloads": 2100,
+      "desc": "Glamorous and stylish — a fan favourite with silky blonde hair.",
+      "tags": [
+        "glamour",
+        "popular"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.442,
+          8
+        ],
+        "t": [
+          0,
+          1.042,
+          0
+        ]
+      }
+    },
+    {
+      "id": "dandy",
+      "name": "Dandy",
+      "type": "glb",
+      "file": "dandy.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "defaultView": "full",
+      "cameraOpt": {
+        "cameraDistance": -2,
+        "cameraY": -0.9
+      },
+      "retarget": {},
+      "baseline": {
+        "headRotateX": 0,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 130,
+      "badge": null,
+      "downloads": 430,
+      "desc": "Dapper and well-dressed — a gentleman for every occasion.",
+      "tags": [
+        "elegant",
+        "classic"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.8286,
+          10
+        ],
+        "t": [
+          0,
+          1.7286,
+          0
+        ]
+      },
+      "note": "Limited expressions — minimal face & lip-sync"
+    },
+    {
+      "id": "mousey",
+      "name": "Mousey",
+      "type": "glb",
+      "file": "mousey.glb",
+      "body": "M",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "camY": -0.5,
+      "retarget": {},
+      "baseline": {
+        "headRotateX": -0.03,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "animal",
+      "price": 0,
+      "badge": "free",
+      "downloads": 1560,
+      "desc": "Everyone's favourite tiny mouse — cheeky, fast and full of charm.",
+      "tags": [
+        "animal",
+        "cute"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.5938,
+          8
+        ],
+        "t": [
+          0,
+          1.4938,
+          0
+        ]
+      }
+    },
+    {
+      "id": "strut",
+      "name": "Sonic",
+      "type": "glb",
+      "file": "strut.glb",
+      "body": "M",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "retarget": {},
+      "baseline": {
+        "headRotateX": -0.03,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "animal",
+      "price": 130,
+      "badge": null,
+      "downloads": 520,
+      "desc": "Speedy hedgehog with attitude and energy to spare.",
+      "tags": [
+        "animal",
+        "fun"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.2431,
+          4.5
+        ],
+        "t": [
+          0,
+          1.2431,
+          0
+        ]
+      },
+      "comingSoon": true
+    },
+    {
+      "id": "granny",
+      "name": "Granny",
+      "type": "glb",
+      "file": "granny.glb",
+      "body": "F",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "retarget": {
+        "origin": {
+          "y": -0.2
+        }
+      },
+      "baseline": {
+        "headRotateX": -0.04,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 70,
+      "badge": null,
+      "downloads": 390,
+      "desc": "Cozy and warm — perfect for nurturing and storytelling.",
+      "tags": [
+        "warm",
+        "cozy"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.3828,
+          8
+        ],
+        "t": [
+          0,
+          1.2828,
+          0
+        ]
+      }
+    },
+    {
+      "id": "rabby",
+      "name": "Rabby",
+      "type": "glb",
+      "file": "rabby.glb",
+      "body": "M",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "kokoroVoice": "am_eric",
+      "kokoroLock": true,
+      "retarget": {},
+      "baseline": {
+        "headRotateX": -0.03,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "animal",
+      "price": 100,
+      "badge": null,
+      "downloads": 2870,
+      "desc": "Fluffy rabbit companion — totally free, massively loved.",
+      "tags": [
+        "animal",
+        "free"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.6382,
+          8
+        ],
+        "t": [
+          0,
+          1.2382,
+          0
+        ]
+      }
+    },
+    {
+      "id": "avaturn",
+      "name": "Lyra",
+      "type": "glb",
+      "file": "avaturn.glb",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "retarget": {
+        "Hips": {
+          "y": 0.03
+        },
+        "Spine": {
+          "y": 0.02
+        },
+        "Spine1": {
+          "y": 0.02,
+          "z": 0.01
+        },
+        "Spine2": {
+          "y": 0.02,
+          "z": 0.01
+        },
+        "Neck": {
+          "z": 0.02,
+          "y": 0.01
+        },
+        "Head": {
+          "z": 0.02
+        },
+        "LeftShoulder": {
+          "rx": -0.5
+        },
+        "RightShoulder": {
+          "rx": -0.5
+        },
+        "scaleToHipsLevel": 1
+      },
+      "baseline": {
+        "headRotateX": -0.05,
+        "eyeBlinkLeft": 0.07,
+        "eyeBlinkRight": 0.09,
+        "eyeWideLeft": 0.04,
+        "eyeWideRight": 0.03
+      },
+      "cat": "adult",
+      "price": 250,
+      "badge": null,
+      "downloads": 280,
+      "desc": "Hyper-realistic scan-based avatar with lifelike skin detail.",
+      "tags": [
+        "realistic",
+        "premium"
+      ],
+      "cameraPose": {
+        "p": [
+          0,
+          1.4389,
+          8
+        ],
+        "t": [
+          0,
+          1.4389,
+          0
+        ]
+      }
+    },
+    {
+      "id": "aria",
+      "name": "Aria",
+      "type": "vrm",
+      "file": "aria.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Elegant anime heroine with flowing hair and graceful poise.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.136,
+      "camDist": 1.4
+    },
+    {
+      "id": "newgirl",
+      "name": "Nova",
+      "type": "vrm",
+      "file": "nova.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 230,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Bright-eyed companion with an upbeat, cheerful energy.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.3,
+      "camDist": 1.65
+    },
+    {
+      "id": "kawaii",
+      "name": "Kawaii",
+      "type": "vrm",
+      "file": "kawaii.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 0,
+      "badge": "free",
+      "downloads": 0,
+      "desc": "Adorable chibi-style cutie full of sweet expressions.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.9878,
+      "camDist": 1.85
+    },
+    {
+      "id": "animboy",
+      "name": "Kai",
+      "type": "vrm",
+      "file": "kai.vrm",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "cat": "anime",
+      "price": 100,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Cool anime boy ready for any adventure.",
+      "tags": [
+        "anime",
+        "free",
+        "male"
+      ],
+      "camY": 1.3153,
+      "camDist": 1.85
+    },
+    {
+      "id": "noelle",
+      "name": "Noelle · 1",
+      "type": "vrm",
+      "file": "noelle.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Gentle dreamer with soft features and warm charm.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.15,
+      "camDist": 1.65
+    },
+    {
+      "id": "noelle2",
+      "name": "Noelle · 2",
+      "type": "vrm",
+      "file": "noelle2.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Second look at the beloved Noelle — fresh outfit, same heart.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.15,
+      "camDist": 1.4
+    },
+    {
+      "id": "violet",
+      "name": "Violet",
+      "type": "vrm",
+      "file": "violet.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Mysterious purple-haired beauty with quiet intensity.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1,
+      "camDist": 1.65
+    },
+    {
+      "id": "blue",
+      "name": "Blue",
+      "type": "vrm",
+      "file": "blue.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Cool-toned anime girl with a calm, serene presence.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.35,
+      "camDist": 1.65
+    },
+    {
+      "id": "king",
+      "name": "King",
+      "type": "vrm",
+      "file": "king.vrm",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "cat": "anime",
+      "price": 150,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Regal male companion with commanding style.",
+      "tags": [
+        "anime",
+        "free",
+        "male"
+      ],
+      "camY": 1.15,
+      "camDist": 1.45
+    },
+    {
+      "id": "cute_model",
+      "name": "Hana",
+      "type": "vrm",
+      "file": "hana.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 350,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Delicate flower-inspired anime girl, soft and graceful.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.45,
+      "camDist": 1.45
+    },
+    {
+      "id": "shuera",
+      "name": "Shuera",
+      "type": "vrm",
+      "file": "shuera.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 130,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Fierce warrior spirit wrapped in elegant anime style.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.15,
+      "camDist": 1.65
+    },
+    {
+      "id": "miku",
+      "name": "Miku",
+      "type": "vrm",
+      "file": "miku.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 350,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Fan-favourite blue-twin-tail virtual idol.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.95,
+      "camDist": 1.65
+    },
+    {
+      "id": "yume",
+      "name": "Yume",
+      "type": "vrm",
+      "file": "yume.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 0,
+      "badge": "free",
+      "downloads": 0,
+      "desc": "Dreamy pastel girl lost in her own fantasy world.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.45,
+      "camDist": 1.65
+    },
+    {
+      "id": "riko",
+      "name": "Riko",
+      "type": "vrm",
+      "file": "riko.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Spunky, adventurous anime girl full of spirit.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.35,
+      "camDist": 1.65
+    },
+    {
+      "id": "arona",
+      "name": "Arona",
+      "type": "vrm",
+      "file": "arona.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 370,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Blue-haired student companion from a beloved franchise.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.9,
+      "camDist": 3.335
+    },
+    {
+      "id": "eri",
+      "name": "Eri",
+      "type": "vrm",
+      "file": "eri.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Sweet little anime girl with big expressive eyes.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.65
+    },
+    {
+      "id": "velvetta",
+      "name": "Velvetta",
+      "type": "vrm",
+      "file": "velvetta.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Luxurious dark-themed anime girl with refined elegance.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.25,
+      "camDist": 2.4
+    },
+    {
+      "id": "vrm3",
+      "name": "Kira",
+      "type": "vrm",
+      "file": "kira.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 400,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Radiant star-themed anime girl, bright and sparkly.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.35,
+      "camDist": 1.65
+    },
+    {
+      "id": "vrm4",
+      "name": "Celestia",
+      "type": "vrm",
+      "file": "celestia.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Celestial beauty with an otherworldly, ethereal glow.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.15,
+      "camDist": 1.4
+    },
+    {
+      "id": "vrm5",
+      "name": "Naia",
+      "type": "vrm",
+      "file": "naia.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Water-inspired anime girl with fluid, graceful movement.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.3,
+      "camDist": 1.65
+    },
+    {
+      "id": "vrm6",
+      "name": "Rylie",
+      "type": "vrm",
+      "file": "rylie.vrm",
+      "body": "F",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Bold and sporty anime girl with a competitive edge.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.3,
+      "camDist": 1.65
+    },
+    {
+      "id": "male_vrm",
+      "name": "Rex",
+      "type": "vrm",
+      "file": "rex.vrm",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Tough and reliable male companion with a cool edge.",
+      "tags": [
+        "anime",
+        "free",
+        "male"
+      ],
+      "camY": 1.6,
+      "camDist": 1.65
+    },
+    {
+      "id": "myvrm",
+      "name": "Ryker",
+      "type": "vrm",
+      "file": "ryker.vrm",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-D",
+      "cat": "anime",
+      "price": 230,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Strong male anime avatar with a mysterious aura.",
+      "tags": [
+        "anime",
+        "free",
+        "male"
+      ],
+      "camY": 1.8,
+      "camDist": 2.15
+    },
+    {
+      "id": "chibivivi",
+      "name": "Chibi ViVi",
+      "type": "vrm",
+      "file": "chibivivi.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Pint-sized chibi companion bursting with personality.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.8084,
+      "camDist": 3.15
+    },
+    {
+      "id": "reira",
+      "name": "Reira",
+      "type": "vrm",
+      "file": "reira.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Elegant anime girl with a poised, graceful presence.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.3,
+      "camDist": 1.65
+    },
+    {
+      "id": "mika",
+      "name": "Mika",
+      "type": "vrm",
+      "file": "mika.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Warm and friendly anime girl next door.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.45,
+      "camDist": 1.65
+    },
+    {
+      "id": "vrm_b",
+      "name": "Teddy",
+      "type": "vrm",
+      "file": "teddy.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 100,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Cosy teddy-bear inspired chibi companion.",
+      "tags": [
+        "anime",
+        "free",
+        "cute"
+      ],
+      "camY": 0.5,
+      "camDist": 1.9
+    },
+    {
+      "id": "vrm_c",
+      "name": "Woolly",
+      "type": "vrm",
+      "file": "woolly.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 100,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Fluffy and warm — a huggable anime companion.",
+      "tags": [
+        "anime",
+        "free",
+        "cute"
+      ],
+      "camY": 0.51,
+      "camDist": 3.15
+    },
+    {
+      "id": "vrm_d",
+      "name": "Boo",
+      "type": "vrm",
+      "file": "boo.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 100,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Ghostly cute character with a playful mischievous side.",
+      "tags": [
+        "anime",
+        "free",
+        "cute"
+      ],
+      "camY": 1.45,
+      "camDist": 2.72,
+      "sceneOffsetY": -0.5
+    },
+    {
+      "id": "vrm_e",
+      "name": "Libo",
+      "type": "vrm",
+      "file": "libo.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 450,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Cheerful anime girl radiating positive energy.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 2.36,
+      "sceneOffsetY": -0.2
+    },
+    {
+      "id": "vrm_g",
+      "name": "Oryn",
+      "type": "vrm",
+      "file": "oryn.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 200,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Ethereal forest-spirit anime girl with natural beauty.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "sceneOffsetY": -0.15,
+      "camY": 0.51,
+      "camDist": 3.15
+    },
+    {
+      "id": "vrm_h",
+      "name": "Sparkle",
+      "type": "vrm",
+      "file": "sparkle.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Glittery, dazzling anime girl who loves to shine.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.39,
+      "camDist": 1.65
+    },
+    {
+      "id": "vrm_i",
+      "name": "Zoe",
+      "type": "vrm",
+      "file": "zoe.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 150,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Lively and energetic anime girl always on the go.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.51,
+      "camDist": 1.9
+    },
+    {
+      "id": "vrm_j",
+      "name": "Pumi",
+      "type": "vrm",
+      "file": "pumi.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Playful and bubbly anime companion full of fun.",
+      "tags": [
+        "anime",
+        "free",
+        "cute"
+      ],
+      "camY": 0.48,
+      "camDist": 1.9
+    },
+    {
+      "id": "vrm_k",
+      "name": "Viola",
+      "type": "vrm",
+      "file": "viola.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-A",
+      "cat": "anime",
+      "price": 450,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Musical soul — elegant anime girl with artistic flair.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.12,
+      "camDist": 1.9,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_l",
+      "name": "Amara",
+      "type": "vrm",
+      "file": "amara.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-B",
+      "cat": "anime",
+      "price": 270,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Warm-hearted anime companion with timeless beauty.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.13,
+      "camDist": 1.9,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_m",
+      "name": "Kia",
+      "type": "vrm",
+      "file": "kia.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Swift and stylish anime girl with modern cool.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1,
+      "camDist": 1.9,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_n",
+      "name": "Hikari",
+      "type": "vrm",
+      "file": "hikari.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-A",
+      "cat": "anime",
+      "price": 330,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Radiant light-themed anime girl, bright and hopeful.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 0.92,
+      "camDist": 1.65,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_o",
+      "name": "Shinya",
+      "type": "vrm",
+      "file": "shinya.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "cat": "anime",
+      "price": 450,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Cool and collected anime girl with quiet confidence.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 0.92,
+      "camDist": 1.65,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_p",
+      "name": "Naru",
+      "type": "vrm",
+      "file": "naru.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Spirited anime girl inspired by nature and growth.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 0.9,
+      "camDist": 1.65,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_q",
+      "name": "Kitsune",
+      "type": "vrm",
+      "file": "kitsune.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-C",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Mystical fox-spirit girl with ancient magical energy.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "fantasy"
+      ],
+      "camY": 0.72,
+      "camDist": 1.65,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_r",
+      "name": "Tsurara",
+      "type": "vrm",
+      "file": "tsurara.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-D",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Icy cool anime girl with a crystalline, wintry aura.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "fantasy"
+      ],
+      "camY": 0.92,
+      "camDist": 1.4,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_s",
+      "name": "Luna S",
+      "type": "vrm",
+      "file": "luna_s.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 400,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Moonlit beauty with a serene and mysterious glow.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_t",
+      "name": "Iris",
+      "type": "vrm",
+      "file": "iris.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 330,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Rainbow-hued anime girl with vivid, expressive charm.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.15,
+      "camDist": 1.6,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_u",
+      "name": "Choco",
+      "type": "vrm",
+      "file": "choco.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-A",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Sweet chocolate-themed anime girl, warm and inviting.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 0.3,
+      "camDist": 1.9,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_w",
+      "name": "Yuki",
+      "type": "vrm",
+      "file": "yuki.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-C",
+      "cat": "anime",
+      "price": 230,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Snow-inspired anime girl with a pure, gentle heart.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 1.25,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_x",
+      "name": "Iro",
+      "type": "vrm",
+      "file": "iro.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-D",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Colourful anime girl bursting with creative energy.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 1.15,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_y",
+      "name": "Ika",
+      "type": "vrm",
+      "file": "ika.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-A",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Playful ocean-themed anime girl with wavy personality.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 0.95,
+      "camDist": 1.6,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_z",
+      "name": "Touka",
+      "type": "vrm",
+      "file": "touka.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Moon-rabbit inspired anime girl with graceful presence.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "fantasy"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_aa",
+      "name": "Reyume",
+      "type": "vrm",
+      "file": "reyume.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-C",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Dream-chasing anime girl with a hopeful romantic spirit.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 1.3,
+      "camDist": 1.9
+    },
+    {
+      "id": "vrm_ab",
+      "name": "Piggy",
+      "type": "vrm",
+      "file": "piggy.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-D",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Adorable pink-themed anime companion, endlessly cute.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "cute"
+      ],
+      "camY": 0.85,
+      "camDist": 1.6,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ae",
+      "name": "Starelle",
+      "type": "vrm",
+      "file": "starelle.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 320,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Star-gazing anime girl who brings cosmic wonder.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_af",
+      "name": "Chaotic",
+      "type": "vrm",
+      "file": "chaotic.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 450,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Wild-energy anime girl who thrives in the unexpected.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.35,
+      "camDist": 2.1,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ag",
+      "name": "Vestelle",
+      "type": "vrm",
+      "file": "vestelle.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 150,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Flowing-dress anime beauty with timeless classic style.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.25,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ah",
+      "name": "Cecil",
+      "type": "vrm",
+      "file": "cecil.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Refined and intelligent anime girl with sharp wit.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 2.6,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ai",
+      "name": "Usagi",
+      "type": "vrm",
+      "file": "usagi.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-A",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Rabbit-themed anime girl, soft and endearingly sweet.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "fantasy"
+      ],
+      "camY": 1.15,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_aj",
+      "name": "Valentines",
+      "type": "vrm",
+      "file": "valentines.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Romantic anime girl made for heartfelt moments.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.1,
+      "camDist": 1.9
+    },
+    {
+      "id": "vrm_al",
+      "name": "Nobuko",
+      "type": "vrm",
+      "file": "nobuko.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Traditional Japanese-inspired anime girl with grace.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_am",
+      "name": "Melnus",
+      "type": "vrm",
+      "file": "melnus.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Warrior-spirit anime girl forged in fantasy battles.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_an",
+      "name": "Mochi",
+      "type": "vrm",
+      "file": "mochi.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-A",
+      "cat": "anime",
+      "price": 150,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Soft and squishy anime companion — sweet as rice cake.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "cute"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ao",
+      "name": "Cassie",
+      "type": "vrm",
+      "file": "cassie.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 350,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Bright and bubbly Western-style anime companion.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ap",
+      "name": "Teste",
+      "type": "vrm",
+      "file": "teste.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Experimental test avatar — quirky and unique.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.1,
+      "camDist": 1.9
+    },
+    {
+      "id": "vrm_aq",
+      "name": "Usayo",
+      "type": "vrm",
+      "file": "usayo.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Moonlit rabbit anime girl enchanted by midnight magic.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "fantasy"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ar",
+      "name": "Seraphine",
+      "type": "vrm",
+      "file": "seraphine.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 230,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Angelic anime girl with white wings and peach skin.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_as",
+      "name": "Koharu",
+      "type": "vrm",
+      "file": "koharu.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 350,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Gentle spring-day anime girl, warm as cherry blossoms.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_au",
+      "name": "Poppy",
+      "type": "vrm",
+      "file": "poppy.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 150,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Energetic pink anime companion bursting with joy.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_av",
+      "name": "Chiaki",
+      "type": "vrm",
+      "file": "chiaki.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 170,
+      "badge": null,
+      "downloads": 0,
+      "desc": "School-club anime girl with everyday sunny charm.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_aw",
+      "name": "Wren",
+      "type": "vrm",
+      "file": "wren.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Nature-inspired anime girl, light as a bird in flight.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.05,
+      "camDist": 1.85,
+      "sceneOffsetY": -0.15
+    },
+    {
+      "id": "vrm_ax",
+      "name": "Fluffy",
+      "type": "vrm",
+      "file": "fluffy.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Soft green-themed anime companion, cosy and adorable.",
+      "tags": [
+        "anime",
+        "free",
+        "cute"
+      ],
+      "camY": 0.45,
+      "camDist": 1.35,
+      "sceneOffsetY": -0.12
+    },
+    {
+      "id": "vrm_ba",
+      "name": "Manju",
+      "type": "vrm",
+      "file": "manju.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-A",
+      "cat": "anime",
+      "price": 70,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Tiny 458 KB wonder — a sweet cat-inspired anime chibi.",
+      "tags": [
+        "anime",
+        "free",
+        "japanese",
+        "cute"
+      ],
+      "camY": 0.1711,
+      "camDist": 1.85
+    },
+    {
+      "id": "vrm_bv",
+      "name": "Pixie",
+      "type": "vrm",
+      "file": "3078376947502904970.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "cat": "anime",
+      "price": 1000,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Winged fairy girl with butterfly wings and a flowing dress.",
+      "tags": [
+        "anime",
+        "free"
+      ],
+      "camY": 1.1,
+      "camDist": 1.65
+    },
+    {
+      "id": "omokage_blue",
+      "name": "Omokage Blue",
+      "type": "vrm",
+      "file": "omokage_blue.vrm",
+      "body": "F",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "camY": 1.4,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 130,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Omokage Blue — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bb",
+      "name": "Zim",
+      "type": "vrm",
+      "file": "6732356765624038613.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-GB",
+      "ttsVoice": "en-GB-Standard-C",
+      "camY": 1.15,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 700,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Zim — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bk",
+      "name": "Celeste",
+      "type": "vrm",
+      "file": "5879296086910766842.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 500,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Celeste — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bl",
+      "name": "Hatter",
+      "type": "vrm",
+      "file": "4046259803237667740.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 270,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Hatter — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bm",
+      "name": "Riri",
+      "type": "vrm",
+      "file": "622156029446842789.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 330,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Riri — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bn",
+      "name": "Mairle",
+      "type": "vrm",
+      "file": "4145499522640500587.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 270,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Mairle — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bo",
+      "name": "Neptune",
+      "type": "vrm",
+      "file": "1142849809175230263.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 270,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Neptune — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bp",
+      "name": "Outie",
+      "type": "vrm",
+      "file": "3016082142299609692.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Outie — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bq",
+      "name": "Usagi",
+      "type": "vrm",
+      "file": "976330775043212445.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 130,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Usagi — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_br",
+      "name": "Flora",
+      "type": "vrm",
+      "file": "6867174017251562056.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 0,
+      "badge": "free",
+      "downloads": 0,
+      "desc": "Flora — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bs",
+      "name": "Rina",
+      "type": "vrm",
+      "file": "1727872698959749405.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 270,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Mika — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bt",
+      "name": "Rion",
+      "type": "vrm",
+      "file": "4211433233394351516.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Rion — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bu",
+      "name": "Aqualia",
+      "type": "vrm",
+      "file": "7336661585066417180.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 700,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Aqualia — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bi",
+      "name": "Reiru",
+      "type": "vrm",
+      "file": "659930735464832056.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 350,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Reiru — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bj",
+      "name": "Juri",
+      "type": "vrm",
+      "file": "5874615106716932765.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "ja",
+      "ttsLang": "ja-JP",
+      "ttsVoice": "ja-JP-Standard-B",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 250,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Juri — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bh",
+      "name": "Lime",
+      "type": "vrm",
+      "file": "8672792286814049441_lime.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 150,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Lime — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_bd",
+      "name": "Nana",
+      "type": "vrm",
+      "file": "1389512577219599931.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Nana — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "vrm_be",
+      "name": "Blue",
+      "type": "vrm",
+      "file": "6486620908953578988.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-E",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 500,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Blue — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "ori",
+      "name": "Ori",
+      "type": "vrm",
+      "file": "7802226806481293962_green.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.1,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Ori — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "hollowknight",
+      "name": "The Knight",
+      "type": "vrm",
+      "file": "hollowknight.vrm",
+      "body": "M",
+      "mood": "neutral",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-D",
+      "camY": 0.9,
+      "camDist": 1.85,
+      "cat": "anime",
+      "price": 300,
+      "badge": null,
+      "downloads": 0,
+      "desc": "The Knight — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    },
+    {
+      "id": "heart_oc",
+      "name": "Heart",
+      "type": "vrm",
+      "file": "heart.vrm",
+      "body": "F",
+      "mood": "happy",
+      "lipsyncLang": "en",
+      "ttsLang": "en-US",
+      "ttsVoice": "en-US-Standard-C",
+      "camY": 1.0,
+      "camDist": 1.65,
+      "cat": "anime",
+      "price": 500,
+      "badge": null,
+      "downloads": 0,
+      "desc": "Heart — anime-style VRM avatar.",
+      "tags": [
+        "anime"
+      ]
+    }
+  ]
+}

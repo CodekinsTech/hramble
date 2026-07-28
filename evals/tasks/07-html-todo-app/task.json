@@ -1,0 +1,4 @@
+{
+  "prompt": "Create a single self-contained file index.html for a Todo List web app. It must have inline CSS and JavaScript (no external files). Features: a text input and Add button to add a todo, each todo shows in a list with a checkbox to mark complete (strike-through when done) and a delete button to remove it. Make it look clean and modern. Everything in one index.html file.",
+  "verify": { "cmd": "test -f index.html && grep -qi '<script' index.html && grep -qi 'addEventListener\\|onclick' index.html && echo ok" }
+}

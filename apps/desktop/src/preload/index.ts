@@ -297,4 +297,65 @@ contextBridge.exposeInMainWorld("palot", {
 		/** Restore the most recent migration backup. */
 		restoreBackup: () => ipcRenderer.invoke("onboarding:restore-backup"),
 	},
+
+	// Perch mode — avatar sits on the edge of the frontmost window.
+	perchCheck: () => ipcRenderer.invoke("perch:check"),
+	perchStart: (avatar: string, interactive: boolean) =>
+		ipcRenderer.invoke("perch:start", avatar, interactive),
+	perchStop: () => ipcRenderer.invoke("perch:stop"),
+	perchHitRects: (rects: unknown) => ipcRenderer.send("perch:hitrects", rects),
+	perchDrag: (action: string, dx: number, dy: number) =>
+		ipcRenderer.send("perch:drag", action, dx, dy),
+	onPerchZone: (callback: (zone: string) => void) => {
+		const listener = (_e: unknown, zone: string) => callback(zone)
+		ipcRenderer.on("perch:zone", listener)
+		return () => ipcRenderer.removeListener("perch:zone", listener)
+	},
+	onPerchActive: (callback: (active: boolean) => void) => {
+		const listener = (_e: unknown, active: boolean) => callback(active)
+		ipcRenderer.on("perch:active", listener)
+		return () => ipcRenderer.removeListener("perch:active", listener)
+	},
+
+	// --- Ollama / local models (the free tier) ---
+	ollama: {
+		/** Is Ollama installed + running, and which models are pulled? */
+		status: () => ipcRenderer.invoke("ollama:status"),
+		/** Pull a model (defaults to the recommended coder model). */
+		pull: (model?: string) => ipcRenderer.invoke("ollama:pull", model),
+		/** Subscribe to download progress during a pull. */
+		onPullProgress: (
+			callback: (p: { status?: string; percent?: number; done?: boolean; error?: string }) => void,
+		) => {
+			const listener = (_e: unknown, p: never) => callback(p)
+			ipcRenderer.on("ollama:pull-progress", listener)
+			return () => ipcRenderer.removeListener("ollama:pull-progress", listener)
+		},
+		/** Open ollama.com/download in the browser. */
+		openDownload: () => ipcRenderer.invoke("ollama:openDownload"),
+	},
+
+	// --- Avatar store (proxies to the shared Worker; bootstrap token stays in main) ---
+	store: {
+		/** Public config for the renderer: supabaseUrl, supabaseAnonKey, razorpayKeyId. */
+		config: () => ipcRenderer.invoke("store:config"),
+		/** Gem balance for an email. */
+		credits: (email: string) => ipcRenderer.invoke("store:credits", email),
+		/** Owned + paid avatar id sets for an email (userToken = Supabase JWT). */
+		owned: (email: string, userToken?: string) => ipcRenderer.invoke("store:owned", email, userToken),
+		/** Create a Razorpay order (amount in paise). */
+		createOrder: (opts: { amount: number; currency?: string; receipt?: string }) =>
+			ipcRenderer.invoke("store:createOrder", opts),
+		/** Verify a completed Razorpay payment → credits gems. */
+		verifyPayment: (p: {
+			razorpay_order_id: string
+			razorpay_payment_id: string
+			razorpay_signature: string
+			email: string
+			credits_to_add: number
+		}) => ipcRenderer.invoke("store:verifyPayment", p),
+		/** Spend gems to buy an avatar (records ownership when avatarId is set). */
+		deduct: (p: { email: string; amount: number; avatarId: string; userToken?: string }) =>
+			ipcRenderer.invoke("store:deduct", p),
+	},
 })

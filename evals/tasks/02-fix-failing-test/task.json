@@ -1,0 +1,4 @@
+{
+  "prompt": "Run `node test.mjs`. It fails. Fix slug.js so the test passes. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

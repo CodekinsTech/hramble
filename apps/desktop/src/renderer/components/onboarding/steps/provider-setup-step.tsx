@@ -29,6 +29,7 @@ import {
 } from "../../../lib/providers"
 import { ConnectProviderDialog } from "../../settings/connect-provider-dialog"
 import { ProviderIcon } from "../../settings/provider-icon"
+import { LocalModelCard } from "./local-model-card"
 
 // ============================================================
 // Component
@@ -142,7 +143,10 @@ export function ProviderSetupStep({ onComplete, onSkip }: ProviderSetupStepProps
 					/>
 				) : null}
 
-				{/* Other providers grid */}
+				{/* Local model (Ollama) — the free, offline, no-API-key path. */}
+					<LocalModelCard />
+
+					{/* Other providers grid */}
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 					{loading
 						? ["s1", "s2", "s3", "s4", "s5", "s6"].map((key) => (

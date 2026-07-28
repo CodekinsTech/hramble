@@ -21,6 +21,7 @@ import { ProviderSettings } from "./components/settings/provider-settings"
 import { ServerSettings } from "./components/settings/server-settings"
 import { SettingsPage } from "./components/settings/settings-page"
 import { SetupSettings } from "./components/settings/setup-settings"
+import { StoreSettings } from "./components/settings/store-settings"
 import { WorktreeSettings } from "./components/settings/worktree-settings"
 import { SidebarLayout } from "./components/sidebar-layout"
 
@@ -113,6 +114,12 @@ const settingsWorktreesRoute = createRoute({
 	component: WorktreeSettings,
 })
 
+const settingsStoreRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: "store",
+	component: StoreSettings,
+})
+
 const settingsAboutRoute = createRoute({
 	getParentRoute: () => settingsRoute,
 	path: "about",
@@ -163,6 +170,7 @@ const routeTree = rootRoute.addChildren([
 			settingsNotificationsRoute,
 			settingsProvidersRoute,
 			settingsWorktreesRoute,
+			settingsStoreRoute,
 			settingsSetupRoute,
 			settingsAboutRoute,
 		]),

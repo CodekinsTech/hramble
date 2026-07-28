@@ -1,0 +1,4 @@
+{
+  "prompt": "In math.js, add a `multiply(a, b)` function that returns a * b, and export it. Do not change the existing add function.",
+  "verify": { "cmd": "node test.mjs" }
+}

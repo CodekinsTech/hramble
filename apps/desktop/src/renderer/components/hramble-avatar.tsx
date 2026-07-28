@@ -39,8 +39,33 @@ export function HrambleAvatar() {
 	const [speaking, setSpeaking] = useState(false)
 	const [muted, setMuted] = useState(false)
 	const [listening, setListening] = useState(false)
+	const [perched, setPerched] = useState(false)
 	const sttRef = useRef<SttHandle | null>(null)
 	const drag = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
+
+	// Track perch state so the box hides its avatar while she's out perching.
+	useEffect(() => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		return (window as any).palot?.onPerchActive?.((active: boolean) => setPerched(active))
+	}, [])
+
+	// ESC from the main window docks her back (escape hatch if the perch hangs).
+	useEffect(() => {
+		if (!perched) return
+		const onKey = (e: KeyboardEvent) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			if (e.key === "Escape") (window as any).palot?.perchStop?.()
+		}
+		window.addEventListener("keydown", onKey)
+		return () => window.removeEventListener("keydown", onKey)
+	}, [perched])
+
+	const togglePerch = () => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const p = (window as any).palot
+		if (perched) p?.perchStop?.()
+		else p?.perchStart?.(avatar, true)
+	}
 
 	// Warm up the TTS + STT models (they are large) so first use is snappy.
 	useEffect(() => {
@@ -128,9 +153,13 @@ export function HrambleAvatar() {
 
 	const body = (onToggle: () => void, docked: boolean) => (
 		<div className="hramble-av-body">
-			<div className="hramble-av-stage-wrap">
-				<VrmStage avatar={avatar} mode={docked ? "box" : "float"} />
-			</div>
+			{perched ? (
+				<div className="hramble-av-away">🚶 out perching…</div>
+			) : (
+				<div className="hramble-av-stage-wrap">
+					<VrmStage avatar={avatar} mode={docked ? "box" : "float"} />
+				</div>
+			)}
 			<div className="hramble-av-tabs" onPointerDown={(e) => e.stopPropagation()}>
 				{(Object.keys(AVATARS) as AvatarKey[]).map((k) => (
 					<button
@@ -155,6 +184,17 @@ export function HrambleAvatar() {
 					}}
 				>
 					🎤
+				</button>
+				<button
+					type="button"
+					className={`hramble-av-tab${perched ? " active" : ""}`}
+					title={perched ? "Dock back to the box" : "Perch — sit on window edges / dock"}
+					onClick={(e) => {
+						e.stopPropagation()
+						togglePerch()
+					}}
+				>
+					🪜
 				</button>
 				<button
 					type="button"

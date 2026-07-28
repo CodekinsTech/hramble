@@ -1,0 +1,4 @@
+{
+  "prompt": "Count the number of lines in data.txt and write just that number into COUNT.txt.",
+  "verify": { "fileContains": { "file": "COUNT.txt", "text": "4" } }
+}

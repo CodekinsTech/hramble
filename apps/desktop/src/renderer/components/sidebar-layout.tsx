@@ -12,10 +12,11 @@ import {
 } from "@palot/ui/components/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
-import { useAtomValue } from "jotai"
-import { PanelLeftIcon, PlusIcon } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useAtomValue, useSetAtom } from "jotai"
+import { CodeIcon, InfinityIcon, PanelLeftIcon, PlusIcon } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
+import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
 import { useAgents, useProjectList, useSetCommandPaletteOpen } from "../hooks/use-agents"
 import { useAgentActions } from "../hooks/use-server"
 import type { Agent } from "../lib/types"
@@ -26,6 +27,51 @@ import { APP_BAR_HEIGHT, AppBar } from "./app-bar"
 import { AppSidebarContent } from "./sidebar"
 import { useSidebarSlot } from "./sidebar-slot-context"
 import { UpdateBanner } from "./update-banner"
+
+// ============================================================
+// Workspace switcher (Code | Hyperloop)
+// ============================================================
+
+/** Top-of-sidebar tabs that switch between the normal coder and the autonomous
+ *  Hyperloop workspace. Same projects; different session list + run behaviour. */
+function WorkspaceSwitcher({
+	mode,
+	onChange,
+}: {
+	mode: "code" | "hyperloop"
+	onChange: (mode: "code" | "hyperloop") => void
+}) {
+	return (
+		<div className="px-2 pt-1 pb-2">
+			<div className="flex items-center gap-1 rounded-lg bg-muted/50 p-1">
+				<button
+					type="button"
+					onClick={() => onChange("code")}
+					className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 font-medium text-xs transition-colors ${
+						mode === "code"
+							? "bg-background text-foreground shadow-sm"
+							: "text-muted-foreground hover:text-foreground"
+					}`}
+				>
+					<CodeIcon className="size-3.5" />
+					Code
+				</button>
+				<button
+					type="button"
+					onClick={() => onChange("hyperloop")}
+					className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 font-medium text-xs transition-colors ${
+						mode === "hyperloop"
+							? "bg-background text-amber-600 shadow-sm dark:text-amber-400"
+							: "text-muted-foreground hover:text-foreground"
+					}`}
+				>
+					<InfinityIcon className="size-3.5" />
+					Hyperloop
+				</button>
+			</div>
+		</div>
+	)
+}
 
 // ============================================================
 // Constants
@@ -152,8 +198,23 @@ export function SidebarLayout() {
 	const { renameSession, deleteSession, forkSession } = useAgentActions()
 	const serverConnected = useAtomValue(serverConnectedAtom)
 
-	// Sub-agents are filtered at the API level (roots: true)
-	const visibleAgents = agents
+	// Workspace mode (Code | Hyperloop). Same projects; each mode shows its own
+	// session list — Hyperloop runs are tagged by id and split out here.
+	const workspaceMode = useAtomValue(workspaceModeAtom)
+	const setWorkspaceMode = useSetAtom(workspaceModeAtom)
+	const hyperloopSet = useAtomValue(hyperloopSessionSetAtom)
+
+	// Sub-agents are filtered at the API level (roots: true); here we additionally
+	// split by workspace so Code hides Hyperloop runs and vice-versa.
+	const visibleAgents = useMemo(
+		() =>
+			agents.filter((a) =>
+				workspaceMode === "hyperloop"
+					? hyperloopSet.has(a.sessionId)
+					: !hyperloopSet.has(a.sessionId),
+			),
+		[agents, workspaceMode, hyperloopSet],
+	)
 
 	const handleRenameSession = useCallback(
 		async (agent: Agent, title: string) => {
@@ -234,6 +295,15 @@ export function SidebarLayout() {
 							WebkitAppRegion: "drag",
 						}}
 					/>
+					{!slotContent && (
+						<WorkspaceSwitcher
+							mode={workspaceMode}
+							onChange={(m) => {
+								setWorkspaceMode(m)
+								navigate({ to: "/" })
+							}}
+						/>
+					)}
 					{slotContent ?? (
 					<AppSidebarContent
 						agents={visibleAgents}

@@ -24,6 +24,7 @@ import {
 	CheckIcon,
 	ChevronDownIcon,
 	GitBranchIcon,
+	InfinityIcon,
 	ListIcon,
 	MaximizeIcon,
 	MonitorIcon,
@@ -466,6 +467,15 @@ export interface PromptToolbarProps {
 	selectedVariant: string | undefined
 	onSelectVariant: (variant: string | undefined) => void
 
+	/** Plan mode: think-first (plan) then act (build). Optional so existing
+	 *  consumers that don't wire it simply don't render the toggle. */
+	planMode?: boolean
+	onTogglePlanMode?: (value: boolean) => void
+
+	/** Hyperloop: autonomous — keeps working until the task is done. */
+	hyperloop?: boolean
+	onToggleHyperloop?: (value: boolean) => void
+
 	disabled?: boolean
 }
 
@@ -485,6 +495,10 @@ export function PromptToolbar({
 	recentModels,
 	selectedVariant,
 	onSelectVariant,
+	planMode,
+	onTogglePlanMode,
+	hyperloop,
+	onToggleHyperloop,
 	disabled,
 }: PromptToolbarProps) {
 	// Compute variants for the current effective model
@@ -506,6 +520,56 @@ export function PromptToolbar({
 					onSelectAgent={onSelectAgent}
 					disabled={disabled}
 				/>
+			)}
+
+			{onTogglePlanMode && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							disabled={disabled}
+							onClick={() => onTogglePlanMode(!planMode)}
+							className={cn(
+								"flex items-center gap-1 rounded-md px-2 py-1 font-medium text-xs transition-colors",
+								planMode
+									? "bg-primary/15 text-primary"
+									: "text-muted-foreground hover:bg-accent hover:text-foreground",
+							)}
+						>
+							<ListIcon className="size-3.5" />
+							Plan
+						</button>
+					</TooltipTrigger>
+					<TooltipContent className="max-w-56 text-center">
+						Plan mode: writes a plan first, then does the work. More reliable (best for local
+						models), a bit slower.
+					</TooltipContent>
+				</Tooltip>
+			)}
+
+			{onToggleHyperloop && (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							disabled={disabled}
+							onClick={() => onToggleHyperloop(!hyperloop)}
+							className={cn(
+								"flex items-center gap-1 rounded-md px-2 py-1 font-medium text-xs transition-colors",
+								hyperloop
+									? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+									: "text-muted-foreground hover:bg-accent hover:text-foreground",
+							)}
+						>
+							<InfinityIcon className="size-3.5" />
+							Hyperloop
+						</button>
+					</TooltipTrigger>
+					<TooltipContent className="max-w-60 text-center">
+						Hyperloop: works on its own, round after round, until the task is done (max 15
+						rounds). Press Escape to stop.
+					</TooltipContent>
+				</Tooltip>
 			)}
 
 			{hasAgents && <Separator orientation="vertical" className="mx-0.5 my-2 self-stretch" />}

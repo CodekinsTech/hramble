@@ -380,8 +380,13 @@ async function spawnServer(
 		}
 	})
 
-	// Wait for the server to be ready
-	await waitForReady(url, 15_000)
+	// Wait for the server to be ready.
+	// 45s, not 15s: `opencode serve` needs ~10s to bind on a warm machine, but
+	// during a cold dev build (or on a busy/slow machine) it regularly exceeds
+	// 15s. The old timeout fired while the server was still starting, the app
+	// showed "connection failed", and the server then bound moments later —
+	// leaving a healthy server the UI believed was down.
+	await waitForReady(url, 45_000)
 
 	// Write lockfile after successful start
 	if (proc.pid) {

@@ -1,0 +1,4 @@
+{
+  "prompt": "Find the port number configured in this project. Then write ONLY that number into ANSWER.md, replacing all existing content.",
+  "verify": { "fileContains": { "file": "ANSWER.md", "text": "8471" } }
+}

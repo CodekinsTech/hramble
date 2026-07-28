@@ -34,6 +34,7 @@ import {
 	upsertSessionAtom,
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
+import { markHyperloopSession, workspaceModeAtom } from "../atoms/workspace"
 import { useAgents, useProjectList } from "../hooks/use-agents"
 import { NEW_CHAT_DRAFT_KEY, useDraftActions, useDraftSnapshot } from "../hooks/use-draft"
 import type { ModelRef } from "../hooks/use-opencode-data"
@@ -235,6 +236,19 @@ export function NewChat() {
 	const [selectedModel, setSelectedModel] = useState<ModelRef | null>(null)
 	const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
 	const [selectedVariant, setSelectedVariant] = useState<string | undefined>(undefined)
+	// Plan mode: think-first-then-act. Auto-on for local models (Ollama), where it
+	// measurably lifts reliability; off for strong hosted models where it just
+	// adds latency. The user can override, after which we stop auto-toggling.
+	const [planMode, setPlanMode] = useState(false)
+	const planModeTouched = useRef(false)
+	const togglePlanMode = useCallback((v: boolean) => {
+		planModeTouched.current = true
+		setPlanMode(v)
+	}, [])
+	// Hyperloop is now a top-level workspace (Code | Hyperloop), not a composer
+	// toggle. When the Hyperloop workspace is active, every new run is autonomous.
+	const workspaceMode = useAtomValue(workspaceModeAtom)
+	const hyperloop = workspaceMode === "hyperloop"
 
 	// Mention popover state
 	const [mentionOpen, setMentionOpen] = useState(false)
@@ -363,6 +377,13 @@ export function NewChat() {
 		[selectedModel, activeOpenCodeAgent, config?.model, providers, recentModels],
 	)
 
+	// Auto-default Plan mode from the model: on for local (Ollama), off otherwise.
+	// Stops once the user flips the toggle themselves.
+	useEffect(() => {
+		if (planModeTouched.current) return
+		setPlanMode(effectiveModel?.providerID === "ollama")
+	}, [effectiveModel])
+
 	// Validate variant against the effective model's available variants.
 	// Clears the variant if the current model doesn't support it (e.g. restored
 	// from per-project preference but the model was changed, or provider updated).
@@ -436,6 +457,9 @@ export function NewChat() {
 			const session = await createSession(selectedDirectory)
 			if (!session) return
 
+			// Tag Hyperloop runs so they show under the Hyperloop workspace only.
+			if (hyperloop) markHyperloopSession(session.id)
+
 			const currentBranch = vcs?.branch ?? ""
 			if (currentBranch) {
 				appStore.set(setSessionBranchAtom, { sessionId: session.id, branch: currentBranch })
@@ -448,6 +472,8 @@ export function NewChat() {
 				agent: selectedAgent ?? undefined,
 				variant: selectedVariant,
 				files,
+				planMode,
+				hyperloop,
 			})
 			clearDraft()
 			navigateToSession(session.id)
@@ -459,6 +485,8 @@ export function NewChat() {
 			effectiveModel,
 			selectedAgent,
 			selectedVariant,
+			planMode,
+			hyperloop,
 			clearDraft,
 			persistProjectModel,
 			navigateToSession,
@@ -519,6 +547,7 @@ export function NewChat() {
 					if (!session) {
 						throw new Error("Failed to create session in worktree")
 					}
+					if (hyperloop) markHyperloopSession(session.id)
 
 					// Replace the stub with the real session data. Override the
 					// directory back to the parent so it groups correctly in the sidebar.
@@ -546,6 +575,8 @@ export function NewChat() {
 						agent: selectedAgent ?? undefined,
 						variant: selectedVariant,
 						files,
+						planMode,
+						hyperloop,
 					})
 				} catch (err) {
 					console.error("Worktree launch failed:", err)
@@ -565,6 +596,8 @@ export function NewChat() {
 			effectiveModel,
 			selectedAgent,
 			selectedVariant,
+			planMode,
+			hyperloop,
 			clearDraft,
 			persistProjectModel,
 			navigateToSession,
@@ -609,7 +642,15 @@ export function NewChat() {
 
 					{/* "Build what's next" + project name */}
 					<div className="text-center">
-						<h1 className="text-2xl font-semibold text-foreground">Build what's next</h1>
+						<h1 className="text-2xl font-semibold text-foreground">
+							{hyperloop ? "Hyperloop" : "Build what's next"}
+						</h1>
+						{hyperloop && (
+							<p className="mx-auto mt-2 max-w-md text-amber-600 text-sm dark:text-amber-400">
+								Autonomous mode — give one task and it works round after round until it's done.
+								Press Escape any time to stop.
+							</p>
+						)}
 						{projects.length > 1 ? (
 							<Popover open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
 								<PopoverTrigger
@@ -738,6 +779,8 @@ export function NewChat() {
 											recentModels={recentModels}
 											selectedVariant={selectedVariant}
 											onSelectVariant={setSelectedVariant}
+											planMode={planMode}
+											onTogglePlanMode={togglePlanMode}
 										/>
 									</PromptInputTools>
 								</PromptInputFooter>

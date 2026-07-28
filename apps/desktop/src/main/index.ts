@@ -11,6 +11,9 @@ import { createLogger } from "./logger"
 import { startMdnsScanner, stopMdnsScanner } from "./mdns-scanner"
 import { stopServer } from "./opencode-manager"
 import { initSettingsStore } from "./settings-store"
+import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
+import { registerOllama } from "./ollama" // local models (free tier)
+import { registerStore } from "./store" // avatar store — proxy to the shared Worker
 import { startEnvResolution } from "./shell-env"
 import { createTray, destroyTray } from "./tray"
 import { initAutoUpdater, stopAutoUpdater } from "./updater"
@@ -291,6 +294,13 @@ if (!gotLock) {
 		initSettingsStore()
 		initCredentialStore()
 		registerIpcHandlers()
+		registerPerch({
+			preloadPath: path.join(__dirname, "../preload/index.cjs"),
+			rendererUrl: process.env.ELECTRON_RENDERER_URL,
+			rendererFile: path.join(__dirname, "../renderer/index.html"),
+		})
+		registerStore()
+		registerOllama()
 		initAutomations().catch(console.error)
 		startMdnsScanner().catch((err) => log.warn("mDNS scanner failed to start", err))
 		createWindow()

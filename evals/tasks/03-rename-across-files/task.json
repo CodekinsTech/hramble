@@ -1,0 +1,4 @@
+{
+  "prompt": "Rename the function `getUsr` to `getUser` everywhere it is defined or used across the project. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

@@ -19,6 +19,38 @@ import { getProjectClient } from "../services/connection-manager"
 
 const log = createLogger("use-server")
 
+// ── Hyperloop ────────────────────────────────────────────────────────────────
+// Autonomous mode: keep working, round after round, until the task is done.
+// Safety is non-negotiable — a hard round cap prevents runaway cost, and any
+// abort (Escape-to-stop) flags the session so the loop exits between rounds.
+const HYPERLOOP_MAX_ROUNDS = 15
+const hyperloopStopped = new Set<string>()
+
+/** Called by abort paths so a running Hyperloop stops at the next round. */
+export function stopHyperloop(sessionId: string) {
+	hyperloopStopped.add(sessionId)
+}
+
+const HYPERLOOP_CONTINUE =
+	"Continue working on the task. Resume exactly where you left off and complete the remaining steps. Never run destructive or irreversible commands (deleting files/dirs, force-pushing, dropping databases, disk operations) — if a step seems to need one, stop and report instead."
+
+// Guardrail: destructive / irreversible shell commands. If one of these shows up
+// in the agent's tool calls during Hyperloop, halt the loop immediately so it
+// can't compound. Broad on purpose — in autonomous mode we favour false stops
+// over real damage.
+const DANGEROUS_COMMAND =
+	/\brm\s+-[rf]{1,2}\b|\bsudo\s+rm\b|git\s+push[^\n]*--force|--force[^\n]*push|\bgit\s+reset\s+--hard\b|\bdd\s+if=|\bmkfs\b|drop\s+(table|database)\b|truncate\s+table\b|>\s*\/dev\/(sd|disk|null\/)|:\s*\(\s*\)\s*\{|\bshutdown\b|\breboot\b|\bhalt\b/i
+const HYPERLOOP_CHECK =
+	"Is the ORIGINAL task now fully complete? If the project has tests, run them now. Reply with ONLY the single word DONE if everything the task required is finished and any tests pass. Otherwise reply CONTINUE followed by one short line describing what still remains."
+
+/** Read the DONE/CONTINUE verdict from the latest assistant message. */
+function isHyperloopDone(text: string): boolean {
+	const v = text.toUpperCase()
+	if (/\bCONTINUE\b/.test(v)) return false
+	if (/NOT\s+(YET\s+)?(DONE|COMPLETE|FINISHED)/.test(v)) return false
+	return /\bDONE\b/.test(v)
+}
+
 /**
  * Hook for OpenCode server connection state.
  */
@@ -38,6 +70,8 @@ export function useAgentActions() {
 		const client = getProjectClient(directory)
 		if (!client) throw new Error("Not connected to OpenCode server")
 		log.debug("abort", { sessionId })
+		// Also halt any running Hyperloop for this session.
+		stopHyperloop(sessionId)
 		try {
 			await client.session.abort({ sessionID: sessionId })
 		} catch (err) {
@@ -56,6 +90,14 @@ export function useAgentActions() {
 				agent?: string
 				variant?: string
 				files?: FileAttachment[]
+				// Plan mode: think first, then act. Runs a no-edit planning turn
+				// (plan agent) and then an execution turn (build agent) in the same
+				// session. Measured to make weaker/local models markedly more
+				// reliable — they otherwise reply with text and forget to edit.
+				planMode?: boolean
+				// Hyperloop: autonomous mode. Keep working round after round until the
+				// task is complete (self-check + run tests) or the round cap is hit.
+				hyperloop?: boolean
 			},
 		) => {
 			log.debug("sendPrompt called", {
@@ -128,26 +170,187 @@ export function useAgentActions() {
 				})
 			}
 
+			const model = options?.model
+				? { providerID: options.model.providerID, modelID: options.model.modelID }
+				: undefined
+
 			log.debug("sendPrompt: calling promptAsync", {
 				sessionId,
 				agent: options?.agent,
 				model: options?.model,
 				partsCount: parts.length,
+				planMode: options?.planMode,
+				hyperloop: options?.hyperloop,
 			})
+
+			// One unit of work. When `withPlan`, it thinks first (plan agent, edits
+			// disabled) then executes (build agent) in the same session; otherwise a
+			// single normal turn.
+			type Part = { type: "text"; text: string } | FilePartInput
+			const runWorkTurn = async (turnParts: Part[], withPlan: boolean) => {
+				if (withPlan) {
+					await client.session.promptAsync({
+						sessionID: sessionId,
+						parts: [
+							...turnParts,
+							{
+								type: "text",
+								text: "\n\nFirst, write a short numbered plan of the exact steps and file edits required. Do not make any changes yet — only the plan.",
+							},
+						],
+						model,
+						agent: "plan",
+						variant: options?.variant,
+					})
+					await client.session.promptAsync({
+						sessionID: sessionId,
+						parts: [
+							{
+								type: "text",
+								text: "Now carry out that plan exactly — make all the file edits and run any commands needed.",
+							},
+						],
+						model,
+						agent: "build",
+						variant: options?.variant,
+					})
+				} else {
+					await client.session.promptAsync({
+						sessionID: sessionId,
+						parts: turnParts,
+						model,
+						agent: options?.agent,
+						variant: options?.variant,
+					})
+				}
+			}
+
+			// Read the latest assistant text (used for the Hyperloop DONE/CONTINUE check).
+			const readLastAssistantText = async (): Promise<string> => {
+				try {
+					const res = await client.session.messages({ sessionID: sessionId })
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const msgs: any[] = res.data ?? []
+					const assistants = msgs.filter((m) => (m.info || m).role === "assistant")
+					const lastParts = assistants[assistants.length - 1]?.parts ?? []
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					return lastParts
+						.filter((p: any) => p.type === "text")
+						.map((p: any) => p.text || "")
+						.join(" ")
+				} catch {
+					return ""
+				}
+			}
+
+			// Count tool executions so far — used to detect a stuck loop (a round
+			// that runs no tools = the agent talked but didn't act). Returns -1 on
+			// error so the caller can skip the check that round.
+			const countTools = async (): Promise<number> => {
+				try {
+					const res = await client.session.messages({ sessionID: sessionId })
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const msgs: any[] = res.data ?? []
+					let n = 0
+					for (const m of msgs)
+						for (const p of m.parts ?? [])
+							if (p.type === "tool" || p.type === "tool-invocation") n++
+					return n
+				} catch {
+					return -1
+				}
+			}
+
+			// Scan the most recent tool calls for a destructive command.
+			const scanDanger = async (): Promise<string | null> => {
+				try {
+					const res = await client.session.messages({ sessionID: sessionId })
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const msgs: any[] = res.data ?? []
+					const recent = msgs
+						.filter((m) => (m.info || m).role === "assistant")
+						.slice(-2)
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						.flatMap((m: any) => m.parts ?? [])
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						.filter((p: any) => p.type === "tool" || p.type === "tool-invocation")
+					const blob = JSON.stringify(recent)
+					const match = blob.match(DANGEROUS_COMMAND)
+					return match ? match[0] : null
+				} catch {
+					return null
+				}
+			}
+
 			try {
-				const result = await client.session.promptAsync({
-					sessionID: sessionId,
-					parts,
-					model: options?.model
-						? { providerID: options.model.providerID, modelID: options.model.modelID }
-						: undefined,
-					agent: options?.agent,
-					variant: options?.variant,
-				})
-				log.debug("sendPrompt: promptAsync returned", {
-					sessionId,
-					result: JSON.stringify(result).slice(0, 200),
-				})
+				if (options?.hyperloop) {
+					// Autonomous loop: work → guardrails → check done → repeat, up to the cap.
+					hyperloopStopped.delete(sessionId)
+					let round = 0
+					let stuckRounds = 0
+					let stopReason = "max-rounds"
+					for (; round < HYPERLOOP_MAX_ROUNDS; round++) {
+						if (hyperloopStopped.has(sessionId)) {
+							stopReason = "stopped"
+							break
+						}
+						const first = round === 0
+						const beforeTools = await countTools()
+						await runWorkTurn(
+							first ? parts : [{ type: "text", text: HYPERLOOP_CONTINUE }],
+							first && !!options?.planMode,
+						)
+						if (hyperloopStopped.has(sessionId)) {
+							stopReason = "stopped"
+							break
+						}
+
+						// Guardrail #2 — destructive command ran: halt immediately.
+						const danger = await scanDanger()
+						if (danger) {
+							stopReason = `blocked-dangerous:${danger}`
+							log.warn("hyperloop halted — dangerous command detected", { sessionId, danger })
+							break
+						}
+
+						// Guardrail #1 — stuck: two rounds in a row with zero tool activity
+						// means it's talking, not doing. Stop rather than burn the cap.
+						const afterTools = await countTools()
+						if (beforeTools >= 0 && afterTools >= 0 && afterTools === beforeTools) {
+							stuckRounds++
+							if (stuckRounds >= 2) {
+								stopReason = "stuck-no-progress"
+								log.warn("hyperloop halted — no progress for 2 rounds", { sessionId })
+								break
+							}
+						} else {
+							stuckRounds = 0
+						}
+
+						// Completion check (A: self-assess + B: run tests).
+						await client.session.promptAsync({
+							sessionID: sessionId,
+							parts: [{ type: "text", text: HYPERLOOP_CHECK }],
+							model,
+							agent: "build",
+							variant: options?.variant,
+						})
+						if (isHyperloopDone(await readLastAssistantText())) {
+							stopReason = "done"
+							break
+						}
+					}
+					hyperloopStopped.delete(sessionId)
+					log.debug("sendPrompt: hyperloop finished", {
+						sessionId,
+						rounds: round + 1,
+						stopReason,
+					})
+				} else if (options?.planMode) {
+					await runWorkTurn(parts, true)
+				} else {
+					await runWorkTurn(parts, false)
+				}
 			} catch (err) {
 				log.error("sendPrompt: promptAsync failed", { sessionId, agent: options?.agent }, err)
 				throw err

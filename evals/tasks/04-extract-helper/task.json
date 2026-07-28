@@ -1,0 +1,4 @@
+{
+  "prompt": "Create a new file util.js exporting `normalize(s)` that trims and lowercases a string. Refactor app.js's greet to use it. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}
