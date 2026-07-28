@@ -37,6 +37,17 @@ from the palot/OpenCode base; the **Hramble additions** are marked ★.
 - **Store** — Settings → Store: avatar catalogue (VRM), reuses the AvatarBox
   backend. ★
 
+## Connectors, skills & ECC ★
+- **Connectors** — Settings → Connectors: add/remove MCP servers (GitHub,
+  browser, Postgres, …) from the UI, no JSON. Same mechanism as Claude's
+  connectors. Restart OpenCode to apply.
+- **Skills** — OpenCode auto-discovers skills; type `/` in chat to use one.
+- **ECC commands** — a curated set of ECC's slash commands (`/ecc-verify`,
+  `/ecc-code-review`, `/ecc-security`, `/ecc-tdd`, …) can be installed with
+  `bash scripts/install-ecc-commands.sh`. Only the self-contained commands are
+  installed (agents normalized to `build`); the full ECC harness is intentionally
+  NOT auto-installed — it needs a build step and can degrade weak local models.
+
 ## The differentiator
 - **Avatar companion** — VRM avatar that speaks (Supertonic TTS), listens (Vosk
   STT), and perches on your screen. This is Hramble's reason to exist; the coder
