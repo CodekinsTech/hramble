@@ -27,10 +27,15 @@ work with them (corrections + confirmed approaches; include the why). **project*
 = ongoing goals/constraints not derivable from the code. **reference** = pointers
 (URLs, tickets, dashboards).
 
+## Tools (baked into the engine)
+- **`remember(title, fact, type)`** — save a durable fact. Prefer this over
+  hand-editing files; it writes the note and updates the index for you.
+- **`recall()`** — list saved memories. Call it at the start of real work.
+
 ## When to SAVE
-Save durable facts: preferences and corrections, non-obvious constraints,
-decisions and their rationale, external pointers. Do NOT save what the code or
-git already records, or anything only relevant to the current task.
+Call `remember(...)` for durable facts: preferences and corrections, non-obvious
+constraints, decisions and their rationale, external pointers. Do NOT save what
+the code or git already records, or anything only relevant to the current task.
 
 Before saving, read the `## Memory` index in `AGENTS.md` and check for a file that
 already covers it — **update it rather than duplicating.** After writing a memory
