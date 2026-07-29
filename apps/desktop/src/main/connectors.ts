@@ -39,7 +39,10 @@ async function writeConfig(cfg: Config): Promise<void> {
 }
 
 // Curated one-click connectors (npx-installable MCP servers).
+// `envKey` = an API-key env var the user must supply (asked for in the UI).
 const PRESETS = [
+	{ id: "web-search-tavily", name: "Web Search (Tavily)", command: ["npx", "-y", "tavily-mcp@latest"], note: "Search the web — get a free key at tavily.com", envKey: "TAVILY_API_KEY" },
+	{ id: "web-search-brave", name: "Web Search (Brave)", command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"], note: "Search the web — free key at brave.com/search/api", envKey: "BRAVE_API_KEY" },
 	{ id: "memory", name: "Memory (long-term)", command: ["npx", "-y", "@modelcontextprotocol/server-memory"], note: "Remembers facts across sessions (knowledge graph)" },
 	{ id: "sequential-thinking", name: "Sequential Thinking", command: ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"], note: "Step-by-step reasoning for hard problems" },
 	{ id: "filesystem", name: "Filesystem", command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", homedir()], note: "Read/write files on your machine" },
@@ -65,11 +68,19 @@ export function registerConnectors() {
 
 	ipcMain.handle(
 		"connectors:add",
-		async (_e, entry: { name: string; command: string[]; enabled?: boolean }) => {
+		async (
+			_e,
+			entry: { name: string; command: string[]; enabled?: boolean; environment?: Record<string, string> },
+		) => {
 			if (!entry?.name || !Array.isArray(entry.command)) return { ok: false, error: "invalid" }
 			const cfg = await readConfig()
 			cfg.mcp = cfg.mcp ?? {}
-			cfg.mcp[entry.name] = { type: "local", command: entry.command, enabled: entry.enabled !== false }
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const mcpEntry: any = { type: "local", command: entry.command, enabled: entry.enabled !== false }
+			if (entry.environment && Object.keys(entry.environment).length) {
+				mcpEntry.environment = entry.environment
+			}
+			cfg.mcp[entry.name] = mcpEntry
 			await writeConfig(cfg)
 			return { ok: true }
 		},

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react"
 // Changes apply after an OpenCode restart (button provided).
 
 type Installed = { name: string; command: string[]; url?: string; enabled: boolean }
-type Preset = { id: string; name: string; command: string[]; note: string }
+type Preset = { id: string; name: string; command: string[]; note: string; envKey?: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const bridge = () => (window as any).palot
@@ -36,7 +36,14 @@ export function ConnectorsSettings() {
 	const installedNames = new Set(installed.map((i) => i.name))
 
 	const addPreset = async (p: Preset) => {
-		await bridge()?.connectors?.add({ name: p.id, command: p.command })
+		let environment: Record<string, string> | undefined
+		if (p.envKey) {
+			// Search/API connectors need a key — ask for it (stored in the config's env).
+			const key = window.prompt(`${p.name} needs an API key.\n\n${p.note}\n\nPaste your ${p.envKey}:`)
+			if (!key) return
+			environment = { [p.envKey]: key.trim() }
+		}
+		await bridge()?.connectors?.add({ name: p.id, command: p.command, environment })
 		setDirty(true)
 		load()
 	}
