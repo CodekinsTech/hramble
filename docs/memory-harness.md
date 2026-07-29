@@ -47,3 +47,9 @@ At the start of real work, read `AGENTS.md` (always in context) and open any
 `.hramble/memory/*.md` whose description looks relevant. Treat recalled memories as
 background, and verify any file/function/flag they name still exists before
 relying on it.
+
+## Codebase awareness
+Before editing an unfamiliar project, call **`repo_map()`** to get a compact map of
+the source files and their top-level symbols (functions, classes, exports). Use it
+to locate the right files instead of reading everything; narrow to a subtree with
+its `path` argument on large repos.
