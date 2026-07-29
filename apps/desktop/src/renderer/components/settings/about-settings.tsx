@@ -57,10 +57,22 @@ export function AboutSettings() {
 		}
 	}, [])
 
+	const openUrl = (url: string) => {
+		// Prefer the main-process external opener; fall back to window.open.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const p = (window as any).palot
+		if (p?.openExternal) p.openExternal(url)
+		else window.open(url, "_blank", "noopener,noreferrer")
+	}
+
 	return (
 		<div className="space-y-8">
 			<div>
 				<h2 className="text-xl font-semibold">About</h2>
+				<p className="mt-1 text-sm text-muted-foreground">
+					Hramble — a friendly AI coding companion with a talking, listening avatar. It runs your
+					choice of model: fully offline on your machine, or any hosted provider with your own key.
+				</p>
 			</div>
 
 			<SettingsSection>
@@ -117,13 +129,13 @@ export function AboutSettings() {
 
 			<SettingsSection title="CLI">
 				<SettingsRow
-					label="palot CLI"
+					label="Hramble CLI"
 					description={
 						cliError
 							? cliError
 							: cliInstalled
-								? "Installed at /usr/local/bin/palot"
-								: "Install the palot command-line tool"
+								? "Installed — run `hramble` in your terminal to open the app"
+								: "Install the `hramble` command-line tool (opens the app from a terminal)"
 					}
 				>
 					{cliLoading ? (
@@ -140,6 +152,30 @@ export function AboutSettings() {
 							Install
 						</Button>
 					) : null}
+				</SettingsRow>
+			</SettingsSection>
+
+			<SettingsSection title="Built with">
+				<SettingsRow label="Coding engine" description="OpenCode (MIT) — the agent that reads, writes, and runs your code">
+					<Button variant="outline" size="sm" onClick={() => openUrl("https://opencode.ai")}>
+						opencode.ai
+					</Button>
+				</SettingsRow>
+				<SettingsRow label="Avatar companion" description="VRM avatar with offline speech (Supertonic TTS) and voice (Vosk STT)">
+					<span className="text-muted-foreground text-sm">Hramble</span>
+				</SettingsRow>
+			</SettingsSection>
+
+			<SettingsSection title="Legal">
+				<SettingsRow label="Terms of Service" description="How Hramble may be used">
+					<Button variant="outline" size="sm" onClick={() => openUrl("https://hramble.app/terms")}>
+						View
+					</Button>
+				</SettingsRow>
+				<SettingsRow label="Privacy Policy" description="What data is (and isn't) collected">
+					<Button variant="outline" size="sm" onClick={() => openUrl("https://hramble.app/privacy")}>
+						View
+					</Button>
 				</SettingsRow>
 			</SettingsSection>
 		</div>

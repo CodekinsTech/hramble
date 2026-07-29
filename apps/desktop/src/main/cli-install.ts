@@ -43,10 +43,12 @@ function getCliInstallDir(): string {
 }
 
 /**
- * Returns the full path where the `palot` symlink/script will be placed.
+ * Returns the full path where the `hramble` symlink/script will be placed.
+ * (The bundled source script keeps its original name; only the user-facing
+ * command is `hramble`.)
  */
 function getCliInstallPath(): string {
-	const name = process.platform === "win32" ? "palot.cmd" : "palot"
+	const name = process.platform === "win32" ? "hramble.cmd" : "hramble"
 	return path.join(getCliInstallDir(), name)
 }
 
