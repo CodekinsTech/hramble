@@ -42,6 +42,8 @@ async function writeConfig(cfg: Config): Promise<void> {
 // `envKey` = an API-key env var the user must supply (asked for in the UI).
 const PRESETS = [
 	{ id: "web-search", name: "Web Search (free)", command: ["npx", "-y", "@oevortex/ddg_search"], note: "Search the web + read pages — DuckDuckGo, no API key" },
+	{ id: "web-search-exa", name: "Web Search (Exa)", command: ["npx", "-y", "exa-mcp-server"], note: "AI-tuned search + crawling — free tier key at exa.ai", envKey: "EXA_API_KEY" },
+	{ id: "web-search-searxng", name: "Web Search (SearXNG)", command: ["npx", "-y", "mcp-searxng"], note: "Private meta-search — paste a SearXNG instance URL (self-host or a public one)", envKey: "SEARXNG_URL" },
 	{ id: "web-search-tavily", name: "Web Search (Tavily)", command: ["npx", "-y", "tavily-mcp@latest"], note: "Higher-quality search — free key at tavily.com", envKey: "TAVILY_API_KEY" },
 	{ id: "web-search-brave", name: "Web Search (Brave)", command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"], note: "Search the web — free key at brave.com/search/api", envKey: "BRAVE_API_KEY" },
 	{ id: "memory", name: "Memory (long-term)", command: ["npx", "-y", "@modelcontextprotocol/server-memory"], note: "Remembers facts across sessions (knowledge graph)" },
