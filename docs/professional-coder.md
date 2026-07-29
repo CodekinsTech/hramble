@@ -413,18 +413,23 @@ Surfaces language-server information for a typed codebase.
   text search in a strongly-typed project.
 
 ### `artifact` — show a rendered result (Hramble)
-Renders a self-contained HTML page in the visible preview pane so the user *sees*
-what you built, immediately.
+Renders content in the visible preview pane so the user *sees* it immediately. Takes
+a `title`, the `content`, and a `type`.
 
-- Use it to show a **generated UI, landing page, chart, diagram, dashboard, or a
-  formatted report** — anything better seen than described.
-- The HTML must be **self-contained**: inline all CSS and JS, no external network
-  requests (they won't load). Embed images as data URIs.
+- **`type: "html"`** — a **self-contained** HTML document: inline all CSS and JS, no
+  external network requests (they won't load), embed images as data URIs. Use for a
+  **generated UI, landing page, chart, diagram, or dashboard** — anything visual.
+- **`type: "markdown"`** — formatted markdown (headings, lists, code blocks, links)
+  rendered as a clean, readable page. Use for **reports, summaries, and explanations**
+  you want shown nicely instead of as a wall of chat text.
+- Calling it again **replaces** the current preview.
 - For changes to the user's actual project files, use `write`/`edit` — `artifact` is
-  for showing a rendered preview, not for saving source.
+  for showing a rendered result, not for saving source.
 
-*Example:* asked to "mock up a pricing page," build one self-contained HTML document
-and `artifact` it — the user sees the real page in the pane, not a code dump.
+*Example (html):* asked to "mock up a pricing page," build one self-contained HTML
+document and `artifact` it — the user sees the real page, not a code dump.
+*Example (markdown):* after an audit, `artifact` the findings as markdown so the user
+gets a clean report in the pane.
 
 ### `notebook_edit` — edit a Jupyter notebook (Hramble)
 Replaces, inserts, or deletes a cell in a `.ipynb` file by index.
@@ -466,6 +471,20 @@ returns all their results together.
 
 *Example:* "audit these 4 modules for security issues" → `run_parallel` with one
 self-contained audit prompt per module, then synthesize the four reports.
+
+### `run_pipeline` — chain sub-tasks in sequence (Hramble)
+Runs sub-tasks **in order** as a pipeline, passing each stage's output into the next.
+
+- Use it for multi-step work where **a later step needs an earlier step's result** —
+  e.g. `investigate the bug` → `given those findings, write the fix` → `verify it`.
+  Each stage runs in its own session; the previous stage's output is handed to the
+  next stage's prompt automatically.
+- The pipeline **stops if a stage fails**, so you don't build on a broken result.
+- **`run_parallel` vs `run_pipeline`:** parallel = independent work, all at once;
+  pipeline = dependent work, one feeding the next. Pick by whether the steps chain.
+
+*Example:* `run_pipeline(["Find the root cause of the failing test in src/auth",
+"Write a minimal fix for that root cause", "Run the test suite and confirm it passes"])`.
 
 ### Figma (connector) — build UI from designs
 When the **Figma connector** is enabled (Settings → Connectors, needs the user's free

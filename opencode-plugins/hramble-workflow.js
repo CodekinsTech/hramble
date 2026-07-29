@@ -61,5 +61,34 @@ export default async ({ client }) => ({
 					.join("\n\n")
 			},
 		}),
+
+		run_pipeline: tool({
+			description:
+				"Run sub-tasks in SEQUENCE as a pipeline, passing each stage's result into the next. Use for multi-step work where a later step needs an earlier step's output — e.g. 'investigate the bug' → 'given those findings, write the fix' → 'verify the fix'. Each stage runs in its own session; the previous stage's output is handed to the next. For independent work that does NOT chain, use run_parallel instead.",
+			args: {
+				stages: z
+					.array(z.string())
+					.min(2)
+					.max(6)
+					.describe(
+						"The pipeline stages in order (2-6). Each stage's instruction; the previous stage's output is appended to the next stage's prompt.",
+					),
+			},
+			execute: async (args) => {
+				let carry = ""
+				const outputs = []
+				for (let i = 0; i < args.stages.length; i++) {
+					const prompt =
+						i === 0
+							? args.stages[i]
+							: `${args.stages[i]}\n\n--- Output of the previous stage ---\n${carry}`
+					const r = await runOne(client, prompt)
+					carry = r.result ?? r.error ?? ""
+					outputs.push(`### Stage ${i + 1}${r.error ? ` — ERROR: ${r.error}` : ""}\n${carry}`)
+					if (r.error) break // stop the pipeline if a stage fails
+				}
+				return outputs.join("\n\n")
+			},
+		}),
 	},
 })
