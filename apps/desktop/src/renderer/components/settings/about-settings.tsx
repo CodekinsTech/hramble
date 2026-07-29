@@ -155,17 +155,6 @@ export function AboutSettings() {
 				</SettingsRow>
 			</SettingsSection>
 
-			<SettingsSection title="Built with">
-				<SettingsRow label="Coding engine" description="OpenCode (MIT) — the agent that reads, writes, and runs your code">
-					<Button variant="outline" size="sm" onClick={() => openUrl("https://opencode.ai")}>
-						opencode.ai
-					</Button>
-				</SettingsRow>
-				<SettingsRow label="Avatar companion" description="VRM avatar with offline speech (Supertonic TTS) and voice (Vosk STT)">
-					<span className="text-muted-foreground text-sm">Hramble</span>
-				</SettingsRow>
-			</SettingsSection>
-
 			<SettingsSection title="Legal">
 				<SettingsRow label="Terms of Service" description="How Hramble may be used">
 					<Button variant="outline" size="sm" onClick={() => openUrl("https://hramble.app/terms")}>
@@ -174,6 +163,12 @@ export function AboutSettings() {
 				</SettingsRow>
 				<SettingsRow label="Privacy Policy" description="What data is (and isn't) collected">
 					<Button variant="outline" size="sm" onClick={() => openUrl("https://hramble.app/privacy")}>
+						View
+					</Button>
+				</SettingsRow>
+				{/* Legally-required open-source attribution — kept low-key. */}
+				<SettingsRow label="Open-source licenses" description="Acknowledgements for included open-source software">
+					<Button variant="outline" size="sm" onClick={() => openUrl("https://hramble.app/licenses")}>
 						View
 					</Button>
 				</SettingsRow>

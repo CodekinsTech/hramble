@@ -33,10 +33,11 @@ By installing or using Hramble you agree to these Terms. You must be at least 18
   **that provider's terms and privacy policy**, not ours. You are responsible for
   your provider accounts, API keys, usage, and costs.
 
-## 5. Open-source components
-Hramble is built on open-source software (including OpenCode and other components)
-under their respective licenses (e.g. MIT). Those licenses continue to apply to
-those components. Nothing here removes rights granted by those licenses.
+## 5. Third-party components
+Hramble includes third-party and open-source components, each under its own
+license. Those licenses are listed in the app's "Open-source licenses" notice and
+continue to apply to those components. Nothing in these Terms removes rights
+granted by those licenses.
 
 ## 6. Avatars & purchases (optional)
 - The avatar store is optional. Buying avatars requires signing in and is handled
