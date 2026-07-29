@@ -57,6 +57,8 @@ export function BrowserPane() {
 				selector?: string
 				text?: string
 				submit?: boolean
+				html?: string
+				title?: string
 			}) => {
 				const reply = (result: unknown) => bridge.sendBrowserResult(cmd.id, result)
 				const wv = ref.current
@@ -65,7 +67,14 @@ export function BrowserPane() {
 					return
 				}
 				try {
-					if (cmd.action === "open") {
+					if (cmd.action === "artifact") {
+						// Render agent-generated HTML in the visible pane (the "artifact").
+						setPanelOpen(true)
+						const html = cmd.html ?? ""
+						await wv.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+						setAddress(cmd.title ? `artifact: ${cmd.title}` : "artifact")
+						reply({ ok: true, title: cmd.title ?? "artifact" })
+					} else if (cmd.action === "open") {
 						setPanelOpen(true)
 						const target = toUrl(cmd.url || "")
 						setAddress(target)

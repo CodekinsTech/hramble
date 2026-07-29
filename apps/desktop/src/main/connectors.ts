@@ -53,6 +53,7 @@ const PRESETS = [
 	{ id: "playwright", name: "Browser (Playwright)", command: ["npx", "-y", "@playwright/mcp@latest"], note: "Control a browser" },
 	{ id: "postgres", name: "Postgres", command: ["npx", "-y", "@modelcontextprotocol/server-postgres"], note: "Query a Postgres database" },
 	{ id: "chrome-devtools", name: "Chrome DevTools", command: ["npx", "-y", "chrome-devtools-mcp@latest"], note: "Inspect/debug pages (confuses weak models)" },
+	{ id: "figma", name: "Figma (design)", command: ["npx", "-y", "figma-developer-mcp", "--stdio"], note: "Read Figma designs to build UI from them — free key at figma.com/developers/api", envKey: "FIGMA_API_KEY" },
 ]
 
 export function registerConnectors() {
