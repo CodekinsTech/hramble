@@ -226,6 +226,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				agentName?: string
 				variant?: string
 				files?: FileAttachment[]
+				hyperloop?: boolean
 			},
 		) => {
 			log.debug("handleSendMessage", {
@@ -242,6 +243,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 					agent: options?.agentName || undefined,
 					variant: options?.variant,
 					files: options?.files,
+					hyperloop: options?.hyperloop,
 				})
 				log.debug("handleSendMessage completed", { sessionId: agent.sessionId })
 			} catch (err) {

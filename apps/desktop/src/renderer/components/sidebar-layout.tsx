@@ -17,6 +17,8 @@ import { CodeIcon, InfinityIcon, PanelLeftIcon, PlusIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
+import { browserPanelOpenAtom } from "../atoms/browser"
+import { BrowserPane } from "./browser-pane"
 import { useAgents, useProjectList, useSetCommandPaletteOpen } from "../hooks/use-agents"
 import { useAgentActions } from "../hooks/use-server"
 import type { Agent } from "../lib/types"
@@ -249,6 +251,9 @@ export function SidebarLayout() {
 
 	// Add project: local servers use native picker, remote servers use a dialog
 	const activeServer = useAtomValue(activeServerConfigAtom)
+	// Browser panel is mounted at the app root so the agent's `browser` tool can
+	// drive it on any route (not only inside a session view).
+	const browserPanelOpen = useAtomValue(browserPanelOpenAtom)
 	const [addProjectOpen, setAddProjectOpen] = useState(false)
 
 	const handleAddProject = useCallback(async () => {
@@ -327,8 +332,23 @@ export function SidebarLayout() {
 					    resolve to 100% of SidebarInset, ignoring AppBar height.
 					    This container takes remaining space after AppBar and
 					    constrains page content correctly. */}
-					<div data-slot="content-area" className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-						<Outlet />
+					<div className="flex min-h-0 flex-1 overflow-hidden">
+						<div
+							data-slot="content-area"
+							className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+						>
+							<Outlet />
+						</div>
+						{/* Browser panel — always mounted (even at 0 width) so the agent
+						    can drive it regardless of the current route. */}
+						<div
+							className="shrink-0 overflow-hidden border-l border-border transition-[width] duration-250 ease-in-out"
+							style={{ width: browserPanelOpen ? "45%" : 0 }}
+						>
+							<div className="h-full" style={{ width: "45vw" }}>
+								<BrowserPane />
+							</div>
+						</div>
 					</div>
 				</SidebarInset>
 				{/* Rendered last so it paints on top of the sidebar and app bar,

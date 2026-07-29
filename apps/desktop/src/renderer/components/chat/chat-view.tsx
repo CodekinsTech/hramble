@@ -17,12 +17,16 @@ import {
 } from "@palot/ui/components/ai-elements/prompt-input"
 import { cn } from "@palot/ui/lib/utils"
 import { useAtomValue, useSetAtom } from "jotai"
+import { workspaceModeAtom } from "../../atoms/workspace"
 import {
 	ArrowUpToLineIcon,
+	CheckIcon,
 	ChevronUpIcon,
 	GitForkIcon,
+	ListOrderedIcon,
 	Loader2Icon,
 	MonitorIcon,
+	PlayIcon,
 	PlusIcon,
 	Redo2Icon,
 	SquareIcon,
@@ -391,7 +395,13 @@ interface ChatViewProps {
 	onSendMessage?: (
 		agent: Agent,
 		message: string,
-		options?: { model?: ModelRef; agentName?: string; variant?: string; files?: FileAttachment[] },
+		options?: {
+			model?: ModelRef
+			agentName?: string
+			variant?: string
+			files?: FileAttachment[]
+			hyperloop?: boolean
+		},
 	) => Promise<void>
 	/** Callback to stop/abort the running session */
 	onStop?: (agent: Agent) => Promise<void>
@@ -732,6 +742,41 @@ export function ChatView({
 }
 
 // ============================================================
+// Auto-growing textarea for a single step. Grows with the text up to a max
+// height, then scrolls — so long steps aren't clipped to a single line.
+function StepTextarea({
+	value,
+	onChange,
+	placeholder,
+	disabled,
+	className,
+}: {
+	value: string
+	onChange: (v: string) => void
+	placeholder?: string
+	disabled?: boolean
+	className?: string
+}) {
+	const ref = useRef<HTMLTextAreaElement>(null)
+	useLayoutEffect(() => {
+		const el = ref.current
+		if (!el) return
+		el.style.height = "auto"
+		el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+	}, [value])
+	return (
+		<textarea
+			ref={ref}
+			value={value}
+			onChange={(e) => onChange(e.target.value)}
+			placeholder={placeholder}
+			disabled={disabled}
+			rows={1}
+			className={className}
+		/>
+	)
+}
+
 // ChatInputSection — owns all input/toolbar/popover/mention state
 // ============================================================
 
@@ -850,6 +895,23 @@ function ChatInputSection({
 	const [selectedModel, setSelectedModel] = useState<ModelRef | null>(null)
 	const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
 	const [selectedVariant, setSelectedVariant] = useState<string | undefined>(undefined)
+
+	// Step list: queue several steps and run them one after another, each waiting
+	// for the previous to finish. Works in both Code (one turn/step) and Hyperloop
+	// (full autonomous run/step) workspaces.
+	const STEP_COUNT = 7
+	const workspaceMode = useAtomValue(workspaceModeAtom)
+	const [stepsOpen, setStepsOpen] = useState(false)
+	const [steps, setSteps] = useState<string[]>(() => Array(STEP_COUNT).fill(""))
+	const [runningSteps, setRunningSteps] = useState(false)
+	const [currentStep, setCurrentStep] = useState(-1)
+	const [completedSteps, setCompletedSteps] = useState<number[]>([])
+	const stopStepsRef = useRef(false)
+	// Always-current copy of the steps so the runner picks up live edits to
+	// upcoming steps mid-run (the useCallback closure would otherwise be stale).
+	const stepsRef = useRef<string[]>(steps)
+	stepsRef.current = steps
+	const hasSteps = steps.some((s) => s.trim())
 
 	// Initialize model, variant, and agent from the session's last user message.
 	const sessionMessages = useAtomValue(messagesFamily(agent.sessionId))
@@ -1018,6 +1080,55 @@ function ChatInputSection({
 		},
 		[agent, onUndo, onRedo, effectiveModel],
 	)
+
+	// Run the queued steps in sequence. Each onSendMessage resolves when that
+	// step's turn (or full Hyperloop run) completes, so awaiting it in a loop
+	// gives step-1 → wait → step-2 → wait → … automatically.
+	const runSteps = useCallback(async () => {
+		if (!onSendMessage || runningSteps || !stepsRef.current.some((s) => s.trim())) return
+		setRunningSteps(true)
+		setCompletedSteps([])
+		stopStepsRef.current = false
+		const hyperloop = workspaceMode === "hyperloop"
+		try {
+			if (effectiveModel && agent.directory) {
+				appStore.set(setProjectModelAtom, {
+					directory: agent.directory,
+					model: { ...effectiveModel, variant: selectedVariant, agent: selectedAgent || undefined },
+				})
+			}
+			// Read each step from the live ref so edits to not-yet-run steps take effect.
+			for (let i = 0; i < STEP_COUNT; i++) {
+				const stepText = (stepsRef.current[i] ?? "").trim()
+				if (!stepText) continue
+				if (stopStepsRef.current) break
+				setCurrentStep(i)
+				await onSendMessage(agent, stepText, {
+					model: effectiveModel ?? undefined,
+					agentName: selectedAgent || undefined,
+					variant: selectedVariant,
+					hyperloop,
+				})
+				setCompletedSteps((prev) => (prev.includes(i) ? prev : [...prev, i]))
+			}
+		} finally {
+			setRunningSteps(false)
+			setCurrentStep(-1)
+		}
+	}, [
+		onSendMessage,
+		runningSteps,
+		workspaceMode,
+		effectiveModel,
+		agent,
+		selectedAgent,
+		selectedVariant,
+	])
+
+	const stopSteps = useCallback(() => {
+		stopStepsRef.current = true
+		onStop?.(agent)
+	}, [onStop, agent])
 
 	const handleSend = useCallback(
 		async (text: string, files?: FileAttachment[]) => {
@@ -1376,6 +1487,84 @@ function ChatInputSection({
 									onSelect={handleMentionSelect}
 									onClose={handleMentionClose}
 								/>
+								{stepsOpen && (
+									<div className="mb-2 rounded-xl border border-border bg-muted/30 p-3">
+										<div className="mb-2 flex items-center justify-between">
+											<span className="font-medium text-muted-foreground text-xs">
+												Steps — run in order
+												{workspaceMode === "hyperloop" ? " · Hyperloop each step" : ""}
+											</span>
+											<button
+												type="button"
+												onClick={() => setStepsOpen(false)}
+												className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+												title="Hide steps"
+											>
+												<XIcon className="size-3.5" />
+											</button>
+										</div>
+										<div className="space-y-1.5">
+											{steps.map((s, i) => (
+												<div key={i} className="flex items-start gap-2">
+													<span
+														className={`flex w-4 shrink-0 items-center justify-center pt-2 text-center text-xs ${currentStep === i ? "font-bold text-primary" : "text-muted-foreground"}`}
+													>
+														{completedSteps.includes(i) ? (
+															<CheckIcon className="size-3.5 text-emerald-500" />
+														) : (
+															i + 1
+														)}
+													</span>
+													<StepTextarea
+														value={s}
+														onChange={(v) =>
+															setSteps((prev) => prev.map((x, j) => (j === i ? v : x)))
+														}
+														placeholder={`Step ${i + 1}…`}
+														disabled={
+															!isConnected ||
+															(runningSteps && (i === currentStep || completedSteps.includes(i)))
+														}
+														className={`max-h-40 min-h-8 flex-1 resize-none overflow-y-auto rounded-md border bg-background px-2 py-1.5 text-sm leading-snug outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 ${currentStep === i ? "border-primary ring-1 ring-primary" : completedSteps.includes(i) ? "border-emerald-500/40" : "border-border"}`}
+													/>
+												</div>
+											))}
+										</div>
+										<div className="mt-2 flex items-center gap-2">
+											{!runningSteps ? (
+												<button
+													type="button"
+													onClick={runSteps}
+													disabled={!canSend || !hasSteps}
+													className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:opacity-90 disabled:opacity-50"
+												>
+													<PlayIcon className="size-3.5" />
+													Run steps
+												</button>
+											) : (
+												<button
+													type="button"
+													onClick={stopSteps}
+													className="flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 font-medium text-white text-xs hover:opacity-90"
+												>
+													<SquareIcon className="size-3.5" />
+													Stop (running step {currentStep + 1})
+												</button>
+											)}
+											<button
+												type="button"
+												onClick={() => {
+													setSteps(Array(STEP_COUNT).fill(""))
+													setCompletedSteps([])
+												}}
+												disabled={runningSteps || !hasSteps}
+												className="rounded-md px-2 py-1.5 font-medium text-muted-foreground text-xs hover:text-foreground disabled:opacity-40"
+											>
+												Clear
+											</button>
+										</div>
+									</div>
+								)}
 								<PromptInput
 									className="rounded-xl"
 									accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
@@ -1412,6 +1601,13 @@ function ChatInputSection({
 									<PromptInputFooter>
 										<PromptInputTools>
 											<AttachButton disabled={!isConnected} />
+											<PromptInputButton
+												onClick={() => setStepsOpen((v) => !v)}
+												className={stepsOpen || hasSteps ? "text-primary" : ""}
+												title="Step list — queue up to 7 steps and run them in sequence"
+											>
+												<ListOrderedIcon className="size-4" />
+											</PromptInputButton>
 											<PromptToolbar
 												agents={openCodeAgents ?? []}
 												selectedAgent={selectedAgent}

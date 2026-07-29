@@ -20,6 +20,7 @@ import {
 	ExternalLinkIcon,
 	FileDiffIcon,
 	FolderTreeIcon,
+	GlobeIcon,
 	GitForkIcon,
 	PencilIcon,
 	TerminalIcon,
@@ -45,6 +46,7 @@ import { PalotWordmark } from "./palot-wordmark"
 import { ReviewPanel } from "./review/review-panel"
 import { fileExplorerOpenAtom } from "../atoms/file-explorer"
 import { FileExplorer } from "./file-explorer"
+import { browserPanelOpenAtom } from "../atoms/browser"
 import { SessionMetricsBar } from "./session-metrics-bar"
 import { WorktreeActions } from "./worktree-actions"
 
@@ -73,7 +75,13 @@ interface AgentDetailProps {
 	onSendMessage?: (
 		agent: Agent,
 		message: string,
-		options?: { model?: ModelRef; agentName?: string; variant?: string; files?: FileAttachment[] },
+		options?: {
+			model?: ModelRef
+			agentName?: string
+			variant?: string
+			files?: FileAttachment[]
+			hyperloop?: boolean
+		},
 	) => Promise<void>
 	onRename?: (agent: Agent, title: string) => Promise<void>
 	/** Display name of the parent session (for breadcrumb) */
@@ -147,8 +155,11 @@ export function AgentDetail({
 	const [reviewSettings, setReviewSettings] = useAtom(reviewPanelSettingsAtom)
 	// File explorer panel state (left side).
 	const [fileExplorerOpen, setFileExplorerOpen] = useAtom(fileExplorerOpenAtom)
+	// Browser panel state (right side).
+	const [browserPanelOpen, setBrowserPanelOpen] = useAtom(browserPanelOpenAtom)
 
-	// Keyboard shortcut: Cmd+Shift+D toggles review; Cmd+Shift+E toggles files.
+	// Keyboard shortcut: Cmd+Shift+D toggles review; Cmd+Shift+E toggles files;
+	// Cmd+Shift+B toggles the browser.
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
@@ -159,6 +170,10 @@ export function AgentDetail({
 				e.preventDefault()
 				setReviewPanelOpen((prev) => !prev)
 			}
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "b") {
+				e.preventDefault()
+				setBrowserPanelOpen((prev) => !prev)
+			}
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
 				e.preventDefault()
 				if (reviewPanelOpen) {
@@ -168,7 +183,7 @@ export function AgentDetail({
 		}
 		document.addEventListener("keydown", handleKeyDown)
 		return () => document.removeEventListener("keydown", handleKeyDown)
-	}, [setReviewPanelOpen, setReviewSettings, reviewPanelOpen, setFileExplorerOpen])
+	}, [setReviewPanelOpen, setReviewSettings, reviewPanelOpen, setFileExplorerOpen, setBrowserPanelOpen])
 
 	// Close review panel when navigating to a session with no diffs
 	const prevSessionIdRef = useRef(agent.sessionId)
@@ -226,6 +241,8 @@ export function AgentDetail({
 				onToggleReviewPanel={() => setReviewPanelOpen((prev) => !prev)}
 				fileExplorerOpen={fileExplorerOpen}
 				onToggleFileExplorer={() => setFileExplorerOpen((prev) => !prev)}
+					browserPanelOpen={browserPanelOpen}
+					onToggleBrowserPanel={() => setBrowserPanelOpen((prev) => !prev)}
 			/>,
 		)
 
@@ -330,6 +347,7 @@ export function AgentDetail({
 					<ReviewPanel sessionId={agent.sessionId} directory={agent.directory} />
 				</div>
 			</div>
+
 		</div>
 	)
 }
@@ -353,6 +371,8 @@ function SessionAppBarContent({
 	onToggleReviewPanel,
 	fileExplorerOpen,
 	onToggleFileExplorer,
+	browserPanelOpen,
+	onToggleBrowserPanel,
 }: {
 	agent: Agent
 	isEditingTitle: boolean
@@ -368,6 +388,8 @@ function SessionAppBarContent({
 	onToggleReviewPanel: () => void
 	fileExplorerOpen: boolean
 	onToggleFileExplorer: () => void
+	browserPanelOpen: boolean
+	onToggleBrowserPanel: () => void
 }) {
 	const navigate = useNavigate()
 	const diffStats = useAtomValue(sessionDiffStatsFamily(agent.sessionId))
@@ -498,6 +520,29 @@ function SessionAppBarContent({
 					</TooltipTrigger>
 					<TooltipContent>
 						{reviewPanelOpen ? "Hide changes panel" : "Show changes panel"} (Cmd+Shift+D)
+					</TooltipContent>
+				</Tooltip>
+
+				{/* Browser panel toggle */}
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<button
+								type="button"
+								onClick={onToggleBrowserPanel}
+								className={cn(
+									"flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+									browserPanelOpen
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							/>
+						}
+					>
+						<GlobeIcon className="size-3.5" />
+					</TooltipTrigger>
+					<TooltipContent>
+						{browserPanelOpen ? "Hide browser" : "Show browser"} (Cmd+Shift+B)
 					</TooltipContent>
 				</Tooltip>
 

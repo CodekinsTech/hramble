@@ -37,6 +37,22 @@ contextBridge.exposeInMainWorld("palot", {
 	/** Gets the URL of the running server, or null. */
 	getServerUrl: () => ipcRenderer.invoke("opencode:url"),
 
+	// --- Agent-driven browser pane ---
+	/** Subscribe to browser commands from the agent (via the main-process bridge). */
+	onBrowserCommand: (
+		callback: (cmd: { id: string; action: string; url?: string }) => void,
+	) => {
+		const listener = (_event: unknown, cmd: { id: string; action: string; url?: string }) =>
+			callback(cmd)
+		ipcRenderer.on("browser:command", listener)
+		return () => {
+			ipcRenderer.removeListener("browser:command", listener)
+		}
+	},
+	/** Reply to a browser command with its result. */
+	sendBrowserResult: (id: string, result: unknown) =>
+		ipcRenderer.send("browser:result", { id, result }),
+
 	/** Stops the managed OpenCode server. */
 	stopOpenCode: () => ipcRenderer.invoke("opencode:stop"),
 

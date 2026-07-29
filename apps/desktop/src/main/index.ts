@@ -13,6 +13,7 @@ import { stopServer } from "./opencode-manager"
 import { initSettingsStore } from "./settings-store"
 import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
 import { registerConnectors } from "./connectors" // MCP connectors management
+import { startBrowserBridge } from "./browser-bridge" // agent ↔ visible browser pane
 import { registerOllama } from "./ollama" // local models (free tier)
 import { registerStore } from "./store" // avatar store — proxy to the shared Worker
 import { startEnvResolution } from "./shell-env"
@@ -196,6 +197,7 @@ async function createWindow(): Promise<BrowserWindow> {
 			contextIsolation: true,
 			sandbox: true,
 			nodeIntegration: false,
+			webviewTag: true, // enables the embedded browser pane (<webview>)
 			spellcheck: false,
 			v8CacheOptions: "bypassHeatCheckAndEagerCompile",
 		},
@@ -220,6 +222,10 @@ async function createWindow(): Promise<BrowserWindow> {
 	win.webContents.once("did-finish-load", () => {
 		win.webContents.send("chrome-tier", chrome.tier)
 	})
+
+	// Start the agent↔browser bridge so the OpenCode `browser` tool can drive
+	// the visible browser pane in this window.
+	startBrowserBridge(win)
 
 	// Open external links in default browser instead of new Electron windows
 	win.webContents.setWindowOpenHandler(({ url }) => {
