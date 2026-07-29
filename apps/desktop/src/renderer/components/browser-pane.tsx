@@ -59,6 +59,9 @@ export function BrowserPane() {
 				submit?: boolean
 				html?: string
 				title?: string
+				amount?: number
+				seconds?: number
+				value?: string
 			}) => {
 				const reply = (result: unknown) => bridge.sendBrowserResult(cmd.id, result)
 				const wv = ref.current
@@ -154,6 +157,70 @@ export function BrowserPane() {
 						const img = await wv.capturePage()
 						const info = await wv.executeJavaScript("({url:location.href,title:document.title})")
 						reply({ ok: true, dataUrl: img.toDataURL(), ...info })
+					} else if (cmd.action === "scroll") {
+						const sel = cmd.selector ? JSON.stringify(cmd.selector) : "null"
+						const amt = typeof cmd.amount === "number" ? cmd.amount : 600
+						await wv.executeJavaScript(`(() => {
+							const sel = ${sel};
+							if (sel) { const el = document.querySelector(sel); if (el) el.scrollIntoView({ block:'center' }); }
+							else window.scrollBy(0, ${amt});
+						})()`)
+						await new Promise((r) => setTimeout(r, 150))
+						reply({ ok: true })
+					} else if (cmd.action === "wait") {
+						const secs = typeof cmd.seconds === "number" ? cmd.seconds : 10
+						if (cmd.selector) {
+							const sel = JSON.stringify(cmd.selector)
+							const deadline = Date.now() + secs * 1000
+							let found = false
+							while (Date.now() < deadline) {
+								found = await wv.executeJavaScript(`!!document.querySelector(${sel})`)
+								if (found) break
+								await new Promise((r) => setTimeout(r, 300))
+							}
+							reply(found ? { ok: true } : { ok: false, error: `element not found within ${secs}s` })
+						} else {
+							await new Promise((r) => setTimeout(r, secs * 1000))
+							reply({ ok: true })
+						}
+					} else if (cmd.action === "select") {
+						const sel = cmd.selector ? JSON.stringify(cmd.selector) : "null"
+						const val = JSON.stringify(cmd.value ?? "")
+						reply(
+							await wv.executeJavaScript(`(() => {
+								const el = document.querySelector(${sel});
+								if (!el) return { ok:false, error:'element not found' };
+								el.value = ${val};
+								el.dispatchEvent(new Event('input', { bubbles:true }));
+								el.dispatchEvent(new Event('change', { bubbles:true }));
+								return { ok:true };
+							})()`),
+						)
+					} else if (cmd.action === "hover") {
+						setPanelOpen(true)
+						await new Promise((r) => setTimeout(r, 200))
+						const sel = cmd.selector ? JSON.stringify(cmd.selector) : "null"
+						const loc = await wv.executeJavaScript(`(() => {
+							const el = document.querySelector(${sel});
+							if (!el) return { ok:false };
+							el.scrollIntoView({ block:'center' });
+							const r = el.getBoundingClientRect();
+							return { ok:true, x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
+						})()`)
+						if (!loc.ok) {
+							reply({ ok: false, error: "element not found" })
+							return
+						}
+						wv.sendInputEvent({ type: "mouseMove", x: loc.x, y: loc.y })
+						reply({ ok: true })
+					} else if (cmd.action === "back") {
+						wv.goBack()
+						await new Promise((r) => setTimeout(r, 300))
+						reply({ ok: true, ...(await wv.executeJavaScript("({url:location.href})")) })
+					} else if (cmd.action === "forward") {
+						wv.goForward()
+						await new Promise((r) => setTimeout(r, 300))
+						reply({ ok: true, ...(await wv.executeJavaScript("({url:location.href})")) })
 					} else {
 						reply({ ok: false, error: `unknown action: ${cmd.action}` })
 					}

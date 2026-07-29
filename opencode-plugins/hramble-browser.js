@@ -26,16 +26,30 @@ export default async () => ({
 	tool: {
 		browser: tool({
 			description:
-				"Control the Hramble in-app browser that the user can see. Actions: 'open' (navigate to a URL), 'read' (get the page's URL/title/visible text), 'click' (click a link/button by CSS selector or visible text), 'type' (type into a field by CSS selector, optionally submit), 'screenshot' (capture the page as a PNG file). Read the page first to find selectors/text before clicking or typing.",
+				"Control the Hramble in-app browser that the user can see. Actions: 'open' (navigate to a URL), 'read' (get the page's URL/title/visible text), 'click' (by CSS selector or visible text), 'type' (into a field by selector, optionally submit), 'screenshot' (capture a PNG), 'scroll' (scroll the page, or a selector into view), 'wait' (wait for a selector to appear, or a number of seconds), 'select' (choose an option in a <select> by value), 'hover' (hover an element to reveal menus/tooltips), 'back'/'forward' (navigate history). Read the page first to find selectors/text before acting.",
 			args: {
 				action: z
-					.enum(["open", "read", "click", "type", "screenshot"])
+					.enum([
+						"open",
+						"read",
+						"click",
+						"type",
+						"screenshot",
+						"scroll",
+						"wait",
+						"select",
+						"hover",
+						"back",
+						"forward",
+					])
 					.describe("What to do in the visible browser"),
 				url: z.string().optional().describe("URL to open (for action 'open')"),
 				selector: z
 					.string()
 					.optional()
-					.describe("CSS selector of the target element (for 'click'/'type')"),
+					.describe(
+						"CSS selector of the target element (for click/type/select/hover, and scroll/wait when targeting an element)",
+					),
 				text: z
 					.string()
 					.optional()
@@ -44,6 +58,9 @@ export default async () => ({
 					.boolean()
 					.optional()
 					.describe("For 'type': submit the form / press Enter after typing"),
+				amount: z.number().optional().describe("For 'scroll' without a selector: pixels to scroll (default 600)"),
+				seconds: z.number().optional().describe("For 'wait' without a selector: seconds to wait"),
+				value: z.string().optional().describe("For 'select': the option value to choose"),
 			},
 			execute: async (args) => {
 				const port = getPort()
@@ -79,6 +96,17 @@ export default async () => ({
 						fs.writeFileSync(file, Buffer.from(b64, "base64"))
 						return `Screenshot saved to ${file} (${data.title ?? ""}). Use the read tool on it if you need to see it.`
 					}
+					case "scroll":
+						return "Scrolled."
+					case "wait":
+						return "Done waiting."
+					case "select":
+						return `Selected ${args.value ?? ""} in ${args.selector ?? "the dropdown"}.`
+					case "hover":
+						return `Hovering ${args.selector ?? "the element"}.`
+					case "back":
+					case "forward":
+						return `Navigated ${args.action}. Now at: ${data.url ?? ""}`
 					default:
 						return JSON.stringify(data)
 				}
