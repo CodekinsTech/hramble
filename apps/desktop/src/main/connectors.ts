@@ -40,6 +40,8 @@ async function writeConfig(cfg: Config): Promise<void> {
 
 // Curated one-click connectors (npx-installable MCP servers).
 const PRESETS = [
+	{ id: "memory", name: "Memory (long-term)", command: ["npx", "-y", "@modelcontextprotocol/server-memory"], note: "Remembers facts across sessions (knowledge graph)" },
+	{ id: "sequential-thinking", name: "Sequential Thinking", command: ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"], note: "Step-by-step reasoning for hard problems" },
 	{ id: "filesystem", name: "Filesystem", command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", homedir()], note: "Read/write files on your machine" },
 	{ id: "github", name: "GitHub", command: ["npx", "-y", "@modelcontextprotocol/server-github"], note: "Repos, issues, PRs (needs a token env var)" },
 	{ id: "fetch", name: "Web Fetch", command: ["npx", "-y", "@modelcontextprotocol/server-fetch"], note: "Fetch and read web pages" },
