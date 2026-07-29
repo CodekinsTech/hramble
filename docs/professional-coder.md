@@ -445,6 +445,44 @@ components — so you can implement UI that matches the design.
 - Only available when the user has connected Figma; if the tools aren't present, it
   isn't enabled — don't assume it.
 
+### `monitor` / `stop_monitor` — react when something changes (Hramble)
+Watches a condition and wakes the agent (in a new session) the first time it changes.
+
+- **`monitor(kind, target, prompt)`** — `kind` is `file` (watch its modified time),
+  `url` (watch its response), or `command` (watch a shell command's output). When the
+  target first changes, it runs your `prompt` in a new session. Use it to react to
+  out-of-band events: a build/CI finishing, a file being written, an endpoint coming up.
+- Fires **once** on the first change, then stops. `stop_monitor(id)` cancels it early.
+- Make the `prompt` self-contained — it runs in a fresh session.
+- For *recurring* schedules, use **Automations** instead; `monitor` is event-driven.
+
+*Example:* "let me know when the deploy is live" → `monitor("url", "https://…/health",
+"The health endpoint is up — verify the deploy and report status")`.
+
+### `schedule_wakeup` / `cancel_wakeup` — come back later (Hramble)
+Runs a prompt after a delay (one-shot).
+
+- **`schedule_wakeup(delay_seconds, prompt)`** — waits, then runs your prompt in a new
+  session. Use to retry after a cooldown, check a deploy in 10 minutes, or follow up on
+  a long process. `cancel_wakeup(id)` cancels it.
+- For *recurring* schedules, use **Automations**; this is a single future run.
+
+### `notify` — desktop notification (Hramble)
+Sends a native desktop notification to the user.
+
+- **`notify(message, title?)`** — use it to get the user's attention when they're away
+  from the window: a long task finished, a background job needs a decision, a monitor
+  fired. Keep it **short** — it's a nudge, not a report.
+
+### `send_message` / `read_messages` — coordinate with other agents (Hramble)
+A same-machine shared inbox so parallel/background agents can pass notes.
+
+- **`send_message(to, message)`** — post a note to a named inbox (a label both sides
+  agree on). **`read_messages(inbox, clear?)`** — read notes another agent/task left.
+- Use it to hand off a result or heads-up between a background task and your main
+  thread, or between parallel runs. (Cross-machine messaging would need the cloud
+  runtime; this is local coordination.)
+
 ---
 
 ## 8. Common workflows
