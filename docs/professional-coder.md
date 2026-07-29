@@ -266,9 +266,23 @@ managers, running the app — anything the dedicated tools don't cover.
   run them in the background when the harness supports it, or the session hangs.
 - If a command fails, **read its error output** and adjust — don't blindly re-run it.
 
-*Example — verifying a change:* after editing, run the project's typecheck and tests
-(look them up in `package.json`/Makefile first); read any failure and fix it before
-reporting done.
+**More patterns**
+- **Discover the project's commands first.** Read `package.json` scripts (or Makefile,
+  `cargo.toml`, `pyproject.toml`) before assuming how to build/test/lint — every project
+  differs, and guessing the wrong command wastes a turn.
+- **Check state before you change it.** `git status` before staging; confirm a file
+  exists before writing near it; list a directory before assuming its layout.
+- **Capture output you'll need to reason about.** For long output, redirect to a file
+  and `read`/`grep` it rather than scrolling a huge terminal dump.
+- **Set the working directory explicitly** when a command must run somewhere specific;
+  don't assume you're in the right folder.
+
+*Example — a clean verify loop:* `npm run typecheck` → read the errors → `edit` the
+fix → `npm run typecheck` again → when clean, `npm test`. Don't declare the task done
+until both pass.
+
+*Example — inspecting without breaking anything:* `git log --oneline -5` and
+`git diff --stat` (read-only) to understand recent changes before you touch the code.
 
 ### `task` — delegate to a sub-agent
 Spawns a sub-agent that handles a self-contained job in **its own context** and
