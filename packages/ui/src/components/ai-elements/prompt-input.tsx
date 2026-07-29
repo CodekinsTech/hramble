@@ -613,6 +613,31 @@ export const PromptInput = ({
 		}
 	}, [add, globalDrop])
 
+	// Paste images (e.g. a screenshot) directly into the composer as attachments.
+	// Only acts on image clipboard items — pasting text is left untouched.
+	useEffect(() => {
+		const onPaste = (e: ClipboardEvent) => {
+			const items = e.clipboardData?.items
+			if (!items) return
+			const imgs: File[] = []
+			for (let i = 0; i < items.length; i++) {
+				const it = items[i]
+				if (it.kind === "file" && it.type.startsWith("image/")) {
+					const f = it.getAsFile()
+					if (f) imgs.push(f)
+				}
+			}
+			if (imgs.length > 0) {
+				e.preventDefault()
+				const dt = new DataTransfer()
+				for (const f of imgs) dt.items.add(f)
+				add(dt.files)
+			}
+		}
+		document.addEventListener("paste", onPaste)
+		return () => document.removeEventListener("paste", onPaste)
+	}, [add])
+
 	useEffect(
 		() => () => {
 			if (!usingProvider) {
