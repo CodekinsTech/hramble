@@ -48,6 +48,24 @@ from the palot/OpenCode base; the **Hramble additions** are marked ★.
   installed (agents normalized to `build`); the full ECC harness is intentionally
   NOT auto-installed — it needs a build step and can degrade weak local models.
 
+## Memory (notes style, like Claude) ★
+Three layers, matching Claude Code:
+- **Context memory** — OpenCode auto-compacts long chats.
+- **Project memory** — `AGENTS.md` at the repo root (like `CLAUDE.md`), always
+  read. Holds project conventions + a `## Memory` index.
+- **Long-term notes** — `.hramble/memory/<slug>.md`, one fact per file with
+  frontmatter (`name`, `description`, `type: user|feedback|project|reference`),
+  recalled on relevance. The save/recall protocol is always in context via
+  `docs/memory-harness.md` (wired through the OpenCode config `instructions`).
+
+We chose the **notes** approach (what Claude uses) over a knowledge-graph MCP:
+notes suit coding memory (conventions, preferences, gotchas), are human-editable,
+and work with weak local models (read a file vs. operate graph tools). The graph
+memory MCP is still available as a toggle in Settings → Connectors.
+
+Setup for a fresh machine: copy `docs/memory-harness.md` to
+`~/.config/opencode/` and add it to the config `instructions` array.
+
 ## The differentiator
 - **Avatar companion** — VRM avatar that speaks (Supertonic TTS), listens (Vosk
   STT), and perches on your screen. This is Hramble's reason to exist; the coder
