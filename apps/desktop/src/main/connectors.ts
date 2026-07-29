@@ -41,13 +41,13 @@ async function writeConfig(cfg: Config): Promise<void> {
 // Curated one-click connectors (npx-installable MCP servers).
 // `envKey` = an API-key env var the user must supply (asked for in the UI).
 const PRESETS = [
-	{ id: "web-search-tavily", name: "Web Search (Tavily)", command: ["npx", "-y", "tavily-mcp@latest"], note: "Search the web — get a free key at tavily.com", envKey: "TAVILY_API_KEY" },
+	{ id: "web-search", name: "Web Search (free)", command: ["npx", "-y", "@oevortex/ddg_search"], note: "Search the web + read pages — DuckDuckGo, no API key" },
+	{ id: "web-search-tavily", name: "Web Search (Tavily)", command: ["npx", "-y", "tavily-mcp@latest"], note: "Higher-quality search — free key at tavily.com", envKey: "TAVILY_API_KEY" },
 	{ id: "web-search-brave", name: "Web Search (Brave)", command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"], note: "Search the web — free key at brave.com/search/api", envKey: "BRAVE_API_KEY" },
 	{ id: "memory", name: "Memory (long-term)", command: ["npx", "-y", "@modelcontextprotocol/server-memory"], note: "Remembers facts across sessions (knowledge graph)" },
 	{ id: "sequential-thinking", name: "Sequential Thinking", command: ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"], note: "Step-by-step reasoning for hard problems" },
 	{ id: "filesystem", name: "Filesystem", command: ["npx", "-y", "@modelcontextprotocol/server-filesystem", homedir()], note: "Read/write files on your machine" },
 	{ id: "github", name: "GitHub", command: ["npx", "-y", "@modelcontextprotocol/server-github"], note: "Repos, issues, PRs (needs a token env var)" },
-	{ id: "fetch", name: "Web Fetch", command: ["npx", "-y", "@modelcontextprotocol/server-fetch"], note: "Fetch and read web pages" },
 	{ id: "playwright", name: "Browser (Playwright)", command: ["npx", "-y", "@playwright/mcp@latest"], note: "Control a browser" },
 	{ id: "postgres", name: "Postgres", command: ["npx", "-y", "@modelcontextprotocol/server-postgres"], note: "Query a Postgres database" },
 	{ id: "chrome-devtools", name: "Chrome DevTools", command: ["npx", "-y", "chrome-devtools-mcp@latest"], note: "Inspect/debug pages (confuses weak models)" },
