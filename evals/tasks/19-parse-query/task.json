@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement parseQuery(qs) in query.js. Given a URL query string like \"a=1&b=hello&c=\", return an object mapping each key to its (string) value. A key with no value maps to an empty string. Ignore a leading '?'. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

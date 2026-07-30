@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement csvToJson(csv) in csv.js. The input is CSV text where the first line is a header row of column names and each following line is a row of comma-separated values. Return an array of objects mapping column name to value (values stay strings). Assume no commas inside values. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

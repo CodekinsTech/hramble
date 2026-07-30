@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement extractEmails(text) in emails.js so it returns an array of all email addresses found in the given text, in order. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

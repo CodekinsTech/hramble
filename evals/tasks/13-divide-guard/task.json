@@ -1,0 +1,4 @@
+{
+  "prompt": "In divide.js, make divide(a, b) throw an Error with the message \"divide by zero\" when b is 0. Otherwise it returns a / b. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

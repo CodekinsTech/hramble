@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement fib(n) in fib.js returning the nth Fibonacci number, where fib(0)=0, fib(1)=1. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

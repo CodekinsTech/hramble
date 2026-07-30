@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement byCategory(items) in group.js. Each item is { name, category }. Return an object mapping each category to an array of the item names in that category, preserving input order. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

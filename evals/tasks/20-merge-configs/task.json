@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement mergeConfig(base, override) in merge.js. Return a new object where keys from override replace keys in base, but keys present only in base are kept. Do not mutate either argument. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

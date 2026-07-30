@@ -1,0 +1,4 @@
+{
+  "prompt": "Edit package.json to add a script named \"test\" whose command is \"node test.mjs\". Keep the existing \"start\" script and valid JSON. Do not create any other files.",
+  "verify": { "cmd": "node -e \"const p=require('./package.json'); if(p.scripts && p.scripts.test==='node test.mjs' && p.scripts.start){console.log('ok')} else {process.exit(1)}\"" }
+}

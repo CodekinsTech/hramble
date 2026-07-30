@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement unique(arr) in dedupe.js so it returns a new array with duplicate values removed, keeping the first occurrence order. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

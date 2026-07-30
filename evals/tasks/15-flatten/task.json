@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement flatten(arr) in flatten.js so it fully flattens an arbitrarily nested array of numbers into a single-level array, preserving order. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

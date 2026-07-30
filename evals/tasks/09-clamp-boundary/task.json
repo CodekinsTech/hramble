@@ -1,0 +1,4 @@
+{
+  "prompt": "Run `node test.mjs`. It fails. clamp.js has a bug: clamp(n, min, max) must return min when n is below min, max when n is above max, and n otherwise. Fix clamp.js so the test passes. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

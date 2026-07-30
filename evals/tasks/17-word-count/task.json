@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement wordCount(text) in words.js so it returns the number of words in the text. Words are sequences separated by any whitespace; leading/trailing whitespace and empty strings must be handled (empty or whitespace-only returns 0). Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

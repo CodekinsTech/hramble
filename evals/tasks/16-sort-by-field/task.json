@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement sortByAge(people) in sort.js. Each person is { name, age }. Return a new array sorted by age ascending; for equal ages, keep original relative order (stable). Do not mutate the input. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

@@ -1,0 +1,4 @@
+{
+  "prompt": "Run `node test.mjs`. It fails. sum.js exports an async function sumAll(promises) that should resolve all the promises and return the sum of their values. Fix sum.js so the test passes. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}
