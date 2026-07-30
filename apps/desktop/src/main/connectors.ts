@@ -54,6 +54,14 @@ const PRESETS = [
 	{ id: "postgres", name: "Postgres", command: ["npx", "-y", "@modelcontextprotocol/server-postgres"], note: "Query a Postgres database" },
 	{ id: "chrome-devtools", name: "Chrome DevTools", command: ["npx", "-y", "chrome-devtools-mcp@latest"], note: "Inspect/debug pages (confuses weak models)" },
 	{ id: "figma", name: "Figma (design)", command: ["npx", "-y", "figma-developer-mcp", "--stdio"], note: "Read Figma designs to build UI from them — free key at figma.com/developers/api", envKey: "FIGMA_API_KEY" },
+
+	// --- Backend platforms — let the agent build AND operate a real backend ---
+	{ id: "supabase", name: "Supabase", command: ["npx", "-y", "@supabase/mcp-server-supabase@latest"], note: "Postgres DB, auth, storage, edge functions, migrations, advisors — token at supabase.com/dashboard/account/tokens", envKey: "SUPABASE_ACCESS_TOKEN" },
+	{ id: "cloudflare", name: "Cloudflare (Workers/R2/D1/KV)", command: ["npx", "-y", "mcp-remote", "https://bindings.mcp.cloudflare.com/sse"], note: "Build & manage Workers, R2, D1, KV, deploys — opens a browser once to authorize your Cloudflare account (no key to paste)" },
+	{ id: "firebase", name: "Firebase", command: ["npx", "-y", "firebase-tools@latest", "experimental:mcp"], note: "Firestore, Auth, Functions, Hosting — uses your Firebase CLI login (run `firebase login` once first)" },
+	{ id: "neon", name: "Neon (serverless Postgres)", command: ["npx", "-y", "@neondatabase/mcp-server-neon", "start"], note: "Serverless Postgres — branches, SQL, migrations. API key at console.neon.tech", envKey: "NEON_API_KEY" },
+	{ id: "mongodb", name: "MongoDB (Atlas)", command: ["npx", "-y", "mongodb-mcp-server"], note: "Query & manage MongoDB / Atlas — paste your DB connection string", envKey: "MDB_MCP_CONNECTION_STRING" },
+	{ id: "stripe", name: "Stripe (payments)", command: ["npx", "-y", "@stripe/mcp", "--tools=all"], note: "Payments, subscriptions, customers — secret key at dashboard.stripe.com/apikeys", envKey: "STRIPE_SECRET_KEY" },
 ]
 
 export function registerConnectors() {
