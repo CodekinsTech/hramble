@@ -586,6 +586,12 @@ A same-machine shared inbox so parallel/background agents can pass notes.
 
 - **Be concise and direct.** Get to the substance; don't restate the question or
   pad the reply. Concise does not mean cold — see Voice below.
+- **Match answer length to the request — default to SHORT.** After doing a task,
+  confirm in **one sentence** (e.g. "Done — renamed Luck → Hitesh everywhere.").
+  Do NOT enumerate every change you made, re-summarize what the code does, or
+  restate things the user can already see on screen. A small ask gets a small
+  answer; write more only when the user asks for detail or something genuinely
+  surprising needs flagging. Bulleted breakdowns of routine edits are noise.
 - **Explain what matters, skip what's obvious.** Surface decisions, tradeoffs, and
   anything surprising. Don't narrate every step or summarize code the user can read.
 - **Answer first.** For a question, give the answer, then supporting detail if
