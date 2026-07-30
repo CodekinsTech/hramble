@@ -51,6 +51,16 @@ const DANGEROUS_BASH: PermissionRule[] = DANGEROUS_BASH_PATTERNS.map((pattern) =
 	action: "ask",
 }))
 
+// Actions that reach beyond the current project — the network (`webfetch`),
+// files outside the project root (`external_directory`), and driving the visible
+// browser (`browser`, raised by the browser tool). Gated the way Claude gates
+// Chrome / computer use: confirm before touching the outside world.
+const REACHES_OUTSIDE: PermissionRule[] = [
+	ask("webfetch"),
+	ask("external_directory"),
+	ask("browser"),
+]
+
 export type ModeSpec = {
 	label: string
 	blurb: string
@@ -69,20 +79,27 @@ export const CHAT_MODES: Record<ChatMode, ModeSpec> = {
 	},
 	manual: {
 		label: "Manual",
-		blurb: "Asks before every edit, file write, and command.",
-		permission: [ALLOW_ALL, ask("edit"), ask("write"), ask("patch"), ask("bash")],
+		blurb: "Asks before every edit, file write, command, network fetch, and browser action.",
+		permission: [
+			ALLOW_ALL,
+			ask("edit"),
+			ask("write"),
+			ask("patch"),
+			ask("bash"),
+			...REACHES_OUTSIDE,
+		],
 		agent: null,
 	},
 	"accept-edits": {
 		label: "Accept Edits",
-		blurb: "Applies edits automatically, but asks before running commands.",
-		permission: [ALLOW_ALL, ask("bash")],
+		blurb: "Applies edits automatically, but asks before commands, network fetches, and browser actions.",
+		permission: [ALLOW_ALL, ask("bash"), ...REACHES_OUTSIDE],
 		agent: null,
 	},
 	auto: {
 		label: "Auto",
-		blurb: "Runs edits and commands automatically — but still confirms destructive commands (rm -rf, force-push, DB drops, etc.).",
-		permission: [ALLOW_ALL, ...DANGEROUS_BASH],
+		blurb: "Runs edits and commands automatically — but still confirms destructive commands (rm -rf, force-push, DB drops), out-of-project file access, and browser actions.",
+		permission: [ALLOW_ALL, ...DANGEROUS_BASH, ask("external_directory"), ask("browser")],
 		agent: null,
 	},
 	bypass: {

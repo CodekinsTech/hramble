@@ -13,6 +13,12 @@ import { homedir } from "node:os"
 
 const PORT_FILE = path.join(homedir(), ".config", "opencode", ".hramble-browser-port")
 
+// Actions that act on the outside world (navigate, change the page, submit).
+// These are gated behind the session's permission policy so the agent asks
+// before driving the browser — like Claude asking before it controls Chrome.
+// Read-only actions (read/screenshot/scroll/hover/wait) never prompt.
+const ACTING = new Set(["open", "click", "type", "select", "back", "forward"])
+
 function getPort() {
 	try {
 		const p = Number.parseInt(fs.readFileSync(PORT_FILE, "utf8").trim(), 10)
@@ -62,10 +68,33 @@ export default async () => ({
 				seconds: z.number().optional().describe("For 'wait' without a selector: seconds to wait"),
 				value: z.string().optional().describe("For 'select': the option value to choose"),
 			},
-			execute: async (args) => {
+			execute: async (args, context) => {
 				const port = getPort()
 				if (!port)
 					return "The Hramble browser isn't available (is the Hramble desktop app running?)."
+
+				// Ask before acting on a page. `context.ask` raises a real permission
+				// request that the session's mode policy answers (allow/ask/deny) and
+				// that surfaces in the same permission card + OS notification. Guarded
+				// so it's a no-op on engines that don't provide `ask`.
+				if (ACTING.has(args.action) && typeof context?.ask === "function") {
+					try {
+						await context.ask({
+							permission: "browser",
+							patterns: [args.action],
+							always: ["browser"],
+							metadata: {
+								action: args.action,
+								url: args.url,
+								selector: args.selector,
+								text: args.text,
+							},
+						})
+					} catch {
+						return `Browser '${args.action}' was declined by the user.`
+					}
+				}
+
 				let data
 				try {
 					const res = await fetch(`http://127.0.0.1:${port}/browser`, {
