@@ -166,6 +166,39 @@ export function registerIpcHandlers(): void {
 		isDev: !app.isPackaged,
 	}))
 
+	// --- Objective shell run (for Step List verification gates) ---
+	// Runs a command in a project directory and returns its real exit code +
+	// output. Unlike agent tool calls, this is a plain process, so a step's
+	// "done when" check is objective (exit 0 = pass), not the model's opinion.
+	ipcMain.handle(
+		"shell:run",
+		async (_e, cwd: string, command: string, timeoutMs?: number) => {
+			const { execFile } = await import("node:child_process")
+			return await new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+				execFile(
+					"/bin/sh",
+					["-c", command],
+					{
+						cwd,
+						timeout: timeoutMs && timeoutMs > 0 ? timeoutMs : 120_000,
+						maxBuffer: 8 * 1024 * 1024,
+						env: process.env,
+					},
+					(err, stdout, stderr) => {
+						const e = err as (Error & { code?: number | string; killed?: boolean }) | null
+						const code =
+							e && typeof e.code === "number" ? e.code : e?.killed ? 124 : e ? 1 : 0
+						resolve({
+							code,
+							stdout: String(stdout).slice(-8000),
+							stderr: String(stderr).slice(-8000),
+						})
+					},
+				)
+			})
+		},
+	)
+
 	// --- OpenCode server lifecycle ---
 
 	ipcMain.handle(

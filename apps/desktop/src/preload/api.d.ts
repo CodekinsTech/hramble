@@ -417,6 +417,12 @@ export interface PalotAPI {
 
 	ensureOpenCode: () => Promise<OpenCodeServerInfo>
 	getServerUrl: () => Promise<string | null>
+	/** Run a shell command in `cwd`; resolves with its exit code + captured output. */
+	runShell: (
+		cwd: string,
+		command: string,
+		timeoutMs?: number,
+	) => Promise<{ code: number; stdout: string; stderr: string }>
 	stopOpenCode: () => Promise<boolean>
 	restartOpenCode: () => Promise<OpenCodeServerInfo>
 	getModelState: () => Promise<ModelState>

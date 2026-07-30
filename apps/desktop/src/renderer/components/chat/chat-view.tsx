@@ -29,6 +29,7 @@ import {
 	PlayIcon,
 	PlusIcon,
 	Redo2Icon,
+	SparklesIcon,
 	SquareIcon,
 	Undo2Icon,
 	XIcon,
@@ -1035,6 +1036,20 @@ function ChatInputSection({
 	stepsRef.current = steps
 	const hasSteps = steps.some((s) => s.trim())
 
+	// Verification gates: an optional "done when" shell command per step. After a
+	// step's turn, the gate is run objectively (exit 0 = pass); on failure the
+	// step is retried with the error fed back, then the run pauses.
+	const MAX_STEP_RETRIES = 2
+	const [gates, setGates] = useState<string[]>(() => Array(STEP_COUNT).fill(""))
+	const gatesRef = useRef<string[]>(gates)
+	gatesRef.current = gates
+	const [failedStep, setFailedStep] = useState(-1)
+	const [gateRunningStep, setGateRunningStep] = useState(-1)
+
+	// Auto-decompose: turn one goal into an editable list of steps.
+	const [goal, setGoal] = useState("")
+	const [decomposing, setDecomposing] = useState(false)
+
 	// Initialize model, variant, and agent from the session's last user message.
 	const sessionMessages = useAtomValue(messagesFamily(agent.sessionId))
 	const projectModels = useAtomValue(projectModelsAtom)
@@ -1225,12 +1240,45 @@ function ChatInputSection({
 				if (!stepText) continue
 				if (stopStepsRef.current) break
 				setCurrentStep(i)
-				await onSendMessage(agent, stepText, {
-					model: effectiveModel ?? undefined,
-					agentName: selectedAgent || undefined,
-					variant: selectedVariant,
-					hyperloop,
-				})
+				setFailedStep(-1)
+				const send = (text: string) =>
+					onSendMessage(agent, text, {
+						model: effectiveModel ?? undefined,
+						agentName: selectedAgent || undefined,
+						variant: selectedVariant,
+						hyperloop,
+					})
+				await send(stepText)
+
+				// Verification gate — run the step's "done when" check objectively.
+				// Retry the step (feeding the failure back) until it passes or we run
+				// out of retries; then pause so the user can intervene.
+				const gate = (gatesRef.current[i] ?? "").trim()
+				if (gate && agent.directory && !stopStepsRef.current) {
+					let passed = false
+					for (let attempt = 0; attempt <= MAX_STEP_RETRIES; attempt++) {
+						if (stopStepsRef.current) break
+						setGateRunningStep(i)
+						const res = await window.palot
+							.runShell(agent.directory, gate, 120_000)
+							.catch(() => ({ code: 1, stdout: "", stderr: "gate could not run" }))
+						setGateRunningStep(-1)
+						if (res.code === 0) {
+							passed = true
+							break
+						}
+						if (attempt === MAX_STEP_RETRIES || stopStepsRef.current) break
+						const detail = (res.stderr || res.stdout || "").slice(-1500)
+						await send(
+							`The verification check \`${gate}\` still fails (exit ${res.code}):\n\n${detail}\n\nFix the code so that command passes, then stop.`,
+						)
+					}
+					if (!passed) {
+						setFailedStep(i)
+						stopStepsRef.current = true
+						break
+					}
+				}
 				setCompletedSteps((prev) => (prev.includes(i) ? prev : [...prev, i]))
 			}
 		} finally {
@@ -1251,6 +1299,49 @@ function ChatInputSection({
 		stopStepsRef.current = true
 		onStop?.(agent)
 	}, [onStop, agent])
+
+	// Auto-decompose: ask the model to break a single goal into an editable list
+	// of steps. Runs in a throwaway session so it doesn't clutter the chat.
+	const autoDecompose = useCallback(async () => {
+		const g = goal.trim()
+		if (!g || decomposing) return
+		const client = getProjectClient(agent.directory)
+		if (!client) return
+		setDecomposing(true)
+		try {
+			const created = await client.session.create({ title: "Plan steps" })
+			const scratchId = created.data?.id
+			if (!scratchId) return
+			const res = await client.session.prompt({
+				sessionID: scratchId,
+				parts: [
+					{
+						type: "text",
+						text: `Break this goal into up to ${STEP_COUNT} concrete, ordered implementation steps. Reply ONLY as a numbered list (\`1.\`, \`2.\`, …), one step per line — no preamble, no sub-bullets.\n\nGoal: ${g}`,
+					},
+				],
+				model: effectiveModel
+					? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
+					: undefined,
+			})
+			const text = (res.data?.parts ?? [])
+				.map((p) => (p.type === "text" ? p.text : ""))
+				.join("\n")
+			const parsed = text
+				.split("\n")
+				.filter((l) => /^\s*\d+[.)]\s+/.test(l))
+				.map((l) => l.replace(/^\s*\d+[.)]\s*/, "").trim())
+				.filter((l) => l.length > 0)
+				.slice(0, STEP_COUNT)
+			if (parsed.length > 0) {
+				setSteps(Array.from({ length: STEP_COUNT }, (_, i) => parsed[i] ?? ""))
+				setStepsOpen(true)
+			}
+			await client.session.delete({ sessionID: scratchId }).catch(() => {})
+		} finally {
+			setDecomposing(false)
+		}
+	}, [goal, decomposing, agent.directory, effectiveModel])
 
 	const handleSend = useCallback(
 		async (text: string, files?: FileAttachment[]) => {
@@ -1704,33 +1795,91 @@ function ChatInputSection({
 												<XIcon className="size-3.5" />
 											</button>
 										</div>
+										{/* Auto-plan: turn one goal into steps */}
+										<div className="mb-2 flex items-center gap-2">
+											<input
+												value={goal}
+												onChange={(e) => setGoal(e.target.value)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter") {
+														e.preventDefault()
+														autoDecompose()
+													}
+												}}
+												placeholder="Describe a goal — Auto-plan breaks it into steps"
+												disabled={decomposing || runningSteps}
+												className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+											/>
+											<button
+												type="button"
+												onClick={autoDecompose}
+												disabled={!goal.trim() || decomposing || runningSteps || !isConnected}
+												className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-medium text-xs hover:bg-muted disabled:opacity-50"
+											>
+												{decomposing ? (
+													<Loader2Icon className="size-3.5 animate-spin" />
+												) : (
+													<SparklesIcon className="size-3.5" />
+												)}
+												{decomposing ? "Planning…" : "Auto-plan"}
+											</button>
+										</div>
 										<div className="space-y-1.5">
 											{steps.map((s, i) => (
 												<div key={i} className="flex items-start gap-2">
 													<span
-														className={`flex w-4 shrink-0 items-center justify-center pt-2 text-center text-xs ${currentStep === i ? "font-bold text-primary" : "text-muted-foreground"}`}
+														className={`flex w-4 shrink-0 items-center justify-center pt-2 text-center text-xs ${failedStep === i ? "text-red-500" : currentStep === i ? "font-bold text-primary" : "text-muted-foreground"}`}
 													>
-														{completedSteps.includes(i) ? (
+														{failedStep === i ? (
+															<XIcon className="size-3.5 text-red-500" />
+														) : gateRunningStep === i ? (
+															<Loader2Icon className="size-3.5 animate-spin text-primary" />
+														) : completedSteps.includes(i) ? (
 															<CheckIcon className="size-3.5 text-emerald-500" />
 														) : (
 															i + 1
 														)}
 													</span>
-													<StepTextarea
-														value={s}
-														onChange={(v) =>
-															setSteps((prev) => prev.map((x, j) => (j === i ? v : x)))
-														}
-														placeholder={`Step ${i + 1}…`}
-														disabled={
-															!isConnected ||
-															(runningSteps && (i === currentStep || completedSteps.includes(i)))
-														}
-														className={`max-h-40 min-h-8 flex-1 resize-none overflow-y-auto rounded-md border bg-background px-2 py-1.5 text-sm leading-snug outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 ${currentStep === i ? "border-primary ring-1 ring-primary" : completedSteps.includes(i) ? "border-emerald-500/40" : "border-border"}`}
-													/>
+													<div className="min-w-0 flex-1 space-y-1">
+														<StepTextarea
+															value={s}
+															onChange={(v) =>
+																setSteps((prev) => prev.map((x, j) => (j === i ? v : x)))
+															}
+															placeholder={`Step ${i + 1}…`}
+															disabled={
+																!isConnected ||
+																(runningSteps && (i === currentStep || completedSteps.includes(i)))
+															}
+															className={`max-h-40 min-h-8 w-full resize-none overflow-y-auto rounded-md border bg-background px-2 py-1.5 text-sm leading-snug outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 ${failedStep === i ? "border-red-500/50" : currentStep === i ? "border-primary ring-1 ring-primary" : completedSteps.includes(i) ? "border-emerald-500/40" : "border-border"}`}
+														/>
+														{/* Optional verification gate — appears once the step has text */}
+														{s.trim() && (
+															<input
+																value={gates[i] ?? ""}
+																onChange={(e) =>
+																	setGates((prev) =>
+																		prev.map((x, j) => (j === i ? e.target.value : x)),
+																	)
+																}
+																placeholder="✓ done when… optional check, e.g. npm test"
+																disabled={
+																	!isConnected ||
+																	(runningSteps && (i === currentStep || completedSteps.includes(i)))
+																}
+																className="w-full rounded-md border border-border/60 bg-background/50 px-2 py-1 font-mono text-[11px] text-muted-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+															/>
+														)}
+													</div>
 												</div>
 											))}
 										</div>
+										{failedStep >= 0 && (
+											<div className="mt-2 rounded-md border border-red-500/30 bg-red-500/5 px-2 py-1.5 text-[11px] text-red-400">
+												Step {failedStep + 1}'s check didn't pass after retries — paused. Fix it or
+												adjust the check, then Run steps again.
+											</div>
+										)}
 										<div className="mt-2 flex items-center gap-2">
 											{!runningSteps ? (
 												<button
@@ -1756,7 +1905,9 @@ function ChatInputSection({
 												type="button"
 												onClick={() => {
 													setSteps(Array(STEP_COUNT).fill(""))
+													setGates(Array(STEP_COUNT).fill(""))
 													setCompletedSteps([])
+													setFailedStep(-1)
 												}}
 												disabled={runningSteps || !hasSteps}
 												className="rounded-md px-2 py-1.5 font-medium text-muted-foreground text-xs hover:text-foreground disabled:opacity-40"

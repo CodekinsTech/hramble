@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld("palot", {
 	/** Gets the URL of the running server, or null. */
 	getServerUrl: () => ipcRenderer.invoke("opencode:url"),
 
+	/** Run a shell command in a directory and return its exit code + output.
+	 *  Used by Step List verification gates for an objective pass/fail. */
+	runShell: (cwd: string, command: string, timeoutMs?: number) =>
+		ipcRenderer.invoke("shell:run", cwd, command, timeoutMs),
+
 	// --- Agent-driven browser pane ---
 	/** Subscribe to browser commands from the agent (via the main-process bridge). */
 	onBrowserCommand: (
