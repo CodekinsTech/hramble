@@ -409,11 +409,13 @@ export function NewChat() {
 		[selectedModel, activeOpenCodeAgent, config?.model, providers, recentModels],
 	)
 
-	// Auto-default Plan mode from the model: on for local (Ollama), off otherwise.
-	// Stops once the user flips the toggle themselves.
+	// Default to Build (plan off) for every model — plan is opt-in, not needed for
+	// most tasks. Auto-planning for local models actually hurt them: the
+	// plan→execute split confuses weaker models more than it helps. Stops once the
+	// user flips the toggle themselves.
 	useEffect(() => {
 		if (planModeTouched.current) return
-		setPlanMode(effectiveModel?.providerID === "ollama")
+		setPlanMode(false)
 	}, [effectiveModel])
 
 	// Validate variant against the effective model's available variants.

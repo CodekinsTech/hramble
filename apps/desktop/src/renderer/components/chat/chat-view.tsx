@@ -713,8 +713,8 @@ export function ChatView({
 				<Conversation key={agent.sessionId} className="h-full">
 					<ScrollOnLoad loading={loading} sessionId={agent.sessionId} />
 					<ScrollBridge scrollRef={scrollRef} />
-					<ConversationContent className="gap-10 px-0 py-2 sm:px-4 sm:py-6">
-						<div className={cn(contentWidthClass, "space-y-10")}>
+					<ConversationContent className="gap-6 px-0 py-2 sm:px-4 sm:py-6">
+						<div className={cn(contentWidthClass, "space-y-6")}>
 							{/* Load earlier messages button */}
 							{hasEarlierMessages && (
 								<div className="flex justify-center pb-4">
