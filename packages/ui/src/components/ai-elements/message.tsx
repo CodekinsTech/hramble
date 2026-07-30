@@ -39,7 +39,7 @@ export type MessageContentProps = HTMLAttributes<HTMLDivElement>
 export const MessageContent = ({ children, className, ...props }: MessageContentProps) => (
 	<div
 		className={cn(
-			"is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-[15px]",
+			"is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-[13.5px]",
 			"group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl group-[.is-user]:bg-black/[0.06] dark:group-[.is-user]:bg-white/[0.09] group-[.is-user]:px-4 group-[.is-user]:py-2.5 group-[.is-user]:text-foreground",
 			"group-[.is-assistant]:text-foreground",
 			className,
@@ -281,7 +281,7 @@ export const MessageResponse = memo(
 				"size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
 				// Reading typography tuned to feel like Claude: comfortable line-height,
 				// clear vertical rhythm, readable headings/lists/code/links.
-				"[&_p]:my-2 [&_p]:leading-relaxed",
+				"[&_p]:my-1.5 [&_p]:leading-6",
 				"[&_h1]:mt-5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold",
 				"[&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold",
 				"[&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-semibold",
