@@ -56,6 +56,7 @@ import {
 	permissionRulesAtom,
 	type UserPermissionRule,
 } from "../../atoms/permission-rules"
+import { promptHistoryAtom, pushPromptHistory } from "../../atoms/prompt-history"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
 	ConfigData,
@@ -1197,6 +1198,12 @@ function ChatInputSection({
 				}
 			}
 
+			// Record the sent prompt for cross-session ↑/↓ recall, and reset any
+			// in-progress history navigation.
+			appStore.set(promptHistoryAtom, pushPromptHistory(appStore.get(promptHistoryAtom), text))
+			historyIndexRef.current = -1
+			historyStashRef.current = null
+
 			setSending(true)
 			try {
 				if (effectiveModel && agent.directory) {
@@ -1323,6 +1330,66 @@ function ChatInputSection({
 	const slashPopoverRef = useRef<SlashCommandPopoverHandle>(null)
 	const mentionPopoverRef = useRef<MentionPopoverHandle>(null)
 
+	// Prompt-history (↑/↓) navigation state. `index` -1 = not navigating; 0 =
+	// newest entry. `stash` holds the in-progress draft while navigating so ↓
+	// past the newest entry restores what the user was typing.
+	const historyIndexRef = useRef(-1)
+	const historyStashRef = useRef<string | null>(null)
+
+	/** Recall a previous/next prompt into the composer. Returns true if handled. */
+	const navigatePromptHistory = useCallback(
+		(direction: "prev" | "next"): boolean => {
+			const ctrl = slashCommandRef.current
+			if (!ctrl) return false
+			const ta = document.querySelector<HTMLTextAreaElement>("textarea[data-prompt-input]")
+			const text = ctrl.getText()
+			const caret = ta?.selectionStart ?? text.length
+			const caretEnd = ta?.selectionEnd ?? text.length
+			const history = appStore.get(promptHistoryAtom)
+			if (history.length === 0) return false
+
+			if (direction === "prev") {
+				// Only hijack ↑ at the very start of the field, so multi-line editing
+				// still works normally.
+				if (caret !== 0 || caretEnd !== 0) return false
+				if (historyIndexRef.current === -1) {
+					historyStashRef.current = text
+					historyIndexRef.current = 0
+				} else if (historyIndexRef.current < history.length - 1) {
+					historyIndexRef.current += 1
+				} else {
+					return true // already at the oldest — swallow the key, don't move
+				}
+			} else {
+				// ↓ only recalls forward while navigating, and only from the end.
+				if (historyIndexRef.current === -1) return false
+				if (caret !== text.length || caretEnd !== text.length) return false
+				if (historyIndexRef.current === 0) {
+					historyIndexRef.current = -1
+					const restore = historyStashRef.current ?? ""
+					historyStashRef.current = null
+					ctrl.setText(restore)
+					requestAnimationFrame(() => {
+						const el = document.querySelector<HTMLTextAreaElement>("textarea[data-prompt-input]")
+						el?.setSelectionRange(restore.length, restore.length)
+					})
+					return true
+				}
+				historyIndexRef.current -= 1
+			}
+
+			const entry = history[history.length - 1 - historyIndexRef.current] ?? ""
+			ctrl.setText(entry)
+			// Keep the caret at the start so repeated ↑ keeps walking back.
+			requestAnimationFrame(() => {
+				const el = document.querySelector<HTMLTextAreaElement>("textarea[data-prompt-input]")
+				el?.setSelectionRange(0, 0)
+			})
+			return true
+		},
+		[],
+	)
+
 	const handleSlashTriggerChange = useCallback((open: boolean, query: string) => {
 		setSlashOpen(open)
 		setSlashQuery(query)
@@ -1428,11 +1495,24 @@ function ChatInputSection({
 			if (slashPopoverRef.current?.handleKeyDown(e)) return
 			if (mentionPopoverRef.current?.handleKeyDown(e)) return
 
+			// Prompt-history recall (↑/↓), Claude-style. Skipped while a modifier is
+			// held so shortcuts still work.
+			if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+				if (navigatePromptHistory(e.key === "ArrowUp" ? "prev" : "next")) {
+					e.preventDefault()
+					return
+				}
+			} else if (e.key !== "Shift") {
+				// Any other edit exits history navigation (back to a fresh draft).
+				historyIndexRef.current = -1
+				historyStashRef.current = null
+			}
+
 			if (e.key === "Escape") {
 				handleEscapeAbort()
 			}
 		},
-		[handleEscapeAbort],
+		[handleEscapeAbort, navigatePromptHistory],
 	)
 
 	// Width constraint class: remove max-w when review panel is open
