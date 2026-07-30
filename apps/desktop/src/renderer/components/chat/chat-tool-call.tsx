@@ -822,17 +822,21 @@ export function shouldDefaultOpen(tool: string, status: string): boolean {
 	if (status === "error") return true
 
 	switch (tool) {
-		// High-information tools: default open in active turn
+		// High-information tools that are concise: default open in the active turn.
+		// `edit` shows a compact diff; `bash` shows output; `apply_patch` a diff.
 		case "bash":
 		case "edit":
-		case "write":
-		case "read":
 		case "apply_patch":
 		case "task":
 		case "question":
 			return true
+		// Write/read: collapsed by default, like Claude. Dumping a whole written or
+		// read file inline clutters the chat — the card header already shows the
+		// filename; expand it to see the content. `edit` stays open because a diff
+		// is small and useful.
+		case "write":
+		case "read":
 		// Todos: always collapsed — the pinned SessionTaskList shows live state.
-		// Inline cards serve as timeline breadcrumbs for session review only.
 		case "todowrite":
 		case "todoread":
 			return false
