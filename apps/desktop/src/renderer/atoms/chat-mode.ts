@@ -16,6 +16,41 @@ type PermissionRule = { permission: string; pattern: string; action: "allow" | "
 const ALLOW_ALL: PermissionRule = { permission: "*", pattern: "*", action: "allow" }
 const ask = (permission: string): PermissionRule => ({ permission, pattern: "*", action: "ask" })
 
+// Commands that can irreversibly destroy work or the system. These always prompt
+// for confirmation — even in Auto mode — so "run it automatically" never silently
+// runs an `rm -rf` or a force-push. (Bypass still runs everything, by definition.)
+// Rules are last-match-wins, so layering these AFTER allow-all turns just these
+// specific commands into "ask" while everything else stays automatic.
+const DANGEROUS_BASH_PATTERNS = [
+	"*rm -rf*",
+	"*rm -fr*",
+	"*rm -r *",
+	"*sudo rm *",
+	"*git push*--force*",
+	"*git push*-f*",
+	"*git reset --hard*",
+	"*git clean -f*",
+	"*:(){:|:&};:*", // fork bomb
+	"*mkfs*",
+	"*dd if=*",
+	"* of=/dev/*",
+	"*DROP TABLE*",
+	"*DROP DATABASE*",
+	"*TRUNCATE TABLE*",
+	"*chmod -R 777*",
+	"*chmod 777*",
+	"*npm publish*",
+	"*yarn publish*",
+	"*shutdown*",
+	"*reboot*",
+	"*killall *",
+]
+const DANGEROUS_BASH: PermissionRule[] = DANGEROUS_BASH_PATTERNS.map((pattern) => ({
+	permission: "bash",
+	pattern,
+	action: "ask",
+}))
+
 export type ModeSpec = {
 	label: string
 	blurb: string
@@ -46,8 +81,8 @@ export const CHAT_MODES: Record<ChatMode, ModeSpec> = {
 	},
 	auto: {
 		label: "Auto",
-		blurb: "Runs edits and commands automatically. Stops only for risky prompts.",
-		permission: null,
+		blurb: "Runs edits and commands automatically — but still confirms destructive commands (rm -rf, force-push, DB drops, etc.).",
+		permission: [ALLOW_ALL, ...DANGEROUS_BASH],
 		agent: null,
 	},
 	bypass: {
