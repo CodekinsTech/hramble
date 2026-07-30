@@ -57,6 +57,7 @@ import {
 	type UserPermissionRule,
 } from "../../atoms/permission-rules"
 import { promptHistoryAtom, pushPromptHistory } from "../../atoms/prompt-history"
+import { fallbackModelAtom } from "../../atoms/fallback-model"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
 	ConfigData,
@@ -515,6 +516,48 @@ export function ChatView({
 
 	const showSessionError = !!sessionErrorText && !lastTurnHasError
 
+	// Fallback-model retry: when a turn errors, offer to re-run the last prompt —
+	// optionally with a different model (provider overload / model unavailable).
+	const lastUserText = useMemo(() => {
+		const lt = turns.at(-1)
+		if (!lt) return ""
+		return lt.userMessage.parts
+			.map((p) => (p.type === "text" ? p.text : ""))
+			.join("")
+			.trim()
+	}, [turns])
+
+	const retryModelOptions = useMemo(() => {
+		const provs = providers?.providers ?? []
+		return provs.flatMap((p) =>
+			Object.entries(p.models ?? {}).map(([modelID, m]) => ({
+				key: `${p.id}/${modelID}`,
+				providerID: p.id,
+				modelID,
+				label: (m as { name?: string })?.name ?? modelID,
+			})),
+		)
+	}, [providers])
+
+	const handleRetryError = useCallback(
+		(model?: ModelRef) => {
+			if (!onSendMessage || !lastUserText) return
+			if (model) appStore.set(fallbackModelAtom, model)
+			void onSendMessage(agent, lastUserText, model ? { model } : undefined)
+		},
+		[onSendMessage, lastUserText, agent],
+	)
+
+	// A previously-chosen fallback model, surfaced as a one-click retry.
+	const storedFallback = useAtomValue(fallbackModelAtom)
+	const storedFallbackLabel = useMemo(() => {
+		if (!storedFallback) return null
+		const opt = retryModelOptions.find(
+			(o) => o.providerID === storedFallback.providerID && o.modelID === storedFallback.modelID,
+		)
+		return opt?.label ?? storedFallback.modelID
+	}, [storedFallback, retryModelOptions])
+
 	// Stable callbacks for question/permission handlers — agent is stable
 	// per render, but wrapping in useCallback avoids creating new inline
 	// closures inside the JSX .map() that would defeat memo() on children.
@@ -726,7 +769,45 @@ export function ChatView({
 							{/* Session-level error from session.error events */}
 							{showSessionError && sessionErrorText && (
 								<div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
-									{sessionErrorText}
+									<div>{sessionErrorText}</div>
+									{onSendMessage && lastUserText && (
+										<div className="mt-2 flex items-center gap-2">
+											<button
+												type="button"
+												onClick={() => handleRetryError()}
+												className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+											>
+												Retry
+											</button>
+											{storedFallback && storedFallbackLabel && (
+												<button
+													type="button"
+													onClick={() => handleRetryError(storedFallback)}
+													className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-300 transition-colors hover:bg-red-500/20"
+												>
+													Retry with {storedFallbackLabel}
+												</button>
+											)}
+											{retryModelOptions.length > 1 && (
+												<select
+													className="h-6 rounded-md border border-red-500/30 bg-transparent px-1.5 text-[11px] text-red-300 outline-none"
+													value=""
+													onChange={(e) => {
+														const opt = retryModelOptions.find((o) => o.key === e.target.value)
+														if (opt) handleRetryError({ providerID: opt.providerID, modelID: opt.modelID })
+													}}
+													aria-label="Retry with another model"
+												>
+													<option value="">Retry with another model…</option>
+													{retryModelOptions.map((o) => (
+														<option key={o.key} value={o.key}>
+															{o.label}
+														</option>
+													))}
+												</select>
+											)}
+										</div>
+									)}
 								</div>
 							)}
 						</div>
