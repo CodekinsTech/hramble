@@ -36,6 +36,7 @@ import {
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
+import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
 import { markHyperloopSession, workspaceModeAtom } from "../atoms/workspace"
 import { useAgents, useProjectList } from "../hooks/use-agents"
 import { NEW_CHAT_DRAFT_KEY, useDraftActions, useDraftSnapshot } from "../hooks/use-draft"
@@ -485,7 +486,11 @@ export function NewChat() {
 	/** Launch a session in local mode (no worktree). */
 	const launchLocal = useCallback(
 		async (promptText: string, files?: FileAttachment[]) => {
-			const session = await createSession(selectedDirectory, undefined, modeSpec.permission ?? undefined)
+			const session = await createSession(
+				selectedDirectory,
+				undefined,
+				mergeSessionPermission(modeSpec.permission, selectedDirectory, appStore.get(permissionRulesAtom)),
+			)
 			if (!session) return
 
 			// Tag Hyperloop runs so they show under the Hyperloop workspace only.
@@ -576,7 +581,11 @@ export function NewChat() {
 						sessionId: stubId,
 						setupPhase: "starting-session",
 					})
-					const session = await createSession(sdkDirectory, undefined, modeSpec.permission ?? undefined)
+					const session = await createSession(
+						sdkDirectory,
+						undefined,
+						mergeSessionPermission(modeSpec.permission, selectedDirectory, appStore.get(permissionRulesAtom)),
+					)
 					if (!session) {
 						throw new Error("Failed to create session in worktree")
 					}

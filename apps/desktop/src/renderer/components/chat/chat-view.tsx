@@ -51,6 +51,11 @@ import {
 	effectiveQuestionFamily,
 } from "../../atoms/derived/session-requests"
 import { appStore } from "../../atoms/store"
+import {
+	newRuleId,
+	permissionRulesAtom,
+	type UserPermissionRule,
+} from "../../atoms/permission-rules"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
 	ConfigData,
@@ -520,6 +525,41 @@ export function ChatView({
 			response?: "once" | "always",
 		) => {
 			await onApprove?.(a, permissionSessionId, permissionId, response)
+
+			// "Always" must survive restarts. The engine handles the *current*
+			// session; we persist a durable project-scoped allow rule so every
+			// future session honours it too (cross-session memory). Scoped to the
+			// project — not global — so one click never silently allows everywhere;
+			// the user can broaden or remove it in Settings → Permissions.
+			if (response === "always") {
+				const perm = a.permissions.find((p) => p.id === permissionId)
+				if (perm) {
+					const pattern = perm.patterns?.[0] ?? "*"
+					const directory = a.projectDirectory
+					const existing = appStore.get(permissionRulesAtom)
+					const already = existing.some(
+						(r) =>
+							r.scope === "project" &&
+							r.directory === directory &&
+							r.permission === perm.permission &&
+							r.pattern === pattern &&
+							r.action === "allow",
+					)
+					if (!already) {
+						const rule: UserPermissionRule = {
+							id: newRuleId(perm.permission),
+							permission: perm.permission,
+							pattern,
+							action: "allow",
+							scope: "project",
+							directory,
+							note: `Always allow ${perm.permission}`,
+							createdAt: Date.now(),
+						}
+						appStore.set(permissionRulesAtom, [...existing, rule])
+					}
+				}
+			}
 			// Permission card disappears after approval — scroll to keep content visible.
 			requestAnimationFrame(() => {
 				scrollRef.current?.scrollToBottom("smooth")

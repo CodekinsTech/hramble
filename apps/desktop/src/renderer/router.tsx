@@ -17,6 +17,7 @@ import { SessionRoute } from "./components/session-route"
 import { AboutSettings } from "./components/settings/about-settings"
 import { GeneralSettings } from "./components/settings/general-settings"
 import { NotificationSettings } from "./components/settings/notification-settings"
+import { PermissionSettings } from "./components/settings/permission-settings"
 import { ProviderSettings } from "./components/settings/provider-settings"
 import { ServerSettings } from "./components/settings/server-settings"
 import { ConnectorsSettings } from "./components/settings/connectors-settings"
@@ -109,6 +110,12 @@ const settingsProvidersRoute = createRoute({
 	component: ProviderSettings,
 })
 
+const settingsPermissionsRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: "permissions",
+	component: PermissionSettings,
+})
+
 const settingsWorktreesRoute = createRoute({
 	getParentRoute: () => settingsRoute,
 	path: "worktrees",
@@ -176,6 +183,7 @@ const routeTree = rootRoute.addChildren([
 			settingsServersRoute,
 			settingsNotificationsRoute,
 			settingsProvidersRoute,
+			settingsPermissionsRoute,
 			settingsConnectorsRoute,
 			settingsWorktreesRoute,
 			settingsStoreRoute,

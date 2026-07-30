@@ -1,7 +1,7 @@
 {
-  "name": "demo",
-  "version": "1.0.0",
-  "scripts": {
-    "start": "node index.js"
-  }
+	"name": "demo",
+	"version": "1.0.0",
+	"scripts": {
+		"start": "node index.js"
+	}
 }
