@@ -846,16 +846,10 @@ export const ChatTurnComponent = memo(
 											: undefined
 										const isStreaming = working && (!lastItem || (lastItem.kind === "reasoning" && !lastItem.part.time.end))
 
-										// Skip trivial "Thought for 1 sec" breadcrumbs — they appear on nearly
-										// every step and clutter the chat. Keep anything still streaming and
-										// any reasoning with real substance to it.
-										const reasoningText = item.items
-											.filter((p) => p.kind === "reasoning")
-											.map((p) =>
-												(p as { part: ReasoningPart }).part.text.replace("[REDACTED]", "").trim(),
-											)
-											.join("")
-										if (!isStreaming && reasoningText.length < 80) return null
+										// Hide the "Thought for X seconds" breadcrumb once reasoning is done —
+										// the user doesn't want it. Keep only the live "Thinking..." shown
+										// while the model is actively reasoning.
+										if (!isStreaming) return null
 
 										return (
 											<Reasoning
