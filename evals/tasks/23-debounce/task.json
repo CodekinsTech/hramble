@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement debounce(fn, wait) in debounce.js. It returns a new function that delays calling fn until `wait` milliseconds have passed since the last call. If it is called again before the delay elapses, the timer resets, so fn runs only once after the calls stop. fn should receive the arguments from the most recent call. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}

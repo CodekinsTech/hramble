@@ -39,7 +39,7 @@ runs the task's verification → records pass/fail + diagnostics → cleans up.
 An empty response is retried once after a back-off, because free tiers throttle
 back-to-back runs and an empty reply otherwise gets mis-scored as incompetence.
 
-## The suite (22 tasks)
+## The suite (24 tasks)
 
 Each task is a directory with a `task.json` and an optional `repo/` fixture. The
 mix is deliberately broad — fixing bugs, implementing from a signature,
@@ -70,6 +70,8 @@ scratch:
 | 20 merge-configs | implement (immutable object merge) |
 | 21 add-npm-script | edit JSON config in place |
 | 22 csv-to-json | implement (parsing structured text) |
+| 23 debounce | implement (timing / closure utility, async behavior) |
+| 24 title-case | implement (string transform, casing edge cases) |
 
 Every fixture is dependency-free and runs offline: verification is either a
 `node` command (exit 0 = pass) or a file-content check. All tasks are validated

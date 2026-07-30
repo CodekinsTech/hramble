@@ -1,0 +1,4 @@
+{
+  "prompt": "Implement titleCase(text) in title.js. It uppercases the first letter of each word and lowercases the rest of every word. Words are separated by single spaces. An empty string returns an empty string. Keep the export. Run `node test.mjs` to check. Do not modify test.mjs.",
+  "verify": { "cmd": "node test.mjs" }
+}
