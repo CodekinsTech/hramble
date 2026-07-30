@@ -281,7 +281,7 @@ export const MessageResponse = memo(
 				"size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
 				// Reading typography tuned to feel like Claude: comfortable line-height,
 				// clear vertical rhythm, readable headings/lists/code/links.
-				"[&_p]:my-3 [&_p]:leading-7",
+				"[&_p]:my-2 [&_p]:leading-relaxed",
 				"[&_h1]:mt-5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold",
 				"[&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold",
 				"[&_h3]:mt-4 [&_h3]:mb-1.5 [&_h3]:text-sm [&_h3]:font-semibold",

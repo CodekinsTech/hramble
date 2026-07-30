@@ -748,7 +748,7 @@ export const ChatTurnComponent = memo(
 		)
 
 		return (
-			<div ref={turnRef} className="group/turn space-y-4">
+			<div ref={turnRef} className="group/turn space-y-2.5">
 				{/* User message */}
 				{isSynthetic ? (
 					<div className="flex items-center justify-end gap-1.5 text-[11px] italic text-muted-foreground/50">
