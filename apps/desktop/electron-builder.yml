@@ -71,13 +71,13 @@ linux:
     - target: rpm
       arch: [x64]
   category: Development
-  maintainer: palot
+  maintainer: hramble
   desktop:
     entry:
-      Name: Palot
+      Name: Hramble
       Comment: AI-powered coding assistant
       Categories: Development;IDE;
-      StartupWMClass: Palot
+      StartupWMClass: Hramble
 
 nsis:
   oneClick: false

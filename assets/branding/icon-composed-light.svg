@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!-- Palot App Icon: Composed Light variant -->
-  <!-- Palot Blue palette, with padding + macOS squircle mask -->
+  <!-- Hramble App Icon: Composed Light variant -->
+  <!-- Hramble Blue palette, with padding + macOS squircle mask -->
   <defs>
     <radialGradient id="bgL" cx="50%" cy="50%" r="65%">
       <stop offset="0%" stop-color="#ecf7fd"/>

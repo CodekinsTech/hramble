@@ -58,7 +58,7 @@
       // Prevent flash of wrong color scheme before React hydrates.
       // Reads from the same localStorage key used by Zustand persist.
       try {
-        var prefs = JSON.parse(localStorage.getItem('palot-preferences') || '{}');
+        var prefs = JSON.parse(localStorage.getItem('hramble-preferences') || '{}');
         var state = prefs.state || {};
         var scheme = state.colorScheme || 'light';
         var themeId = state.theme || 'default';
@@ -81,7 +81,7 @@
       // Toggle via Command Palette (Cmd+K > "React Scan"). Only active in dev
       // since production React builds don't expose the DevTools hook.
       try {
-        if (localStorage.getItem('palot:reactScan') === 'true') {
+        if (localStorage.getItem('hramble:reactScan') === 'true') {
           document.write('<script src="https://unpkg.com/react-scan/dist/auto.global.js"><\/script>');
         }
       } catch (e) {}

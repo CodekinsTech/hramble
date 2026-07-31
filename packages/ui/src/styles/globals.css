@@ -100,8 +100,8 @@
   --destructive-foreground: #ffffff;
   --border: #ededed;
   --input: #ededed;
-  --ring: #0080bd;              /* palot-blue-600 */
-  --chart-1: #05bdf5;           /* palot-blue-400 */
+  --ring: #0080bd;              /* hramble-blue-600 */
+  --chart-1: #05bdf5;           /* hramble-blue-400 */
   --chart-2: #04b84c;
   --chart-3: #fb6a22;
   --chart-4: #924ff7;
@@ -110,10 +110,10 @@
   --sidebar-foreground: #212121;
   --sidebar-primary: #0d0d0d;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #a8ddf7;    /* palot-blue-200 */
+  --sidebar-accent: #a8ddf7;    /* hramble-blue-200 */
   --sidebar-accent-foreground: #0d0d0d;
   --sidebar-border: #ededed;
-  --sidebar-ring: #0080bd;      /* palot-blue-600 */
+  --sidebar-ring: #0080bd;      /* hramble-blue-600 */
 
   /* Diff colors */
   --diff-addition: #04b84c;
@@ -123,7 +123,7 @@
 }
 
 .dark {
-  /* Dark mode — Cortex neutral scale with Palot Blue accent */
+  /* Dark mode — Cortex neutral scale with Hramble Blue accent */
   --background: #181818;
   --foreground: #ffffff;
   --card: #212121;
@@ -142,8 +142,8 @@
   --destructive-foreground: #ffffff;
   --border: #2e2e2e;
   --input: #2e2e2e;
-  --ring: #6fcbf3;              /* palot-blue-300 */
-  --chart-1: #05bdf5;           /* palot-blue-400 */
+  --ring: #6fcbf3;              /* hramble-blue-300 */
+  --chart-1: #05bdf5;           /* hramble-blue-400 */
   --chart-2: #40c977;
   --chart-3: #ff8549;
   --chart-4: #ad7bf9;
@@ -152,10 +152,10 @@
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: #0d0d0d;
-  --sidebar-accent: #001a2b;    /* palot-blue-950 */
+  --sidebar-accent: #001a2b;    /* hramble-blue-950 */
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #ffffff;
-  --sidebar-ring: #6fcbf3;      /* palot-blue-300 */
+  --sidebar-ring: #6fcbf3;      /* hramble-blue-300 */
 
   /* Diff colors */
   --diff-addition: #40c977;
@@ -690,7 +690,7 @@
  * ============================================================ */
 @layer components {
   [data-slot="app-bar"] {
-    background-color: var(--palot-titlebar-tint, transparent);
+    background-color: var(--hramble-titlebar-tint, transparent);
   }
 }
 

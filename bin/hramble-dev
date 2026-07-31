@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# palot-dev — Launch the Palot desktop app in development mode.
+# hramble-dev — Launch the Hramble desktop app in development mode.
 #
 # Usage:
-#   palot-dev          Start Electron dev (default)
-#   palot-dev --web    Start browser-only dev (renderer + server)
+#   hramble-dev          Start Electron dev (default)
+#   hramble-dev --web    Start browser-only dev (renderer + server)
 #
 # Tip: symlink this into your PATH once:
-#   ln -sf "$(cd "$(dirname "$0")/.." && pwd)/bin/palot-dev" /usr/local/bin/palot-dev
+#   ln -sf "$(cd "$(dirname "$0")/.." && pwd)/bin/hramble-dev" /usr/local/bin/hramble-dev
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ for arg in "$@"; do
 			MODE="web"
 			;;
 		--help|-h)
-			echo "Usage: palot-dev [--web]"
+			echo "Usage: hramble-dev [--web]"
 			echo ""
 			echo "  --web    Start browser-only dev (Vite + Hono server)"
 			echo "           Default: Start Electron dev"
@@ -38,7 +38,7 @@ for arg in "$@"; do
 			;;
 		*)
 			echo "Unknown option: $arg" >&2
-			echo "Usage: palot-dev [--web]" >&2
+			echo "Usage: hramble-dev [--web]" >&2
 			exit 1
 			;;
 	esac
@@ -52,7 +52,7 @@ if ! command -v bun &>/dev/null; then
 fi
 
 if [ "$MODE" = "web" ]; then
-	echo "Starting Palot in browser dev mode..."
+	echo "Starting Hramble in browser dev mode..."
 	echo "  Server:   http://localhost:3100"
 	echo "  Renderer: http://localhost:1420"
 	echo ""
@@ -62,7 +62,7 @@ if [ "$MODE" = "web" ]; then
 	sleep 1
 	(cd "$REPO_ROOT/apps/desktop" && bun run dev:web)
 else
-	echo "Starting Palot in Electron dev mode..."
+	echo "Starting Hramble in Electron dev mode..."
 	echo ""
 	cd "$REPO_ROOT"
 	exec bun run dev:desktop
