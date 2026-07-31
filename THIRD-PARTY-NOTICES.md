@@ -1,7 +1,7 @@
 # Third-Party Notices
 
-This file lists the third-party libraries used by Palot and their respective licenses.
-Palot itself is licensed under the [MIT License](LICENSE).
+This file lists the third-party libraries used by Hramble and their respective licenses.
+Hramble itself is licensed under the [MIT License](LICENSE).
 
 Last updated: 2025-02-12
 
@@ -22,7 +22,7 @@ Last updated: 2025-02-12
 | Other (W3C, MPL-2.0, Zlib, 0BSD, etc.) | ~30 | Various permissive licenses |
 
 The full dependency tree contains approximately 1,100 packages. The overwhelming majority
-(~95%) use MIT, ISC, or BSD licenses. All licenses are compatible with Palot's MIT license.
+(~95%) use MIT, ISC, or BSD licenses. All licenses are compatible with Hramble's MIT license.
 
 ---
 
@@ -30,12 +30,12 @@ The full dependency tree contains approximately 1,100 packages. The overwhelming
 
 ### OpenCode
 
-Palot is a desktop GUI for [OpenCode](https://github.com/opencode-ai/opencode), an
-open-source AI coding agent. Palot integrates with OpenCode via the
+Hramble is a desktop GUI for [OpenCode](https://github.com/anomalyco/opencode), an
+open-source AI coding agent. Hramble integrates with OpenCode via the
 [`@opencode-ai/sdk`](https://www.npmjs.com/package/@opencode-ai/sdk) package, which is
 licensed under the MIT License.
 
-Palot is not a fork of OpenCode. It spawns and manages the OpenCode server process and
+Hramble is not a fork of OpenCode. It spawns and manages the OpenCode server process and
 communicates with it over SSE/HTTP.
 
 ---

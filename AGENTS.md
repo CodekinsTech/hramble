@@ -177,7 +177,7 @@ Never open external URLs inside the Electron window. Use `setWindowOpenHandler` 
 
 ### Hramble storage -- XDG Base Directory
 
-Hramble follows the XDG Base Directory Specification (same convention as OpenCode). Config at `~/.config/palot/`, data at `~/.local/share/palot/`. Automation configs live at `~/.config/palot/automations/<id>/`, SQLite database at `~/.local/share/palot/palot.db`. See `main/automation/paths.ts` for the implementation. Do NOT use `~/.palot/` (legacy) or Electron's `userData` path for automation storage.
+Hramble follows the XDG Base Directory Specification (same convention as OpenCode). Config at `~/.config/hramble/`, data at `~/.local/share/hramble/`. Automation configs live at `~/.config/hramble/automations/<id>/`, SQLite database at `~/.local/share/hramble/hramble.db`. See `main/automation/paths.ts` for the implementation. Do NOT use `~/.hramble/` (legacy) or Electron's `userData` path for automation storage.
 
 ### electron-vite -- Three Build Targets
 

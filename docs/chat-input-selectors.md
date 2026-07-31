@@ -54,13 +54,13 @@ When a session is opened (or the user navigates between sessions), the selectors
 
 ### Phase 1: Project-level preferences (immediate)
 
-On session switch, the selectors are immediately seeded from `projectModelsAtom` -- a Jotai atom backed by `localStorage` under the key `palot:projectModels`.
+On session switch, the selectors are immediately seeded from `projectModelsAtom` -- a Jotai atom backed by `localStorage` under the key `hramble:projectModels`.
 
 ```
 chat-view.tsx:525-542
 
 Source: atoms/preferences.ts:84-87
-  projectModelsAtom = atomWithStorage<Record<string, PersistedModelRef>>("palot:projectModels", {})
+  projectModelsAtom = atomWithStorage<Record<string, PersistedModelRef>>("hramble:projectModels", {})
 
 Shape: Record<directory, PersistedModelRef>
   where PersistedModelRef = { providerID, modelID, variant?, agent? }
@@ -167,7 +167,7 @@ Calls `updateModelRecent(model)` which routes through the backend service layer:
 ```
 services/backend.ts:86-95
 
-Electron mode:  window.palot.updateModelRecent(model)
+Electron mode:  window.hramble.updateModelRecent(model)
                   -> IPC "model-state:update-recent"
                   -> main/model-state.ts:updateModelRecent()
                   -> writes ~/.local/state/opencode/model.json
@@ -208,7 +208,7 @@ if (effectiveModel && agent.directory) {
 }
 ```
 
-This writes to `localStorage` under `palot:projectModels`, keyed by the project directory. The persisted shape is:
+This writes to `localStorage` under `hramble:projectModels`, keyed by the project directory. The persisted shape is:
 
 ```typescript
 interface PersistedModelRef {
@@ -278,7 +278,7 @@ Fetched via `useModelState` hook (`use-opencode-data.ts:343-404`):
 | `renderer/atoms/preferences.ts` | `projectModelsAtom` (localStorage), `PersistedModelRef` type, `setProjectModelAtom` |
 | `renderer/hooks/use-opencode-data.ts` | `resolveEffectiveModel()`, `useProviders`, `useConfig`, `useOpenCodeAgents`, `useModelState`, `getModelVariants` |
 | `renderer/services/backend.ts` | `fetchModelState()`, `updateModelRecent()` -- Electron/browser routing layer |
-| `renderer/services/palot-server.ts` | HTTP implementations for model state (browser mode) |
+| `renderer/services/hramble-server.ts` | HTTP implementations for model state (browser mode) |
 | `main/model-state.ts` | `readModelState()`, `updateModelRecent()` -- reads/writes `model.json` on disk |
 | `main/ipc-handlers.ts` | Registers IPC channels `model-state` and `model-state:update-recent` |
-| `preload/index.ts` | Exposes `getModelState` and `updateModelRecent` on `window.palot` bridge |
+| `preload/index.ts` | Exposes `getModelState` and `updateModelRecent` on `window.hramble` bridge |

@@ -1,6 +1,6 @@
-# Contributing to Palot
+# Contributing to Hramble
 
-Thanks for your interest in contributing to Palot! This document covers the basics for
+Thanks for your interest in contributing to Hramble! This document covers the basics for
 getting started.
 
 ## Prerequisites
@@ -31,7 +31,7 @@ apps/
   desktop/       Electron 40 + Vite + React 19 desktop app
   server/        Bun + Hono backend (browser-mode dev only)
 packages/
-  ui/            Shared shadcn/ui component library (@palot/ui)
+  ui/            Shared shadcn/ui component library (@hramble/ui)
   configconv/    Universal agent config converter
   configconv-cli/ CLI wrapper for the config converter
 ```
@@ -66,7 +66,7 @@ bun changeset
 
 ## Code Style
 
-Palot uses [Biome](https://biomejs.dev/) for linting and formatting. Key conventions:
+Hramble uses [Biome](https://biomejs.dev/) for linting and formatting. Key conventions:
 
 - **Indentation:** Tabs (width 2)
 - **Quotes:** Double quotes
@@ -99,14 +99,14 @@ This is used to generate changelogs and version bumps automatically.
 
 ## Reporting Bugs
 
-Open an issue on [GitHub](https://github.com/ItsWendell/palot/issues) with:
+Open an issue on [GitHub](https://github.com/worldkingk777/hramble-code/issues) with:
 
 - Steps to reproduce
 - Expected behavior
 - Actual behavior
-- Your OS, Palot version, and OpenCode version
+- Your OS, Hramble version, and OpenCode version
 
 ## License
 
-By contributing to Palot, you agree that your contributions will be licensed under the
+By contributing to Hramble, you agree that your contributions will be licensed under the
 [MIT License](LICENSE).

@@ -1,7 +1,7 @@
 # Hramble — feature map
 
 Where each coding feature lives, so nothing feels "missing." Most of this comes
-from the palot/OpenCode base; the **Hramble additions** are marked ★.
+from the hramble / OpenCode base; the **Hramble additions** are marked ★.
 
 ## Working in a project
 - **Pick a folder** — on the new-session screen, the 📁 control → "Choose a

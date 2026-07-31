@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Only the latest stable release of Palot is currently supported for security updates.
+Only the latest stable release of Hramble is currently supported for security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -11,7 +11,7 @@ Only the latest stable release of Palot is currently supported for security upda
 
 ## Reporting a Vulnerability
 
-We take the security of Palot seriously. If you believe you have found a security
+We take the security of Hramble seriously. If you believe you have found a security
 vulnerability, please report it to us as described below.
 
 **Please do not report security vulnerabilities through public GitHub issues.**
