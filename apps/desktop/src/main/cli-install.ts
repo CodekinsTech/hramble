@@ -10,13 +10,13 @@ const __dirname = path.dirname(__filename)
 /**
  * Resolves the path to the CLI shell script bundled inside the app.
  *
- * macOS packaged:  Palot.app/Contents/Resources/bin/palot
- * Linux packaged:  <install-dir>/resources/bin/palot
- * Windows:         <install-dir>/resources/bin/palot.cmd
- * Dev mode:        <repo>/apps/desktop/resources/bin/palot
+ * macOS packaged:  Hramble.app/Contents/Resources/bin/hramble
+ * Linux packaged:  <install-dir>/resources/bin/hramble
+ * Windows:         <install-dir>/resources/bin/hramble.cmd
+ * Dev mode:        <repo>/apps/desktop/resources/bin/hramble
  */
 function getCliSourcePath(): string {
-	const scriptName = process.platform === "win32" ? "palot.cmd" : "palot"
+	const scriptName = process.platform === "win32" ? "hramble.cmd" : "hramble"
 
 	if (app.isPackaged) {
 		// In packaged apps, extraResources go into the resources directory
@@ -31,13 +31,13 @@ function getCliSourcePath(): string {
  * Returns the directory where the CLI symlink will be installed.
  *
  * macOS/Linux: /usr/local/bin
- * Windows:     %LOCALAPPDATA%\Palot\bin  (added to PATH by the user)
+ * Windows:     %LOCALAPPDATA%\Hramble\bin  (added to PATH by the user)
  */
 function getCliInstallDir(): string {
 	if (process.platform === "win32") {
 		const localAppData =
 			process.env.LOCALAPPDATA ?? path.join(app.getPath("home"), "AppData", "Local")
-		return path.join(localAppData, "Palot", "bin")
+		return path.join(localAppData, "Hramble", "bin")
 	}
 	return "/usr/local/bin"
 }
@@ -70,7 +70,7 @@ export function isCliInstalled(): boolean {
 }
 
 /**
- * Installs the `palot` CLI command by symlinking it into /usr/local/bin
+ * Installs the `hramble` CLI command by symlinking it into /usr/local/bin
  * (or the platform equivalent).
  *
  * Returns an object with `success` and optional `error` message.
@@ -121,7 +121,7 @@ export function installCli(): { success: boolean; error?: string } {
 }
 
 /**
- * Uninstalls the `palot` CLI command by removing the symlink.
+ * Uninstalls the `hramble` CLI command by removing the symlink.
  */
 export function uninstallCli(): { success: boolean; error?: string } {
 	const dest = getCliInstallPath()

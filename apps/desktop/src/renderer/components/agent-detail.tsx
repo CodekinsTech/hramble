@@ -42,7 +42,7 @@ import type { Agent, FileAttachment, QuestionAnswer } from "../lib/types"
 import { fetchOpenInTargets, isElectron, openInTarget } from "../services/backend"
 import { useSetAppBarContent } from "./app-bar-context"
 import { ChatView } from "./chat"
-import { PalotWordmark } from "./palot-wordmark"
+import { HrambleWordmark } from "./hramble-wordmark"
 import { ReviewPanel } from "./review/review-panel"
 import { fileExplorerOpenAtom } from "../atoms/file-explorer"
 import { FileExplorer } from "./file-explorer"
@@ -397,7 +397,7 @@ function SessionAppBarContent({
 	return (
 		<div className="flex h-full w-full min-w-0 items-center gap-2.5">
 			{/* App name */}
-			<PalotWordmark className="hidden h-[11px] w-auto shrink-0 text-muted-foreground/70 md:block" />
+			<HrambleWordmark className="hidden h-[11px] w-auto shrink-0 text-muted-foreground/70 md:block" />
 
 			{/* Separator */}
 			<div className="hidden h-3 w-px shrink-0 bg-border/60 md:block" />

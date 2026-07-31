@@ -6,7 +6,7 @@
 
 import { Button } from "@hramble/ui/components/button"
 import { ArrowRightIcon } from "lucide-react"
-import { PalotWordmark } from "../../palot-wordmark"
+import { HrambleWordmark } from "../../hramble-wordmark"
 
 interface WelcomeStepProps {
 	onContinue: () => void
@@ -18,7 +18,7 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
 			<div className="w-full max-w-md space-y-8 text-center">
 				{/* Logo */}
 				<div className="flex justify-center">
-					<PalotWordmark className="h-6 w-auto text-foreground" />
+					<HrambleWordmark className="h-6 w-auto text-foreground" />
 				</div>
 
 				{/* Description */}

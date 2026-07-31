@@ -3,7 +3,7 @@
  * <text> so it scales with the className height (h-5, h-4, h-[11px], ...) with
  * no font-loading dependency for layout.
  */
-export function PalotWordmark({ className }: { className?: string }) {
+export function HrambleWordmark({ className }: { className?: string }) {
 	return (
 		<svg
 			viewBox="0 0 360 80"

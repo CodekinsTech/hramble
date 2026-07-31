@@ -3,7 +3,7 @@
  *
  * Detects whether we're running inside Electron (preload bridge available)
  * or in a plain browser (Bun + Hono server on port 3100). All hooks import
- * from here instead of `palot-server.ts` directly.
+ * from here instead of `hramble-server.ts` directly.
  *
  * In Electron mode, calls go through IPC to the main process.
  * In browser mode, calls go through HTTP to the Palot server.
@@ -56,7 +56,7 @@ export async function fetchOpenCodeUrl(): Promise<{ url: string }> {
 			log.info("OpenCode server URL resolved", { url: info.url })
 			return { url: info.url }
 		}
-		const { fetchOpenCodeUrl: httpFetch } = await import("./palot-server")
+		const { fetchOpenCodeUrl: httpFetch } = await import("./hramble-server")
 		const result = await httpFetch()
 		log.info("OpenCode server URL resolved", { url: result.url })
 		return result
@@ -119,7 +119,7 @@ export async function fetchModelState(): Promise<ModelState> {
 	if (isElectron) {
 		return window.hramble.getModelState()
 	}
-	const { fetchModelState: httpFetch } = await import("./palot-server")
+	const { fetchModelState: httpFetch } = await import("./hramble-server")
 	return httpFetch() as unknown as Promise<ModelState>
 }
 
@@ -135,7 +135,7 @@ export async function updateModelRecent(model: {
 	if (isElectron) {
 		return window.hramble.updateModelRecent(model)
 	}
-	const { updateModelRecent: httpUpdate } = await import("./palot-server")
+	const { updateModelRecent: httpUpdate } = await import("./hramble-server")
 	return httpUpdate(model) as unknown as Promise<ModelState>
 }
 
@@ -148,7 +148,7 @@ export async function checkBackendHealth(): Promise<boolean> {
 	if (isElectron) {
 		return true
 	}
-	const { checkServerHealth } = await import("./palot-server")
+	const { checkServerHealth } = await import("./hramble-server")
 	return checkServerHealth()
 }
 

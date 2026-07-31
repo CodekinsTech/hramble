@@ -59,7 +59,7 @@ import { useSetAppBarContent } from "./app-bar-context"
 import { BranchPicker } from "./branch-picker"
 import { PromptAttachmentPreview } from "./chat/prompt-attachments"
 import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
-import { PalotWordmark } from "./palot-wordmark"
+import { HrambleWordmark } from "./hramble-wordmark"
 import { HrambleLogo } from "./hramble-logo"
 
 // ============================================================
@@ -219,7 +219,7 @@ export function NewChat() {
 	const setAppBarContent = useSetAppBarContent()
 	useLayoutEffect(() => {
 		setAppBarContent(
-			<PalotWordmark className="h-[11px] w-auto shrink-0 text-muted-foreground/70" />,
+			<HrambleWordmark className="h-[11px] w-auto shrink-0 text-muted-foreground/70" />,
 		)
 		return () => setAppBarContent(null)
 	}, [setAppBarContent])
