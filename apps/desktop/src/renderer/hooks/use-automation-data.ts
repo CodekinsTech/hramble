@@ -19,7 +19,7 @@ const log = createLogger("use-automation-data")
 /** Polling interval for countdown/timer freshness (30 seconds). */
 const POLL_INTERVAL = 30_000
 
-const isElectron = typeof window !== "undefined" && "palot" in window
+const isElectron = typeof window !== "undefined" && "hramble" in window
 
 export function useAutomationData() {
 	const setAutomations = useSetAtom(setAutomationsAtom)
@@ -121,7 +121,7 @@ export function useAutomationData() {
 	useEffect(() => {
 		if (!isElectron) return
 		log.debug("Subscribing to automation:runs-updated IPC events")
-		const unsub = window.palot?.onAutomationRunsUpdated(() => {
+		const unsub = window.hramble?.onAutomationRunsUpdated(() => {
 			log.info("Received automation:runs-updated from main process")
 			refetch("ipc-push")
 		})

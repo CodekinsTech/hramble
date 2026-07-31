@@ -3,10 +3,10 @@ import { contextBridge, ipcRenderer } from "electron"
 /**
  * Preload bridge — exposes a typed API from the main process to the renderer.
  *
- * The renderer accesses these via `window.palot.*`.
+ * The renderer accesses these via `window.hramble.*`.
  * All methods return Promises (backed by `ipcRenderer.invoke`).
  */
-contextBridge.exposeInMainWorld("palot", {
+contextBridge.exposeInMainWorld("hramble", {
 	/** The host platform: "darwin", "win32", or "linux". */
 	platform: process.platform,
 

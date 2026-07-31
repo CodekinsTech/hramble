@@ -12,9 +12,9 @@ files:
   - "node_modules/electron-liquid-glass/**/*"
 
 # Bundle the CLI launcher script into the app package.
-# macOS: Contents/Resources/bin/palot
-# Linux: resources/bin/palot
-# Windows: resources/bin/palot.cmd
+# macOS: Contents/Resources/bin/hramble
+# Linux: resources/bin/hramble
+# Windows: resources/bin/hramble.cmd
 extraResources:
   - from: resources/bin
     to: bin
@@ -61,7 +61,7 @@ win:
       arch: [x64, arm64]
 
 linux:
-  executableName: palot
+  executableName: hramble
   icon: resources/linux-icons
   target:
     - target: AppImage

@@ -38,7 +38,7 @@ export function useServerSettingsSync() {
 		if (!isElectron) return
 
 		// Load initial settings
-		window.palot.getSettings().then((settings) => {
+		window.hramble.getSettings().then((settings) => {
 			if (settings.servers) {
 				setServers(settings.servers.servers)
 				setActiveServerId(settings.servers.activeServerId)
@@ -46,7 +46,7 @@ export function useServerSettingsSync() {
 		})
 
 		// Subscribe to settings changes
-		const unsub = window.palot.onSettingsChanged((settings) => {
+		const unsub = window.hramble.onSettingsChanged((settings) => {
 			const s = settings as { servers?: { servers: ServerConfig[]; activeServerId: string } }
 			if (s.servers) {
 				setServers(s.servers.servers)
@@ -61,12 +61,12 @@ export function useServerSettingsSync() {
 		if (!isElectron) return
 
 		// Load current snapshot
-		window.palot.mdns.getDiscovered().then((servers) => {
+		window.hramble.mdns.getDiscovered().then((servers) => {
 			setDiscoveredMdns(servers as DiscoveredMdnsServer[])
 		})
 
 		// Subscribe to live updates
-		const unsub = window.palot.mdns.onChanged((servers) => {
+		const unsub = window.hramble.mdns.onChanged((servers) => {
 			setDiscoveredMdns(servers as DiscoveredMdnsServer[])
 		})
 		return unsub
@@ -92,13 +92,13 @@ export function useServerActions() {
 
 		// Store password securely if provided
 		if (password) {
-			await window.palot.credential.store(server.id, password)
+			await window.hramble.credential.store(server.id, password)
 		}
 
-		const settings = await window.palot.getSettings()
+		const settings = await window.hramble.getSettings()
 		const currentServers = settings.servers?.servers ?? [DEFAULT_LOCAL_SERVER]
 
-		await window.palot.updateSettings({
+		await window.hramble.updateSettings({
 			servers: {
 				servers: [...currentServers, { ...server, hasPassword: !!password }],
 				activeServerId: settings.servers?.activeServerId ?? "local",
@@ -114,13 +114,13 @@ export function useServerActions() {
 			// Update password if provided, delete if explicitly set to null
 			if (password !== undefined) {
 				if (password === null) {
-					await window.palot.credential.delete(serverId)
+					await window.hramble.credential.delete(serverId)
 				} else {
-					await window.palot.credential.store(serverId, password)
+					await window.hramble.credential.store(serverId, password)
 				}
 			}
 
-			const settings = await window.palot.getSettings()
+			const settings = await window.hramble.getSettings()
 			const currentServers = settings.servers?.servers ?? [DEFAULT_LOCAL_SERVER]
 
 			const updatedServers = currentServers.map((s) => {
@@ -133,7 +133,7 @@ export function useServerActions() {
 				}
 			})
 
-			await window.palot.updateSettings({
+			await window.hramble.updateSettings({
 				servers: {
 					servers: updatedServers,
 					activeServerId: settings.servers?.activeServerId ?? "local",
@@ -148,16 +148,16 @@ export function useServerActions() {
 		if (!isElectron || serverId === "local") return
 
 		// Delete stored credential
-		await window.palot.credential.delete(serverId)
+		await window.hramble.credential.delete(serverId)
 
-		const settings = await window.palot.getSettings()
+		const settings = await window.hramble.getSettings()
 		const currentServers = settings.servers?.servers ?? [DEFAULT_LOCAL_SERVER]
 
 		const filteredServers = currentServers.filter((s) => s.id !== serverId)
 		const activeId = settings.servers?.activeServerId
 		const newActiveId = activeId === serverId ? "local" : activeId
 
-		await window.palot.updateSettings({
+		await window.hramble.updateSettings({
 			servers: {
 				servers: filteredServers,
 				activeServerId: newActiveId ?? "local",
@@ -175,10 +175,10 @@ export function useServerActions() {
 	const switchServer = useCallback(async (serverId: string) => {
 		if (!isElectron) return
 
-		const settings = await window.palot.getSettings()
+		const settings = await window.hramble.getSettings()
 		if (settings.servers?.activeServerId === serverId) return
 
-		await window.palot.updateSettings({
+		await window.hramble.updateSettings({
 			servers: {
 				...settings.servers,
 				servers: settings.servers?.servers ?? [DEFAULT_LOCAL_SERVER],
@@ -193,7 +193,7 @@ export function useServerActions() {
 	const testConnection = useCallback(
 		async (url: string, username?: string, password?: string): Promise<string | null> => {
 			if (!isElectron) return "Not running in Electron"
-			return window.palot.testServerConnection(url, username, password)
+			return window.hramble.testServerConnection(url, username, password)
 		},
 		[],
 	)

@@ -16,7 +16,7 @@ import { fetchOpenInTargets, setOpenInPreferred } from "../../services/backend"
 import { SettingsRow } from "./settings-row"
 import { SettingsSection } from "./settings-section"
 
-const isElectron = typeof window !== "undefined" && "palot" in window
+const isElectron = typeof window !== "undefined" && "hramble" in window
 
 export function GeneralSettings() {
 	return (
@@ -128,9 +128,9 @@ function OpaqueWindowsRow() {
 		async (checked: boolean) => {
 			setOpaque(checked)
 			if (isElectron) {
-				await window.palot.setOpaqueWindows(checked)
+				await window.hramble.setOpaqueWindows(checked)
 				// Requires relaunch -- prompt or auto-relaunch
-				window.palot.relaunch()
+				window.hramble.relaunch()
 			}
 		},
 		[setOpaque],

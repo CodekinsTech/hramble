@@ -101,8 +101,8 @@ export function useThemeEffect() {
 		// Sync native theme with macOS so the glass tint matches the CSS color scheme.
 		// Without this, macOS applies its system appearance (dark/light) to the native
 		// glass layer regardless of what the app's CSS says — causing mismatched tinting.
-		if ("palot" in window) {
-			window.palot.setNativeTheme(colorScheme === "system" ? "system" : cls)
+		if ("hramble" in window) {
+			window.hramble.setNativeTheme(colorScheme === "system" ? "system" : cls)
 		}
 
 		if (theme.fonts?.sans) {
@@ -143,7 +143,7 @@ export function useColorScheme(): ColorScheme {
 
 export function useAvailableThemes(): ThemeDefinition[] {
 	const platform =
-		typeof window !== "undefined" && "palot" in window ? window.palot.platform : undefined
+		typeof window !== "undefined" && "hramble" in window ? window.hramble.platform : undefined
 	return useMemo(() => getAvailableThemes(platform), [platform])
 }
 

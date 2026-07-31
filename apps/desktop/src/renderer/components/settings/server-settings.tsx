@@ -247,7 +247,7 @@ export function ServerSettings() {
 // Local server configuration
 // ============================================================
 
-const isElectron = typeof window !== "undefined" && "palot" in window
+const isElectron = typeof window !== "undefined" && "hramble" in window
 
 function LocalServerSettings() {
 	const { settings, updateSettings } = useSettings()
@@ -298,10 +298,10 @@ function LocalServerSettings() {
 		try {
 			// Store password in secure storage if provided
 			if (password && isElectron) {
-				await window.palot.credential.store("local", password)
+				await window.hramble.credential.store("local", password)
 			} else if (!hasPassword && isElectron) {
 				// If password was cleared, delete stored credential
-				await window.palot.credential.delete("local")
+				await window.hramble.credential.delete("local")
 			}
 
 			// Update local server config in settings
@@ -329,7 +329,7 @@ function LocalServerSettings() {
 
 			// Restart the server to apply new settings
 			if (isElectron) {
-				await window.palot.restartOpenCode()
+				await window.hramble.restartOpenCode()
 			}
 
 			setPassword("")
@@ -342,7 +342,7 @@ function LocalServerSettings() {
 
 	const handleClearPassword = useCallback(async () => {
 		if (isElectron) {
-			await window.palot.credential.delete("local")
+			await window.hramble.credential.delete("local")
 		}
 		setHasPassword(false)
 		setPassword("")
@@ -363,7 +363,7 @@ function LocalServerSettings() {
 
 		// Restart the server without password
 		if (isElectron) {
-			await window.palot.restartOpenCode()
+			await window.hramble.restartOpenCode()
 		}
 	}, [settings, updateSettings])
 

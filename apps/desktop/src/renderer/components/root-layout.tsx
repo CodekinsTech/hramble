@@ -32,7 +32,7 @@ export function RootLayout() {
 	const setOnboardingState = useSetAtom(onboardingStateAtom)
 
 	// Only run discovery/connection after onboarding is complete (or in browser mode / mock mode)
-	const isElectronEnv = typeof window !== "undefined" && "palot" in window
+	const isElectronEnv = typeof window !== "undefined" && "hramble" in window
 	const showOnboarding = isElectronEnv && !onboardingState.completed && !isMockMode
 
 	// Track discovery phase to coordinate startup overlay / content crossfade

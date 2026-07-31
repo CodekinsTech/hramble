@@ -23,7 +23,7 @@ export function NotificationSettings() {
 	)
 
 	const isMac =
-		typeof window !== "undefined" && "palot" in window && window.palot.platform === "darwin"
+		typeof window !== "undefined" && "hramble" in window && window.hramble.platform === "darwin"
 
 	return (
 		<div className="space-y-8">

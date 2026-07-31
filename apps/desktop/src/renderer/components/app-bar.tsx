@@ -4,10 +4,10 @@ import { useAppBarContent } from "./app-bar-context"
 export const APP_BAR_HEIGHT = 46
 
 /**
- * Detect whether we're running inside Electron (preload injects `window.palot`).
+ * Detect whether we're running inside Electron (preload injects `window.hramble`).
  */
 function isElectron(): boolean {
-	return typeof window !== "undefined" && "palot" in window
+	return typeof window !== "undefined" && "hramble" in window
 }
 
 export function AppBar() {

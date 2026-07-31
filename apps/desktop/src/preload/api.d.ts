@@ -2,7 +2,7 @@
  * Type definitions for the Electron preload bridge.
  *
  * These types are shared between the preload script and the renderer.
- * The renderer accesses these via `window.palot`.
+ * The renderer accesses these via `window.hramble`.
  */
 
 export interface OpenCodeServerInfo {
@@ -405,7 +405,7 @@ export interface UpdateAutomationInput {
 	execution?: Partial<ExecutionConfig>
 }
 
-export interface PalotAPI {
+export interface HrambleAPI {
 	/** The host platform: "darwin", "win32", or "linux". */
 	platform: NodeJS.Platform
 	getAppInfo: () => Promise<AppInfo>
@@ -597,6 +597,6 @@ export interface PalotAPI {
 
 declare global {
 	interface Window {
-		palot: PalotAPI
+		hramble: HrambleAPI
 	}
 }

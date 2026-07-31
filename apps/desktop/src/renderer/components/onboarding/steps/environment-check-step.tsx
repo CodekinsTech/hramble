@@ -63,7 +63,7 @@ export function EnvironmentCheckStep({ onComplete, onSkip }: EnvironmentCheckSte
 	const hasRun = useRef(false)
 	const terminalRef = useRef<HTMLDivElement>(null)
 
-	const isElectron = typeof window !== "undefined" && "palot" in window
+	const isElectron = typeof window !== "undefined" && "hramble" in window
 
 	// mDNS discovered servers (scanner starts before onboarding renders)
 	const discoveredServers = useAtomValue(discoveredMdnsServersAtom)
@@ -97,7 +97,7 @@ export function EnvironmentCheckStep({ onComplete, onSkip }: EnvironmentCheckSte
 
 		try {
 			// Step 1: Check OpenCode installation
-			const result = await window.palot.onboarding.checkOpenCode()
+			const result = await window.hramble.onboarding.checkOpenCode()
 			setOpenCodeResult(result)
 
 			if (!result.installed) {
@@ -170,12 +170,12 @@ export function EnvironmentCheckStep({ onComplete, onSkip }: EnvironmentCheckSte
 		setInstalling(true)
 		setInstallOutput([])
 
-		const cleanup = window.palot.onboarding.onInstallOutput((text) => {
+		const cleanup = window.hramble.onboarding.onInstallOutput((text) => {
 			setInstallOutput((prev) => [...prev, text])
 		})
 
 		try {
-			const result = await window.palot.onboarding.installOpenCode()
+			const result = await window.hramble.onboarding.installOpenCode()
 			cleanup()
 
 			if (result.success) {
@@ -270,7 +270,7 @@ export function EnvironmentCheckStep({ onComplete, onSkip }: EnvironmentCheckSte
 
 				// The newly saved server gets an auto-generated ID. Find it in settings
 				// and switch to it.
-				const settings = await window.palot.getSettings()
+				const settings = await window.hramble.getSettings()
 				const saved = settings.servers?.servers.find(
 					(s) =>
 						s.type === "remote" &&

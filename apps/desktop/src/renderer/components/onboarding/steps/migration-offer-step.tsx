@@ -69,7 +69,7 @@ export function MigrationOfferStep({ provider, onPreview, onSkip }: MigrationOff
 	const hasScanned = useRef(false)
 	const scanResultRef = useRef<unknown>(null)
 
-	const isElectron = typeof window !== "undefined" && "palot" in window
+	const isElectron = typeof window !== "undefined" && "hramble" in window
 	const label = PROVIDER_LABELS[provider]
 
 	// Run full scan on mount (user explicitly opted in)
@@ -78,7 +78,7 @@ export function MigrationOfferStep({ provider, onPreview, onSkip }: MigrationOff
 		hasScanned.current = true
 		setScanning(true)
 
-		window.palot.onboarding
+		window.hramble.onboarding
 			.scanProvider(provider)
 			.then(({ detection, scanResult }) => {
 				scanResultRef.current = scanResult
@@ -103,7 +103,7 @@ export function MigrationOfferStep({ provider, onPreview, onSkip }: MigrationOff
 		const selectedIds = categories.filter((c) => c.enabled).map((c) => c.id)
 
 		try {
-			const preview = await window.palot.onboarding.previewMigration(
+			const preview = await window.hramble.onboarding.previewMigration(
 				provider,
 				scanResultRef.current,
 				selectedIds,

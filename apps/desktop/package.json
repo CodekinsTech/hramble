@@ -2,12 +2,12 @@
 	"name": "@hramble/desktop",
 	"version": "0.11.0",
 	"description": "AI-powered coding assistant desktop app",
-	"author": "Palot",
+	"author": "Hramble",
 	"license": "MIT",
-	"homepage": "https://github.com/ItsWendell/palot",
+	"homepage": "https://github.com/worldkingk777/hramble-code",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/ItsWendell/palot.git",
+		"url": "https://github.com/worldkingk777/hramble-code.git",
 		"directory": "apps/desktop"
 	},
 	"private": true,

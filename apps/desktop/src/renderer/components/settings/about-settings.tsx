@@ -5,7 +5,7 @@ import { useUpdater } from "../../hooks/use-updater"
 import { SettingsRow } from "./settings-row"
 import { SettingsSection } from "./settings-section"
 
-const isElectron = typeof window !== "undefined" && "palot" in window
+const isElectron = typeof window !== "undefined" && "hramble" in window
 
 export function AboutSettings() {
 	const [appVersion, setAppVersion] = useState("")
@@ -18,11 +18,11 @@ export function AboutSettings() {
 
 	useEffect(() => {
 		if (!isElectron) return
-		window.palot.getAppInfo().then((info) => {
+		window.hramble.getAppInfo().then((info) => {
 			setAppVersion(info.version)
 			setIsDev(info.isDev)
 		})
-		window.palot.cli.isInstalled().then(setCliInstalled)
+		window.hramble.cli.isInstalled().then(setCliInstalled)
 	}, [])
 
 	const handleCliInstall = useCallback(async () => {
@@ -30,7 +30,7 @@ export function AboutSettings() {
 		setCliLoading(true)
 		setCliError(null)
 		try {
-			const result = await window.palot.cli.install()
+			const result = await window.hramble.cli.install()
 			if (result.success) {
 				setCliInstalled(true)
 			} else {
@@ -46,7 +46,7 @@ export function AboutSettings() {
 		setCliLoading(true)
 		setCliError(null)
 		try {
-			const result = await window.palot.cli.uninstall()
+			const result = await window.hramble.cli.uninstall()
 			if (result.success) {
 				setCliInstalled(false)
 			} else {

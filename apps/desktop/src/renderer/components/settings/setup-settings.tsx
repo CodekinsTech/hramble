@@ -18,7 +18,7 @@ import { onboardingStateAtom } from "../../atoms/onboarding"
 import { SettingsRow } from "./settings-row"
 import { SettingsSection } from "./settings-section"
 
-const isElectron = typeof window !== "undefined" && "palot" in window
+const isElectron = typeof window !== "undefined" && "hramble" in window
 
 // ============================================================
 // Provider display metadata
@@ -56,7 +56,7 @@ function OpenCodeStatusSection() {
 		if (!isElectron) return
 		setChecking(true)
 		try {
-			const r = await window.palot.onboarding.checkOpenCode()
+			const r = await window.hramble.onboarding.checkOpenCode()
 			setResult(r)
 		} catch {
 			// ignore
@@ -125,7 +125,7 @@ function MigrationSection() {
 		setRestoring(true)
 		setRestoreResult(null)
 		try {
-			const result = await window.palot.onboarding.restoreBackup()
+			const result = await window.hramble.onboarding.restoreBackup()
 			if (result.success) {
 				setRestoreResult(`Restored ${result.restored.length} file(s)`)
 			} else {
@@ -214,7 +214,7 @@ function OnboardingSection() {
 		})
 		// Relaunch the app to show onboarding fresh
 		if (isElectron) {
-			window.palot.relaunch()
+			window.hramble.relaunch()
 		}
 	}, [setOnboardingState])
 

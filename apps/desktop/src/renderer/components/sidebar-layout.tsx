@@ -80,8 +80,8 @@ function WorkspaceSwitcher({
 // ============================================================
 
 const isMac =
-	typeof window !== "undefined" && "palot" in window && window.palot.platform === "darwin"
-const isElectronEnv = typeof window !== "undefined" && "palot" in window
+	typeof window !== "undefined" && "hramble" in window && window.hramble.platform === "darwin"
+const isElectronEnv = typeof window !== "undefined" && "hramble" in window
 
 /** Pixel offset from the left edge where window controls (toggle + new session) start */
 const WINDOW_CONTROLS_LEFT = isMac && isElectronEnv ? 93 : 8

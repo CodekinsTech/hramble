@@ -38,9 +38,9 @@ async function probeServerHealth(server: ServerConfig): Promise<boolean> {
 		const controller = new AbortController()
 		const timeout = setTimeout(() => controller.abort(), 3000)
 
-		if (isElectron && "palot" in window) {
+		if (isElectron && "hramble" in window) {
 			// Use IPC fetch to bypass connection limits
-			const result = await window.palot.fetch({
+			const result = await window.hramble.fetch({
 				url: `${url}/global/health`,
 				method: "GET",
 				headers,

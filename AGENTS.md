@@ -1,4 +1,4 @@
-# Palot Agent Instructions
+# Hramble Agent Instructions
 
 ## Purpose of This File
 
@@ -9,8 +9,8 @@ Do NOT add one-time setup notes, general knowledge, or things discoverable from 
 ## Project Structure
 
 - **Monorepo**: Turborepo + Bun workspaces (Bun 1.3.8)
-- **`packages/ui`**: Shared shadcn/ui component library (`@palot/ui`)
-- **`packages/configconv`**: Universal agent config converter library (`@palot/configconv`) -- converts between Claude Code, OpenCode, and Cursor formats
+- **`packages/ui`**: Shared shadcn/ui component library (`@hramble/ui`)
+- **`packages/configconv`**: Universal agent config converter library (`@hramble/configconv`) -- converts between Claude Code, OpenCode, and Cursor formats
 - **`packages/configconv-cli`**: Thin CLI wrapper (`configconv`) for the converter library
 - **`apps/desktop`**: Electron 40 + Vite + React 19 desktop app (via `electron-vite`)
 - **`apps/server`**: Bun + Hono backend -- used only in browser-mode dev (`dev:web`), NOT bundled with Electron
@@ -18,7 +18,7 @@ Do NOT add one-time setup notes, general knowledge, or things discoverable from 
 ### Desktop App Layout (`apps/desktop/src/`)
 
 - **`main/`** -- Electron main process (Node.js): window management, IPC handlers, OpenCode server lifecycle, filesystem reads
-- **`preload/`** -- Electron preload bridge: exposes `window.palot` API via `contextBridge`
+- **`preload/`** -- Electron preload bridge: exposes `window.hramble` API via `contextBridge`
 - **`renderer/`** -- React app (browser context): components, hooks, services, atoms (Jotai)
 
 ## Skills
@@ -65,7 +65,7 @@ generic knowledge.
 - Use `import type { ... }` for type-only imports (Biome warns otherwise)
 - Order: external packages first, then internal/relative imports (no blank line between)
 - Main process: `node:` builtins first, then `electron`, then local
-- Renderer: `@palot/ui` -> `@tanstack/*` -> `lucide-react` -> `react` -> local atoms/hooks/services
+- Renderer: `@hramble/ui` -> `@tanstack/*` -> `lucide-react` -> `react` -> local atoms/hooks/services
 
 ### Naming Conventions
 
@@ -119,11 +119,11 @@ generic knowledge.
 
 ### Electron -- Two Runtime Contexts
 
-The main process runs in Node.js, the renderer runs in a Chromium sandbox. They communicate via IPC only. Never import Node.js modules (`fs`, `child_process`, `path`) in the renderer -- use the `window.palot` bridge or `services/backend.ts` instead.
+The main process runs in Node.js, the renderer runs in a Chromium sandbox. They communicate via IPC only. Never import Node.js modules (`fs`, `child_process`, `path`) in the renderer -- use the `window.hramble` bridge or `services/backend.ts` instead.
 
 ### Backend Service Layer -- `services/backend.ts`
 
-All hooks must import from `services/backend.ts`, NOT from `services/palot-server.ts` directly. The backend module detects Electron (`"palot" in window`) and routes to IPC or HTTP automatically.
+All hooks must import from `services/backend.ts`, NOT from `services/palot-server.ts` directly. The backend module detects Electron (`"hramble" in window`) and routes to IPC or HTTP automatically.
 
 ### Jotai + React 19
 
@@ -169,15 +169,15 @@ When adding routes to `apps/server`, run `cd apps/server && bun run build:types`
 
 ### Electron -- Preload Timing
 
-The `window.palot` bridge is not available until the preload script finishes. Early-running renderer code (e.g., module-level calls, top-of-file side effects) must guard with optional chaining: `window.palot?.someMethod()`.
+The `window.hramble` bridge is not available until the preload script finishes. Early-running renderer code (e.g., module-level calls, top-of-file side effects) must guard with optional chaining: `window.hramble?.someMethod()`.
 
 ### Electron -- External Links
 
 Never open external URLs inside the Electron window. Use `setWindowOpenHandler` in the main process to deny and redirect to `shell.openExternal()`. This prevents navigation to untrusted content inside the app.
 
-### Palot storage -- XDG Base Directory
+### Hramble storage -- XDG Base Directory
 
-Palot follows the XDG Base Directory Specification (same convention as OpenCode). Config at `~/.config/palot/`, data at `~/.local/share/palot/`. Automation configs live at `~/.config/palot/automations/<id>/`, SQLite database at `~/.local/share/palot/palot.db`. See `main/automation/paths.ts` for the implementation. Do NOT use `~/.palot/` (legacy) or Electron's `userData` path for automation storage.
+Hramble follows the XDG Base Directory Specification (same convention as OpenCode). Config at `~/.config/palot/`, data at `~/.local/share/palot/`. Automation configs live at `~/.config/palot/automations/<id>/`, SQLite database at `~/.local/share/palot/palot.db`. See `main/automation/paths.ts` for the implementation. Do NOT use `~/.palot/` (legacy) or Electron's `userData` path for automation storage.
 
 ### electron-vite -- Three Build Targets
 

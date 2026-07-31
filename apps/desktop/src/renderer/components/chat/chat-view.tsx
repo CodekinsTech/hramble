@@ -1259,7 +1259,7 @@ function ChatInputSection({
 					for (let attempt = 0; attempt <= MAX_STEP_RETRIES; attempt++) {
 						if (stopStepsRef.current) break
 						setGateRunningStep(i)
-						const res = await window.palot
+						const res = await window.hramble
 							.runShell(agent.directory, gate, 120_000)
 							.catch(() => ({ code: 1, stdout: "", stderr: "gate could not run" }))
 						setGateRunningStep(-1)

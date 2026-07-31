@@ -31,8 +31,8 @@ interface CompleteStepProps {
 // Component
 // ============================================================
 
-const isElectron = typeof window !== "undefined" && "palot" in window
-const isMac = isElectron && window.palot.platform === "darwin"
+const isElectron = typeof window !== "undefined" && "hramble" in window
+const isMac = isElectron && window.hramble.platform === "darwin"
 
 export function CompleteStep({
 	opencodeVersion,
@@ -53,7 +53,7 @@ export function CompleteStep({
 		hasDetected.current = true
 		setDetecting(true)
 
-		window.palot.onboarding
+		window.hramble.onboarding
 			.detectProviders()
 			.then((detections) => {
 				// Only show providers that were found and aren't OpenCode itself

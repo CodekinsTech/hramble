@@ -93,7 +93,7 @@ export function CommandPalette({ open, onOpenChange, agents, onForkSession }: Co
 	const toggleAutomations = useSetAtom(toggleAutomationsAtom)
 	const [reloading, setReloading] = useState(false)
 
-	const isElectron = typeof window !== "undefined" && "palot" in window
+	const isElectron = typeof window !== "undefined" && "hramble" in window
 
 	const handleToggleTransparency = useCallback(async () => {
 		const newValue = !opaqueWindows
@@ -101,13 +101,13 @@ export function CommandPalette({ open, onOpenChange, agents, onForkSession }: Co
 
 		// Persist to main process so the next window creation uses the correct chrome tier
 		if (isElectron) {
-			await window.palot.setOpaqueWindows(newValue)
+			await window.hramble.setOpaqueWindows(newValue)
 			// BrowserWindow.transparent is a creation-time option — prompt for restart
 			const shouldRestart = window.confirm(
 				"Transparency changes take effect after restarting the app.\n\nRestart now?",
 			)
 			if (shouldRestart) {
-				window.palot.relaunch()
+				window.hramble.relaunch()
 			}
 		}
 	}, [opaqueWindows, setOpaqueWindows, isElectron])

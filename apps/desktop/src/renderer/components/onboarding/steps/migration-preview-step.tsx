@@ -66,13 +66,13 @@ export function MigrationPreviewStep({
 	const [error, setError] = useState<string | null>(null)
 	const [progress, setProgress] = useState<MigrationProgress | null>(null)
 
-	const isElectron = typeof window !== "undefined" && "palot" in window
+	const isElectron = typeof window !== "undefined" && "hramble" in window
 	const label = PROVIDER_LABELS[provider]
 
 	// Subscribe to migration progress events during execution
 	useEffect(() => {
 		if (!isElectron || !executing) return
-		const unsub = window.palot.onboarding.onMigrationProgress((p) => {
+		const unsub = window.hramble.onboarding.onMigrationProgress((p) => {
 			setProgress(p as MigrationProgress)
 		})
 		return unsub
@@ -85,7 +85,7 @@ export function MigrationPreviewStep({
 		setProgress(null)
 
 		try {
-			const result = await window.palot.onboarding.executeMigration(
+			const result = await window.hramble.onboarding.executeMigration(
 				provider,
 				scanResult,
 				categories,
