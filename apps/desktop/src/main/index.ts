@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, Menu, session, shell } from "electron"
 import { initAutomations, shutdownAutomations } from "./automation"
+import { migrateLegacyStorage } from "./automation/paths"
 import { initCredentialStore } from "./credential-store"
 import { getOpaqueWindowsPref, registerIpcHandlers } from "./ipc-handlers"
 import { installLiquidGlass, resolveWindowChrome } from "./liquid-glass"
@@ -279,6 +280,10 @@ if (!gotLock) {
 	})
 
 	app.whenReady().then(() => {
+		// One-time move of legacy "palot" storage → "hramble". MUST run first, before
+		// anything touches getDataDir()/getConfigDir() (automations DB, server lockfile).
+		migrateLegacyStorage()
+
 		// Bypass Chromium's Private Network Access checks for OpenCode server requests.
 		// Chromium (134+/Electron 40+) blocks renderer fetch() to private network addresses
 		// (127.0.0.1) with ERR_ALPN_NEGOTIATION_FAILED when the PNA preflight response

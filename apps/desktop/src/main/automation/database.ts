@@ -28,7 +28,7 @@ export function getDb() {
 
 	const dataDir = getDataDir()
 	fs.mkdirSync(dataDir, { recursive: true })
-	const dbPath = path.join(dataDir, "palot.db")
+	const dbPath = path.join(dataDir, "hramble.db")
 	log.info("Initializing automation database", { path: dbPath })
 
 	// LibSQL uses a URL-style path for local files
