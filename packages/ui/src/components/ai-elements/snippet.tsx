@@ -6,8 +6,8 @@ import {
 	InputGroupButton,
 	InputGroupInput,
 	InputGroupText,
-} from "@palot/ui/components/input-group"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/input-group"
+import { cn } from "@hramble/ui/lib/utils"
 import { CheckIcon, CopyIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"

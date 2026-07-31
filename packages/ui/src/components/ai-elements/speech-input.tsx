@@ -1,8 +1,8 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { Spinner } from "@palot/ui/components/spinner"
-import { cn } from "@palot/ui/lib/utils"
+import { Button } from "@hramble/ui/components/button"
+import { Spinner } from "@hramble/ui/components/spinner"
+import { cn } from "@hramble/ui/lib/utils"
 import { MicIcon, SquareIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"

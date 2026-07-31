@@ -39,4 +39,4 @@ echo "Starting Hramble… (first build takes ~60s)"
 echo "Keep this window open — closing it stops the app."
 echo
 
-"$BUN" run dev --filter=@palot/desktop 2>&1 | tee "$LOG"
+"$BUN" run dev --filter=@hramble/desktop 2>&1 | tee "$LOG"

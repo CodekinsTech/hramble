@@ -1,13 +1,13 @@
 "use client"
 
-import { Avatar, AvatarFallback } from "@palot/ui/components/avatar"
-import { Button } from "@palot/ui/components/button"
+import { Avatar, AvatarFallback } from "@hramble/ui/components/avatar"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from "@palot/ui/components/collapsible"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/collapsible"
+import { cn } from "@hramble/ui/lib/utils"
 import { CheckIcon, CopyIcon, FileIcon, GitCommitIcon, MinusIcon, PlusIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"
 import { useCallback, useEffect, useRef, useState } from "react"

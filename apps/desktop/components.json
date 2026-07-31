@@ -14,7 +14,7 @@
 		"components": "@/components",
 		"hooks": "@/hooks",
 		"lib": "@/lib",
-		"utils": "@palot/ui/lib/utils",
-		"ui": "@palot/ui/components"
+		"utils": "@hramble/ui/lib/utils",
+		"ui": "@hramble/ui/components"
 	}
 }

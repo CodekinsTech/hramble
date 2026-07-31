@@ -2,8 +2,8 @@
  * Settings tab for environment setup, migration management, and re-running onboarding.
  */
 
-import { Button } from "@palot/ui/components/button"
-import { Spinner } from "@palot/ui/components/spinner"
+import { Button } from "@hramble/ui/components/button"
+import { Spinner } from "@hramble/ui/components/spinner"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
 	AlertCircleIcon,

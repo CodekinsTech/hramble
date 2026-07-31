@@ -6,10 +6,10 @@
  * servers on the network as an alternative connection path.
  */
 
-import { Button } from "@palot/ui/components/button"
-import { Input } from "@palot/ui/components/input"
-import { Label } from "@palot/ui/components/label"
-import { Spinner } from "@palot/ui/components/spinner"
+import { Button } from "@hramble/ui/components/button"
+import { Input } from "@hramble/ui/components/input"
+import { Label } from "@hramble/ui/components/label"
+import { Spinner } from "@hramble/ui/components/spinner"
 import { useAtomValue } from "jotai"
 import {
 	AlertCircleIcon,

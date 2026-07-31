@@ -1,4 +1,4 @@
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 
 function AspectRatio({
 	ratio,

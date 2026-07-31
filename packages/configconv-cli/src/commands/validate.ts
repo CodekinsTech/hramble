@@ -4,8 +4,8 @@
  * Runs a scan + convert and checks for issues in the conversion output.
  */
 
-import type { AgentFormat } from "@palot/configconv"
-import { formatName, scanFormat, universalConvert } from "@palot/configconv"
+import type { AgentFormat } from "@hramble/configconv"
+import { formatName, scanFormat, universalConvert } from "@hramble/configconv"
 import { defineCommand } from "citty"
 import consola from "consola"
 

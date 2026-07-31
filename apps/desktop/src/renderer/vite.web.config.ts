@@ -17,7 +17,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": __dirname,
-			"@palot/ui": path.resolve(__dirname, "../../../../packages/ui/src"),
+			"@hramble/ui": path.resolve(__dirname, "../../../../packages/ui/src"),
 		},
 	},
 	clearScreen: false,

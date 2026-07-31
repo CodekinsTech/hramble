@@ -3,7 +3,7 @@ import {
 	ConversationContent,
 	ConversationScrollButton,
 	useStickToBottomContext,
-} from "@palot/ui/components/ai-elements/conversation"
+} from "@hramble/ui/components/ai-elements/conversation"
 import {
 	PromptInput,
 	PromptInputButton,
@@ -14,8 +14,8 @@ import {
 	PromptInputTools,
 	usePromptInputAttachments,
 	usePromptInputController,
-} from "@palot/ui/components/ai-elements/prompt-input"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/ai-elements/prompt-input"
+import { cn } from "@hramble/ui/lib/utils"
 import { useAtomValue, useSetAtom } from "jotai"
 import { workspaceModeAtom } from "../../atoms/workspace"
 import {

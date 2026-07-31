@@ -4,9 +4,9 @@ import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from "@palot/ui/components/collapsible"
-import { useControllableState } from "@palot/ui/hooks/use-controllable-state"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/collapsible"
+import { useControllableState } from "@hramble/ui/hooks/use-controllable-state"
+import { cn } from "@hramble/ui/lib/utils"
 import { cjk } from "@streamdown/cjk"
 import { code } from "@streamdown/code"
 import { math } from "@streamdown/math"

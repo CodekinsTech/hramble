@@ -1,9 +1,9 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@palot/ui/components/hover-card"
-import { Progress } from "@palot/ui/components/progress"
-import { cn } from "@palot/ui/lib/utils"
+import { Button } from "@hramble/ui/components/button"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@hramble/ui/components/hover-card"
+import { Progress } from "@hramble/ui/components/progress"
+import { cn } from "@hramble/ui/lib/utils"
 import type { LanguageModelUsage } from "ai"
 import type { ComponentProps } from "react"
 import { createContext, useContext, useMemo } from "react"

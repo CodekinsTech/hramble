@@ -2,7 +2,7 @@
 
 import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 
 function Switch({
 	className,

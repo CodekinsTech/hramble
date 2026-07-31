@@ -27,7 +27,7 @@ function copyDrizzleMigrations(): Plugin {
 export default defineConfig({
 	main: {
 		plugins: [
-			externalizeDepsPlugin({ exclude: ["@palot/configconv", "drizzle-orm"] }),
+			externalizeDepsPlugin({ exclude: ["@hramble/configconv", "drizzle-orm"] }),
 			copyDrizzleMigrations(),
 		],
 		build: {
@@ -54,7 +54,7 @@ export default defineConfig({
 		resolve: {
 			alias: {
 				"@": path.resolve(__dirname, "src/renderer"),
-				"@palot/ui": path.resolve(__dirname, "../../packages/ui/src"),
+				"@hramble/ui": path.resolve(__dirname, "../../packages/ui/src"),
 			},
 		},
 		worker: {

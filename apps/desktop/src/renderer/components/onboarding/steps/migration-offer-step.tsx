@@ -6,9 +6,9 @@
  * (from the complete step), so scanning happens on mount.
  */
 
-import { Button } from "@palot/ui/components/button"
-import { Checkbox } from "@palot/ui/components/checkbox"
-import { Spinner } from "@palot/ui/components/spinner"
+import { Button } from "@hramble/ui/components/button"
+import { Checkbox } from "@hramble/ui/components/checkbox"
+import { Spinner } from "@hramble/ui/components/spinner"
 import {
 	ArrowRightIcon,
 	BotIcon,

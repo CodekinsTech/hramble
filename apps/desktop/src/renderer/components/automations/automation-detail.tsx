@@ -8,9 +8,9 @@
  * Rendered at /automations/:automationId
  */
 
-import { Badge } from "@palot/ui/components/badge"
-import { Button } from "@palot/ui/components/button"
-import { Separator } from "@palot/ui/components/separator"
+import { Badge } from "@hramble/ui/components/badge"
+import { Button } from "@hramble/ui/components/button"
+import { Separator } from "@hramble/ui/components/separator"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import {
 	CalendarIcon,

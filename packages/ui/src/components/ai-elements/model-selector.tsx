@@ -8,9 +8,9 @@ import {
 	CommandList,
 	CommandSeparator,
 	CommandShortcut,
-} from "@palot/ui/components/command"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@palot/ui/components/dialog"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/command"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@hramble/ui/components/dialog"
+import { cn } from "@hramble/ui/lib/utils"
 import type { ComponentProps, ReactNode } from "react"
 
 export type ModelSelectorProps = ComponentProps<typeof Dialog>

@@ -1,5 +1,5 @@
-import { MessageResponse } from "@palot/ui/components/ai-elements/message"
-import { cn } from "@palot/ui/lib/utils"
+import { MessageResponse } from "@hramble/ui/components/ai-elements/message"
+import { cn } from "@hramble/ui/lib/utils"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtomValue } from "jotai"
 import {

@@ -4,7 +4,7 @@
  * Provides IPC-callable functions for the first-run experience:
  * - OpenCode CLI detection and version compatibility check
  * - OpenCode CLI installation (via curl/shell)
- * - Multi-provider config detection and migration via @palot/configconv
+ * - Multi-provider config detection and migration via @hramble/configconv
  *   Supported providers: Claude Code, Cursor, OpenCode
  */
 
@@ -197,7 +197,7 @@ export async function installOpenCode(): Promise<{ success: boolean; error?: str
 
 /**
  * Quickly detects which agent tools have configuration on this machine.
- * Does NOT import @palot/configconv, just checks for file/directory existence.
+ * Does NOT import @hramble/configconv, just checks for file/directory existence.
  * Returns an array of detections (one per supported provider).
  */
 export async function detectProviders(): Promise<ProviderDetection[]> {
@@ -451,18 +451,18 @@ async function detectOpenCodeProvider(): Promise<ProviderDetection> {
 }
 
 // ============================================================
-// Migration (lazy-loads @palot/configconv)
+// Migration (lazy-loads @hramble/configconv)
 // ============================================================
 
 /**
  * Runs a full scan for the specified provider and returns detailed detection results.
- * Lazy-loads @palot/configconv to keep the main process fast when not needed.
+ * Lazy-loads @hramble/configconv to keep the main process fast when not needed.
  */
 export async function scanProvider(provider: MigrationProvider): Promise<{
 	detection: ProviderDetection
 	scanResult: unknown
 }> {
-	const { scanFormat } = await import("@palot/configconv")
+	const { scanFormat } = await import("@hramble/configconv")
 
 	const scanResult = await scanFormat({
 		format: provider,
@@ -482,7 +482,7 @@ export async function previewMigration(
 	scanResult: unknown,
 	categories: string[],
 ): Promise<MigrationPreview> {
-	const { universalConvert } = await import("@palot/configconv")
+	const { universalConvert } = await import("@hramble/configconv")
 
 	// Convert from source provider to OpenCode (the target for Palot)
 	// biome-ignore lint/suspicious/noExplicitAny: scanResult is dynamically typed from IPC
@@ -658,7 +658,7 @@ export async function executeMigration(
 	scanResult: unknown,
 	categories: string[],
 ): Promise<MigrationResult> {
-	const { universalConvert, universalWrite } = await import("@palot/configconv")
+	const { universalConvert, universalWrite } = await import("@hramble/configconv")
 
 	// biome-ignore lint/suspicious/noExplicitAny: scanResult is dynamically typed from IPC
 	const conversion = universalConvert(scanResult as any, { to: "opencode" })
@@ -728,8 +728,8 @@ async function executeHistoryMigration(
 	}
 
 	if (provider === "cursor" && result?.data?.history) {
-		const { convertCursorHistory } = await import("@palot/configconv/converter/cursor-history")
-		const { writeHistorySessionsDetailed } = await import("@palot/configconv/writer/history")
+		const { convertCursorHistory } = await import("@hramble/configconv/converter/cursor-history")
+		const { writeHistorySessionsDetailed } = await import("@hramble/configconv/writer/history")
 
 		sendProgress("converting", 0, 0, 0)
 		const { sessions } = convertCursorHistory(result.data.history)
@@ -751,8 +751,8 @@ async function executeHistoryMigration(
 			}
 		}
 	} else if (provider === "claude-code" && result?.data?.history) {
-		const { convertHistory } = await import("@palot/configconv/converter/history")
-		const { writeHistorySessionsDetailed } = await import("@palot/configconv/writer/history")
+		const { convertHistory } = await import("@hramble/configconv/converter/history")
+		const { writeHistorySessionsDetailed } = await import("@hramble/configconv/writer/history")
 
 		sendProgress("converting", 0, 0, 0)
 		const { sessions } = await convertHistory(result.data.history)
@@ -787,7 +787,7 @@ export async function restoreMigrationBackup(): Promise<{
 	removed: string[]
 	errors: string[]
 }> {
-	const { restore } = await import("@palot/configconv")
+	const { restore } = await import("@hramble/configconv")
 	const result = await restore()
 	return {
 		success: result.errors.length === 0,

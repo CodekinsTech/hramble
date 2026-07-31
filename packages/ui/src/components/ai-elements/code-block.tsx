@@ -1,14 +1,14 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "@palot/ui/components/select"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/select"
+import { cn } from "@hramble/ui/lib/utils"
 import { CheckIcon, CopyIcon } from "lucide-react"
 import type { ComponentProps, CSSProperties, HTMLAttributes } from "react"
 import {

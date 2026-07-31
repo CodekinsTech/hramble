@@ -4,7 +4,7 @@
  * Inspired by OpenCode TUI's context-items.tsx pattern.
  * Shows removable chips for each @-mentioned file or agent.
  */
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import { BrainIcon, FileIcon, XIcon } from "lucide-react"
 import { memo } from "react"
 import type { PromptMention } from "./prompt-mentions"

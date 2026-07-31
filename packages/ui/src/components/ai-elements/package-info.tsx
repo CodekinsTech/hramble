@@ -1,7 +1,7 @@
 "use client"
 
-import { Badge } from "@palot/ui/components/badge"
-import { cn } from "@palot/ui/lib/utils"
+import { Badge } from "@hramble/ui/components/badge"
+import { cn } from "@hramble/ui/lib/utils"
 import { ArrowRightIcon, MinusIcon, PackageIcon, PlusIcon } from "lucide-react"
 import type { HTMLAttributes } from "react"
 import { createContext, useContext } from "react"

@@ -7,7 +7,7 @@ import {
 	CommandList,
 	CommandSeparator,
 	CommandShortcut,
-} from "@palot/ui/components/command"
+} from "@hramble/ui/components/command"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {

@@ -6,8 +6,8 @@
  * Supports all migration providers (Claude Code, Cursor, OpenCode).
  */
 
-import { Button } from "@palot/ui/components/button"
-import { Spinner } from "@palot/ui/components/spinner"
+import { Button } from "@hramble/ui/components/button"
+import { Spinner } from "@hramble/ui/components/spinner"
 import {
 	AlertTriangleIcon,
 	ArrowLeftIcon,

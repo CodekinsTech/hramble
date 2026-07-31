@@ -5,8 +5,8 @@
  * Defaults to Claude Code for backwards compatibility.
  */
 
-import type { AgentFormat } from "@palot/configconv"
-import { formatName, scan, scanCursor, scanOpenCode } from "@palot/configconv"
+import type { AgentFormat } from "@hramble/configconv"
+import { formatName, scan, scanCursor, scanOpenCode } from "@hramble/configconv"
 import { defineCommand } from "citty"
 import consola from "consola"
 import { printScanSummary } from "../output/terminal"

@@ -4,8 +4,8 @@ import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from "@palot/ui/components/collapsible"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/collapsible"
+import { cn } from "@hramble/ui/lib/utils"
 import { ChevronDownIcon, SearchIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 

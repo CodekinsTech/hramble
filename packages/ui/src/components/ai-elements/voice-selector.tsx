@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Command,
 	CommandDialog,
@@ -11,11 +11,11 @@ import {
 	CommandList,
 	CommandSeparator,
 	CommandShortcut,
-} from "@palot/ui/components/command"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@palot/ui/components/dialog"
-import { Spinner } from "@palot/ui/components/spinner"
-import { useControllableState } from "@palot/ui/hooks/use-controllable-state"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/command"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@hramble/ui/components/dialog"
+import { Spinner } from "@hramble/ui/components/spinner"
+import { useControllableState } from "@hramble/ui/hooks/use-controllable-state"
+import { cn } from "@hramble/ui/lib/utils"
 import {
 	CircleSmallIcon,
 	MarsIcon,

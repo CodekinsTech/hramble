@@ -7,7 +7,7 @@
  * "Commit & Push" commits all changes and pushes the branch to origin.
  */
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Dialog,
 	DialogContent,
@@ -15,10 +15,10 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@palot/ui/components/dialog"
-import { Input } from "@palot/ui/components/input"
-import { Textarea } from "@palot/ui/components/textarea"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
+} from "@hramble/ui/components/dialog"
+import { Input } from "@hramble/ui/components/input"
+import { Textarea } from "@hramble/ui/components/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import {
 	ArrowDownToLineIcon,
 	ArrowUpFromLineIcon,

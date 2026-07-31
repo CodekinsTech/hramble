@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import type * as React from "react"
 
 function Label({ className, ...props }: React.ComponentProps<"label">) {

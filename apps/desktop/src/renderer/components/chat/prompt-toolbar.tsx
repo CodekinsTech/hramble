@@ -8,17 +8,17 @@ import {
 	SearchableListPopoverSearch,
 	SearchableListPopoverTrigger,
 	useSearchableListPopoverSearch,
-} from "@palot/ui/components/searchable-list-popover"
+} from "@hramble/ui/components/searchable-list-popover"
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "@palot/ui/components/select"
-import { Separator } from "@palot/ui/components/separator"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/select"
+import { Separator } from "@hramble/ui/components/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
+import { cn } from "@hramble/ui/lib/utils"
 import { useAtomValue } from "jotai"
 import { type ChatMode, CHAT_MODES } from "../../atoms/chat-mode"
 import {

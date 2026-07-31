@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Card,
 	CardAction,
@@ -9,13 +9,13 @@ import {
 	CardFooter,
 	CardHeader,
 	CardTitle,
-} from "@palot/ui/components/card"
+} from "@hramble/ui/components/card"
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from "@palot/ui/components/collapsible"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/collapsible"
+import { cn } from "@hramble/ui/lib/utils"
 import { ChevronsUpDownIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 import { createContext, useContext } from "react"

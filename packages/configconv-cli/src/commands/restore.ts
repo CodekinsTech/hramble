@@ -2,7 +2,7 @@
  * configconv restore -- Restore files from a pre-migration backup.
  */
 
-import { deleteBackup, listBackups, restore } from "@palot/configconv"
+import { deleteBackup, listBackups, restore } from "@hramble/configconv"
 import { defineCommand } from "citty"
 import consola from "consola"
 import { printBackupList, printRestoreResult } from "../output/terminal"

@@ -5,12 +5,12 @@
  * for the split layout and drives the data pipeline via useAutomationData().
  */
 
-import { Alert, AlertAction, AlertDescription } from "@palot/ui/components/alert"
+import { Alert, AlertAction, AlertDescription } from "@hramble/ui/components/alert"
 import {
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
-} from "@palot/ui/components/resizable"
+} from "@hramble/ui/components/resizable"
 import { Outlet } from "@tanstack/react-router"
 import { useAtom } from "jotai"
 import { XIcon } from "lucide-react"

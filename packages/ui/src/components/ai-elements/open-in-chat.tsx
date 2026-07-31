@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -8,8 +8,8 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@palot/ui/components/dropdown-menu"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/dropdown-menu"
+import { cn } from "@hramble/ui/lib/utils"
 import { ChevronDownIcon, ExternalLinkIcon, MessageCircleIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 import { createContext, useContext } from "react"

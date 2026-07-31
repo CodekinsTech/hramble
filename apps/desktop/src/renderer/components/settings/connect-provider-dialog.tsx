@@ -7,7 +7,7 @@
  * env-var instructions with copy buttons and docs links.
  */
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Dialog,
 	DialogContent,
@@ -15,10 +15,10 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@palot/ui/components/dialog"
-import { Input } from "@palot/ui/components/input"
-import { Label } from "@palot/ui/components/label"
-import { Spinner } from "@palot/ui/components/spinner"
+} from "@hramble/ui/components/dialog"
+import { Input } from "@hramble/ui/components/input"
+import { Label } from "@hramble/ui/components/label"
+import { Spinner } from "@hramble/ui/components/spinner"
 import {
 	AlertCircleIcon,
 	CheckCircle2Icon,

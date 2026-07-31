@@ -1,4 +1,4 @@
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import { useAtomValue } from "jotai"
 import { CheckCircle2Icon, CircleDotIcon, Loader2Icon, XCircleIcon } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"

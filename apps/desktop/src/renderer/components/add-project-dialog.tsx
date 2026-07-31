@@ -9,7 +9,7 @@
  * instead of opening this dialog.
  */
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Dialog,
 	DialogClose,
@@ -18,9 +18,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@palot/ui/components/dialog"
-import { Input } from "@palot/ui/components/input"
-import { Label } from "@palot/ui/components/label"
+} from "@hramble/ui/components/dialog"
+import { Input } from "@hramble/ui/components/input"
+import { Label } from "@hramble/ui/components/label"
 import { useAtomValue } from "jotai"
 import { FolderOpenIcon, Loader2Icon } from "lucide-react"
 import { useCallback, useState } from "react"

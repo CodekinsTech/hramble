@@ -1,9 +1,9 @@
 "use client"
 
-import { Badge } from "@palot/ui/components/badge"
-import { Button } from "@palot/ui/components/button"
-import { Switch } from "@palot/ui/components/switch"
-import { cn } from "@palot/ui/lib/utils"
+import { Badge } from "@hramble/ui/components/badge"
+import { Button } from "@hramble/ui/components/button"
+import { Switch } from "@hramble/ui/components/switch"
+import { cn } from "@hramble/ui/lib/utils"
 import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"

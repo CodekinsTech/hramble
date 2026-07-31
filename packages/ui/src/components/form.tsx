@@ -1,5 +1,5 @@
-import { Label } from "@palot/ui/components/label"
-import { cn } from "@palot/ui/lib/utils"
+import { Label } from "@hramble/ui/components/label"
+import { cn } from "@hramble/ui/lib/utils"
 import * as React from "react"
 import {
 	Controller,

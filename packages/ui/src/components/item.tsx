@@ -1,7 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
-import { Separator } from "@palot/ui/components/separator"
-import { cn } from "@palot/ui/lib/utils"
+import { Separator } from "@hramble/ui/components/separator"
+import { cn } from "@hramble/ui/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
 import type * as React from "react"
 

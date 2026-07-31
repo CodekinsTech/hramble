@@ -5,17 +5,17 @@ import {
 	CodeBlockCopyButton,
 	CodeBlockHeader,
 	CodeBlockTitle,
-} from "@palot/ui/components/ai-elements/code-block"
-import { Diff, DiffContent } from "@palot/ui/components/ai-elements/diff"
+} from "@hramble/ui/components/ai-elements/code-block"
+import { Diff, DiffContent } from "@hramble/ui/components/ai-elements/diff"
 import {
 	Terminal,
 	TerminalContent,
 	TerminalCopyButton,
 	TerminalHeader,
 	TerminalTitle,
-} from "@palot/ui/components/ai-elements/terminal"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@palot/ui/components/dialog"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/ai-elements/terminal"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@hramble/ui/components/dialog"
+import { cn } from "@hramble/ui/lib/utils"
 
 import { useSetAtom } from "jotai"
 import {

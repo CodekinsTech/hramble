@@ -13,7 +13,7 @@
 		"clean": "rm -rf node_modules .turbo"
 	},
 	"dependencies": {
-		"@palot/configconv": "workspace:*",
+		"@hramble/configconv": "workspace:*",
 		"citty": "^0.2.1",
 		"consola": "^3.4.2"
 	},

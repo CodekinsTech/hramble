@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
 

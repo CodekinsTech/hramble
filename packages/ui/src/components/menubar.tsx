@@ -14,9 +14,9 @@ import {
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
-} from "@palot/ui/components/dropdown-menu"
+} from "@hramble/ui/components/dropdown-menu"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import { CheckIcon } from "lucide-react"
 import type * as React from "react"
 

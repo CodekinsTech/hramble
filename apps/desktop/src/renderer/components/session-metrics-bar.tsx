@@ -8,8 +8,8 @@
  * Context window usage is displayed separately in the StatusBar below
  * the chat input (see prompt-toolbar.tsx).
  */
-import { Popover, PopoverContent, PopoverTrigger } from "@palot/ui/components/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { useAtomValue } from "jotai"
 import { BarChart3Icon, CoinsIcon, TimerIcon } from "lucide-react"
 import { Fragment, memo, useEffect, useState } from "react"

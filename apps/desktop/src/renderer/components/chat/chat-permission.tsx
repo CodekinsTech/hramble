@@ -1,10 +1,10 @@
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-} from "@palot/ui/components/dropdown-menu"
+} from "@hramble/ui/components/dropdown-menu"
 import { ChevronDownIcon, Loader2Icon, ShieldCheckIcon, ZapIcon } from "lucide-react"
 import { memo, useState } from "react"
 import type { Agent, PermissionRequest } from "../../lib/types"

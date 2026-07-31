@@ -8,7 +8,7 @@ import {
 	PromptInputTools,
 	usePromptInputAttachments,
 	usePromptInputController,
-} from "@palot/ui/components/ai-elements/prompt-input"
+} from "@hramble/ui/components/ai-elements/prompt-input"
 import { PlusIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { setProjectModelAtom } from "../../atoms/preferences"

@@ -1,4 +1,4 @@
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import { useRouter } from "@tanstack/react-router"
 import { SearchXIcon } from "lucide-react"
 

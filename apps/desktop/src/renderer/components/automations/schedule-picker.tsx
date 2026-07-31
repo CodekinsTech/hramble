@@ -11,9 +11,9 @@
  * 3. Live summary + next 3 runs -- always shown at the bottom
  */
 
-import { Button } from "@palot/ui/components/button"
-import { Input } from "@palot/ui/components/input"
-import { Label } from "@palot/ui/components/label"
+import { Button } from "@hramble/ui/components/button"
+import { Input } from "@hramble/ui/components/input"
+import { Label } from "@hramble/ui/components/label"
 import {
 	Select,
 	SelectContent,
@@ -21,8 +21,8 @@ import {
 	SelectSeparator,
 	SelectTrigger,
 	SelectValue,
-} from "@palot/ui/components/select"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
+} from "@hramble/ui/components/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { CalendarClockIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {

@@ -1,13 +1,13 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
-} from "@palot/ui/components/tooltip"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/tooltip"
+import { cn } from "@hramble/ui/lib/utils"
 import type { LucideIcon } from "lucide-react"
 import { XIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"

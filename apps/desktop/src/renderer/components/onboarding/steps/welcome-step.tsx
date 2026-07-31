@@ -4,7 +4,7 @@
  * Brief introduction to Palot and what the setup will cover.
  */
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import { ArrowRightIcon } from "lucide-react"
 import { PalotWordmark } from "../../palot-wordmark"
 

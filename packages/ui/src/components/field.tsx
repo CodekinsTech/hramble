@@ -1,9 +1,9 @@
 "use client"
 
-import { Label } from "@palot/ui/components/label"
-import { Separator } from "@palot/ui/components/separator"
+import { Label } from "@hramble/ui/components/label"
+import { Separator } from "@hramble/ui/components/separator"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
 import { useMemo } from "react"
 

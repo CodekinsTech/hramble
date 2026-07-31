@@ -1,8 +1,8 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { ButtonGroup, ButtonGroupText } from "@palot/ui/components/button-group"
-import { cn } from "@palot/ui/lib/utils"
+import { Button } from "@hramble/ui/components/button"
+import { ButtonGroup, ButtonGroupText } from "@hramble/ui/components/button-group"
+import { cn } from "@hramble/ui/lib/utils"
 import type { Experimental_SpeechResult as SpeechResult } from "ai"
 import {
 	MediaControlBar,

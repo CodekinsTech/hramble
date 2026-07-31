@@ -12,6 +12,8 @@ export const POPULAR_PROVIDER_IDS = [
 	"anthropic",
 	"openai",
 	"google",
+	"moonshotai",
+	"deepseek",
 	"github-copilot",
 	"groq",
 	"openrouter",
@@ -39,6 +41,8 @@ export const ZEN_DOCS_URL = "https://opencode.ai/docs/zen"
 export const PROVIDER_KEY_URLS: Record<string, { label: string; url: string }> = {
 	opencode: { label: "Get API key", url: "https://opencode.ai/zen/" },
 	anthropic: { label: "Get API key", url: "https://console.anthropic.com/settings/keys" },
+	moonshotai: { label: "Get API key", url: "https://platform.moonshot.ai/console/api-keys" },
+	"moonshotai-cn": { label: "Get API key", url: "https://platform.moonshot.cn/console/api-keys" },
 	openai: { label: "Get API key", url: "https://platform.openai.com/api-keys" },
 	google: { label: "Get API key", url: "https://aistudio.google.com/apikey" },
 	groq: { label: "Get API key", url: "https://console.groq.com/keys" },

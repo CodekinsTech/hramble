@@ -9,8 +9,8 @@
  * on demand via a quick fetch to /global/health.
  */
 
-import { Popover, PopoverContent, PopoverTrigger } from "@palot/ui/components/popover"
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@palot/ui/components/sidebar"
+import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@hramble/ui/components/sidebar"
 import { useNavigate } from "@tanstack/react-router"
 import { useAtomValue } from "jotai"
 import { CheckIcon, GlobeIcon, MonitorIcon, RadarIcon, SettingsIcon } from "lucide-react"

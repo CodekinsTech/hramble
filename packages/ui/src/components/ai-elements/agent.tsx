@@ -5,9 +5,9 @@ import {
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
-} from "@palot/ui/components/accordion"
-import { Badge } from "@palot/ui/components/badge"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/accordion"
+import { Badge } from "@hramble/ui/components/badge"
+import { cn } from "@hramble/ui/lib/utils"
 import type { Tool } from "ai"
 import { BotIcon } from "lucide-react"
 import type { ComponentProps } from "react"

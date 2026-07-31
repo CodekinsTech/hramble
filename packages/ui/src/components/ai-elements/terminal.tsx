@@ -1,7 +1,7 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { cn } from "@palot/ui/lib/utils"
+import { Button } from "@hramble/ui/components/button"
+import { cn } from "@hramble/ui/lib/utils"
 import Ansi from "ansi-to-react"
 import { CheckIcon, CopyIcon, TerminalIcon, Trash2Icon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"

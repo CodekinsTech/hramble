@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import { AlertCircle } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 import {

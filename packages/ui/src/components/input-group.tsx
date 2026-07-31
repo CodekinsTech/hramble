@@ -1,9 +1,9 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { Input } from "@palot/ui/components/input"
-import { Textarea } from "@palot/ui/components/textarea"
-import { cn } from "@palot/ui/lib/utils"
+import { Button } from "@hramble/ui/components/button"
+import { Input } from "@hramble/ui/components/input"
+import { Textarea } from "@hramble/ui/components/textarea"
+import { cn } from "@hramble/ui/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
 import type * as React from "react"
 

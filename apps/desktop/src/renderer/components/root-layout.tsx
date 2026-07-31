@@ -3,7 +3,7 @@
  * command palette, and onboarding.
  * Does NOT render any sidebar chrome -- that lives in SidebarLayout.
  */
-import { TooltipProvider } from "@palot/ui/components/tooltip"
+import { TooltipProvider } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate, useParams } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useCallback, useEffect, useMemo } from "react"

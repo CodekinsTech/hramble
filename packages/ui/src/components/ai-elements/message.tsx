@@ -1,14 +1,14 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { ButtonGroup, ButtonGroupText } from "@palot/ui/components/button-group"
+import { Button } from "@hramble/ui/components/button"
+import { ButtonGroup, ButtonGroupText } from "@hramble/ui/components/button-group"
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
 	TooltipTrigger,
-} from "@palot/ui/components/tooltip"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/tooltip"
+import { cn } from "@hramble/ui/lib/utils"
 import { cjk } from "@streamdown/cjk"
 import { code } from "@streamdown/code"
 import { math } from "@streamdown/math"

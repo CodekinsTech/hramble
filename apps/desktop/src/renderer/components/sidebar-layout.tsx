@@ -2,15 +2,15 @@
  * Sidebar shell layout: wraps child routes with the sidebar + SidebarInset chrome.
  * Reads from SidebarSlotContext to allow child routes to override sidebar content.
  */
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Sidebar,
 	SidebarHeader,
 	SidebarInset,
 	SidebarProvider,
 	useSidebar,
-} from "@palot/ui/components/sidebar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
+} from "@hramble/ui/components/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import { CodeIcon, InfinityIcon, PanelLeftIcon, PlusIcon } from "lucide-react"

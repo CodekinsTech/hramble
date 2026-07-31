@@ -1,15 +1,15 @@
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@palot/ui/components/dropdown-menu"
-import { Input } from "@palot/ui/components/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@palot/ui/components/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/dropdown-menu"
+import { Input } from "@hramble/ui/components/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
+import { cn } from "@hramble/ui/lib/utils"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
 import {

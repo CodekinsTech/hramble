@@ -6,7 +6,7 @@
  * Includes configuration for the local server's hostname, port, and password.
  */
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Dialog,
 	DialogClose,
@@ -16,10 +16,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@palot/ui/components/dialog"
-import { Input } from "@palot/ui/components/input"
-import { Label } from "@palot/ui/components/label"
-import { Switch } from "@palot/ui/components/switch"
+} from "@hramble/ui/components/dialog"
+import { Input } from "@hramble/ui/components/input"
+import { Label } from "@hramble/ui/components/label"
+import { Switch } from "@hramble/ui/components/switch"
 import {
 	CheckCircle2Icon,
 	ChevronRightIcon,

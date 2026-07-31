@@ -11,7 +11,7 @@ import {
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
-} from "@palot/ui/components/context-menu"
+} from "@hramble/ui/components/context-menu"
 import {
 	ArchiveIcon,
 	CheckCircle2Icon,

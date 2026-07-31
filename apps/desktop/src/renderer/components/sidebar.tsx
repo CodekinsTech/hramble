@@ -1,12 +1,19 @@
-import { Collapsible, CollapsibleContent } from "@palot/ui/components/collapsible"
+import { Collapsible, CollapsibleContent } from "@hramble/ui/components/collapsible"
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
-} from "@palot/ui/components/context-menu"
-import { Input } from "@palot/ui/components/input"
+} from "@hramble/ui/components/context-menu"
+import { Input } from "@hramble/ui/components/input"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@hramble/ui/components/dropdown-menu"
 import {
 	SidebarContent,
 	SidebarFooter,
@@ -14,11 +21,12 @@ import {
 	SidebarGroupContent,
 	SidebarGroupLabel,
 	SidebarMenu,
+	SidebarMenuAction,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarSeparator,
-} from "@palot/ui/components/sidebar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
+} from "@hramble/ui/components/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtomValue } from "jotai"
 import {
@@ -31,6 +39,7 @@ import {
 	CommandIcon,
 	GitForkIcon,
 	Loader2Icon,
+	MoreVerticalIcon,
 	PencilIcon,
 	PlusIcon,
 	SearchIcon,
@@ -718,9 +727,49 @@ const SessionItem = memo(function SessionItem({
 				)}
 
 				{!isEditing && (
-					<span className="shrink-0 text-xs tabular-nums text-muted-foreground">{lastActive}</span>
+					<span className="shrink-0 text-xs tabular-nums text-muted-foreground group-hover/menu-item:opacity-0">
+						{lastActive}
+					</span>
 				)}
 			</SidebarMenuButton>
+
+			{/* Visible ⋯ button (appears on hover) — same actions as the right-click menu */}
+			{!isEditing && (onRename || onFork || onDelete) && (
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={
+							<SidebarMenuAction
+								showOnHover
+								aria-label="Session options"
+								onClick={(e) => e.stopPropagation()}
+							/>
+						}
+					>
+						<MoreVerticalIcon />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" side="right" className="min-w-[150px]">
+						{onRename && (
+							<DropdownMenuItem onClick={startEditing}>
+								<PencilIcon className="size-4" />
+								Rename
+							</DropdownMenuItem>
+						)}
+						{onFork && (
+							<DropdownMenuItem onClick={() => onFork(agent)}>
+								<GitForkIcon className="size-4" />
+								Fork
+							</DropdownMenuItem>
+						)}
+						{(onRename || onFork) && onDelete && <DropdownMenuSeparator />}
+						{onDelete && (
+							<DropdownMenuItem variant="destructive" onClick={() => onDelete(agent)}>
+								<TrashIcon className="size-4" />
+								Delete
+							</DropdownMenuItem>
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
+			)}
 		</SidebarMenuItem>
 	)
 

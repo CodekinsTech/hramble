@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@palot/ui/lib/utils"
+import { cn } from "@hramble/ui/lib/utils"
 import * as ResizablePrimitive from "react-resizable-panels"
 
 function ResizablePanelGroup({ className, ...props }: ResizablePrimitive.GroupProps) {

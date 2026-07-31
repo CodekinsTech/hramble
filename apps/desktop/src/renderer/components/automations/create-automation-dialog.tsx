@@ -5,8 +5,8 @@
  * pre-fills fields from the automation, and shows Delete/Test/Pause actions.
  */
 
-import { Badge } from "@palot/ui/components/badge"
-import { Button } from "@palot/ui/components/button"
+import { Badge } from "@hramble/ui/components/badge"
+import { Button } from "@hramble/ui/components/button"
 import {
 	Combobox,
 	ComboboxContent,
@@ -14,18 +14,18 @@ import {
 	ComboboxInput,
 	ComboboxItem,
 	ComboboxList,
-} from "@palot/ui/components/combobox"
+} from "@hramble/ui/components/combobox"
 import {
 	Dialog,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@palot/ui/components/dialog"
-import { Input } from "@palot/ui/components/input"
-import { Label } from "@palot/ui/components/label"
-import { Separator } from "@palot/ui/components/separator"
-import { Textarea } from "@palot/ui/components/textarea"
+} from "@hramble/ui/components/dialog"
+import { Input } from "@hramble/ui/components/input"
+import { Label } from "@hramble/ui/components/label"
+import { Separator } from "@hramble/ui/components/separator"
+import { Textarea } from "@hramble/ui/components/textarea"
 import { useAtomValue } from "jotai"
 import {
 	FolderIcon,

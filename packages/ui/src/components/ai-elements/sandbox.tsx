@@ -4,9 +4,9 @@ import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from "@palot/ui/components/collapsible"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@palot/ui/components/tabs"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/collapsible"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@hramble/ui/components/tabs"
+import { cn } from "@hramble/ui/lib/utils"
 import type { ToolUIPart } from "ai"
 import { ChevronDownIcon, Code } from "lucide-react"
 import type { ComponentProps } from "react"

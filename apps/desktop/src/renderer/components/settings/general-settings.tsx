@@ -4,8 +4,8 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from "@palot/ui/components/select"
-import { Switch } from "@palot/ui/components/switch"
+} from "@hramble/ui/components/select"
+import { Switch } from "@hramble/ui/components/switch"
 import { useAtomValue, useSetAtom } from "jotai"
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"

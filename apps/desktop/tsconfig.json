@@ -15,7 +15,7 @@
 		"noEmit": true,
 		"paths": {
 			"@/*": ["./src/renderer/*"],
-			"@palot/ui/*": ["../../packages/ui/src/*"]
+			"@hramble/ui/*": ["../../packages/ui/src/*"]
 		}
 	},
 	"include": [

@@ -1,5 +1,5 @@
 /**
- * @palot/configconv -- Universal agent configuration converter.
+ * @hramble/configconv -- Universal agent configuration converter.
  *
  * Supports converting between Claude Code, OpenCode, and Cursor formats
  * using a hub-and-spoke architecture with a canonical intermediate representation.

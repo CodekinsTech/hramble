@@ -5,8 +5,8 @@
  * in one but not the other. Useful for seeing what a migration would change.
  */
 
-import type { AgentFormat, CanonicalScanResult } from "@palot/configconv"
-import { formatName, scanFormat, toCanonical } from "@palot/configconv"
+import type { AgentFormat, CanonicalScanResult } from "@hramble/configconv"
+import { formatName, scanFormat, toCanonical } from "@hramble/configconv"
 import { defineCommand } from "citty"
 import consola from "consola"
 

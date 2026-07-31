@@ -1,12 +1,12 @@
 "use client"
 
-import { Badge } from "@palot/ui/components/badge"
+import { Badge } from "@hramble/ui/components/badge"
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
-} from "@palot/ui/components/collapsible"
-import { cn } from "@palot/ui/lib/utils"
+} from "@hramble/ui/components/collapsible"
+import { cn } from "@hramble/ui/lib/utils"
 import {
 	CheckCircle2Icon,
 	ChevronRightIcon,

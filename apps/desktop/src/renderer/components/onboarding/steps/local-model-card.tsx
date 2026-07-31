@@ -9,7 +9,7 @@
  * fast but unreliable at tool calling, which silently breaks the agent loop.
  */
 
-import { Button } from "@palot/ui/components/button"
+import { Button } from "@hramble/ui/components/button"
 import { CheckIcon, DownloadIcon, HardDriveIcon, Loader2Icon, RefreshCwIcon } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 

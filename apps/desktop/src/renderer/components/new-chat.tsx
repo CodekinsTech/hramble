@@ -5,15 +5,15 @@ import {
 	PromptInputTextarea,
 	PromptInputTools,
 	usePromptInputController,
-} from "@palot/ui/components/ai-elements/prompt-input"
+} from "@hramble/ui/components/ai-elements/prompt-input"
 import { type MentionOption, MentionPopover, type MentionPopoverHandle } from "./chat/mention-popover"
 import {
 	createAgentMention,
 	createFileMention,
 	insertMentionIntoText,
 } from "./chat/prompt-mentions"
-import { Popover, PopoverContent, PopoverTrigger } from "@palot/ui/components/popover"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import {

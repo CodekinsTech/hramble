@@ -1,9 +1,9 @@
 "use client"
 
-import { Button } from "@palot/ui/components/button"
-import { Separator } from "@palot/ui/components/separator"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@palot/ui/components/tooltip"
-import { cn } from "@palot/ui/lib/utils"
+import { Button } from "@hramble/ui/components/button"
+import { Separator } from "@hramble/ui/components/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
+import { cn } from "@hramble/ui/lib/utils"
 import type { LucideProps } from "lucide-react"
 import { BookmarkIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes } from "react"

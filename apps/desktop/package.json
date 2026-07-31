@@ -1,5 +1,5 @@
 {
-	"name": "@palot/desktop",
+	"name": "@hramble/desktop",
 	"version": "0.11.0",
 	"description": "AI-powered coding assistant desktop app",
 	"author": "Palot",
@@ -39,8 +39,8 @@
 		"@fontsource/ibm-plex-mono": "^5.2.7",
 		"@libsql/client": "^0.17.0",
 		"@opencode-ai/sdk": "^1.2.1",
-		"@palot/configconv": "workspace:*",
-		"@palot/ui": "workspace:*",
+		"@hramble/configconv": "workspace:*",
+		"@hramble/ui": "workspace:*",
 		"@pierre/diffs": "^1.0.10",
 		"@pixiv/three-vrm": "3",
 		"@pixiv/three-vrm-animation": "3",
@@ -74,7 +74,7 @@
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^4.0.3",
-		"@palot/server": "workspace:*",
+		"@hramble/server": "workspace:*",
 		"@tailwindcss/vite": "^4.0.0",
 		"@types/node": "^24.0.0",
 		"@types/react": "^19.0.0",

@@ -4,15 +4,15 @@ import {
 	MessageActions,
 	MessageContent,
 	MessageResponse,
-} from "@palot/ui/components/ai-elements/message"
+} from "@hramble/ui/components/ai-elements/message"
 import {
 	Reasoning,
 	ReasoningContent,
 	ReasoningText,
 	ReasoningTrigger,
-} from "@palot/ui/components/ai-elements/reasoning"
-import { Shimmer } from "@palot/ui/components/ai-elements/shimmer"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@palot/ui/components/dialog"
+} from "@hramble/ui/components/ai-elements/reasoning"
+import { Shimmer } from "@hramble/ui/components/ai-elements/shimmer"
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@hramble/ui/components/dialog"
 
 import {
 	ArrowUpToLineIcon,
@@ -40,6 +40,7 @@ import {
 } from "../../lib/session-metrics"
 import type { FilePart, Part, ReasoningPart, TextPart, ToolPart } from "../../lib/types"
 import { ChatToolCall, getToolInfo, getToolSubtitle } from "./chat-tool-call"
+import { WorkingMark } from "./working-mark"
 import { getToolCategory, TOOL_CATEGORY_COLORS, type ToolCategory } from "./tool-card"
 
 // ============================================================
@@ -817,7 +818,7 @@ export const ChatTurnComponent = memo(
 						{/* Working shimmer — shown before any tools/reasoning appear */}
 						{working && !hasSteps && !hasReasoning && (
 							<div className="flex items-center gap-2 text-xs text-muted-foreground">
-								<Loader2Icon className="size-3 animate-spin text-muted-foreground/40" />
+								<WorkingMark />
 								<Shimmer className="text-xs">{statusText}</Shimmer>
 							</div>
 						)}
@@ -911,7 +912,7 @@ export const ChatTurnComponent = memo(
 								{/* Live status while the agent is still working */}
 								{working && hasSteps && (
 									<div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
-										<Loader2Icon className="size-3 animate-spin text-muted-foreground/30" />
+										<WorkingMark />
 										<Shimmer className="text-[11px]">{statusText}</Shimmer>
 									</div>
 								)}
