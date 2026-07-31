@@ -49,7 +49,7 @@ export interface SessionEntry {
 	branch?: string
 	/** If set, the session runs in a git worktree at this path */
 	worktreePath?: string
-	/** The branch name auto-created for the worktree (e.g. "palot/fix-auth-bug") */
+	/** The branch name auto-created for the worktree (e.g. "hramble/fix-auth-bug") */
 	worktreeBranch?: string
 	/** Last session-level error (from session.error events) */
 	error?: SessionError

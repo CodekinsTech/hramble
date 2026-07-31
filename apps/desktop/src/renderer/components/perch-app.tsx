@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { type AvatarKey, type PerchZone, VrmStage } from "./vrm-stage"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const palot = () => (window as any).palot
+const hramble = () => (window as any).hramble
 
 /** The perch window's content: just the avatar, draggable, click-through around it. */
 export function PerchApp() {
@@ -15,7 +15,7 @@ export function PerchApp() {
 
 	// The perch loop tells us where she is (dock / stand-on-window / sit-on-window).
 	useEffect(() => {
-		return palot()?.onPerchZone?.((z: string) => {
+		return hramble()?.onPerchZone?.((z: string) => {
 			if (z === "sit" || z === "stand" || z === "dock") setZone(z)
 		})
 	}, [])
@@ -23,14 +23,14 @@ export function PerchApp() {
 	// ESC → dock her back to the box.
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === "Escape") palot()?.perchStop?.()
+			if (e.key === "Escape") hramble()?.perchStop?.()
 		}
 		window.addEventListener("keydown", onKey)
 		return () => window.removeEventListener("keydown", onKey)
 	}, [])
 
 	useEffect(() => {
-		// Remove the "Palot" splash (only StartupOverlay removes it, and perch has none).
+		// Remove the "Hramble" splash (only StartupOverlay removes it, and perch has none).
 		document.getElementById("splash")?.remove()
 		// Transparent window — no background anywhere.
 		document.title = "Hramble"
@@ -44,7 +44,7 @@ export function PerchApp() {
 		const report = () => {
 			const w = window.innerWidth
 			const h = window.innerHeight
-			palot()?.perchHitRects?.([{ x: Math.round(w * 0.28), y: Math.round(h * 0.08), w: Math.round(w * 0.44), h: Math.round(h * 0.88) }])
+			hramble()?.perchHitRects?.([{ x: Math.round(w * 0.28), y: Math.round(h * 0.08), w: Math.round(w * 0.44), h: Math.round(h * 0.88) }])
 		}
 		report()
 		const iv = setInterval(report, 800)
@@ -73,13 +73,13 @@ export function PerchApp() {
 			// Threshold crossed — she's now being carried: stand and start the drag.
 			started.current = true
 			setZone("stand")
-			palot()?.perchDrag?.("start", 0, 0)
+			hramble()?.perchDrag?.("start", 0, 0)
 		}
 		last.current = { x: e.screenX, y: e.screenY }
-		palot()?.perchDrag?.("move", dx, dy)
+		hramble()?.perchDrag?.("move", dx, dy)
 	}
 	const onPointerUp = (e: React.PointerEvent) => {
-		if (dragging.current && started.current) palot()?.perchDrag?.("end", 0, 0)
+		if (dragging.current && started.current) hramble()?.perchDrag?.("end", 0, 0)
 		dragging.current = false
 		started.current = false
 		try {
@@ -100,7 +100,7 @@ export function PerchApp() {
 			>
 				<VrmStage avatar={avatar} mode="perch" zone={zone} />
 			</div>
-			<button type="button" className="perch-close" title="Dock back" onClick={() => palot()?.perchStop?.()}>
+			<button type="button" className="perch-close" title="Dock back" onClick={() => hramble()?.perchStop?.()}>
 				×
 			</button>
 		</div>

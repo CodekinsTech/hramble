@@ -164,11 +164,11 @@ contextBridge.exposeInMainWorld("hramble", {
 	// --- CLI install ---
 
 	cli: {
-		/** Checks whether the `palot` CLI command is installed. */
+		/** Checks whether the `hramble` CLI command is installed. */
 		isInstalled: () => ipcRenderer.invoke("cli:is-installed"),
-		/** Installs the `palot` CLI command (symlinks to /usr/local/bin). */
+		/** Installs the `hramble` CLI command (symlinks to /usr/local/bin). */
 		install: () => ipcRenderer.invoke("cli:install"),
-		/** Uninstalls the `palot` CLI command. */
+		/** Uninstalls the `hramble` CLI command. */
 		uninstall: () => ipcRenderer.invoke("cli:uninstall"),
 	},
 

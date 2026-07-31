@@ -425,7 +425,7 @@ function convertIcnsToPng(appBundlePath: string): string | null {
 		// Use sips to convert .icns to PNG via a temp file
 		const tmpPath = join(
 			tmpdir(),
-			`palot-icon-${Date.now()}-${Math.random().toString(36).slice(2)}.png`,
+			`hramble-icon-${Date.now()}-${Math.random().toString(36).slice(2)}.png`,
 		)
 		try {
 			execFileSync("sips", ["-s", "format", "png", "-z", "64", "64", icnsPath, "--out", tmpPath], {

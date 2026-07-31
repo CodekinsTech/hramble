@@ -1,5 +1,5 @@
 /**
- * Inline SVG wordmark for "Hrambal code" -- renders at currentColor via SVG
+ * Inline SVG wordmark for "Hramble code" -- renders at currentColor via SVG
  * <text> so it scales with the className height (h-5, h-4, h-[11px], ...) with
  * no font-loading dependency for layout.
  */
@@ -11,7 +11,7 @@ export function HrambleWordmark({ className }: { className?: string }) {
 			xmlns="http://www.w3.org/2000/svg"
 			className={className}
 			style={{ overflow: "visible" }}
-			aria-label="Hrambal code"
+			aria-label="Hramble code"
 		>
 			<text
 				x="0"

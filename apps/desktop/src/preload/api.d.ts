@@ -114,7 +114,7 @@ export interface OpenInTargetsResult {
 // Server config types (shared between main process and renderer)
 // ============================================================
 
-/** Built-in local server, auto-managed by Palot via OpenCodeManager. */
+/** Built-in local server, auto-managed by Hramble via OpenCodeManager. */
 export interface LocalServerConfig {
 	id: "local"
 	name: string

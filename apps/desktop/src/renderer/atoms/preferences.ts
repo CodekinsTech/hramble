@@ -28,13 +28,13 @@ function migrateFromZustandPersist(): void {
 	try {
 		const { state } = JSON.parse(raw) // Zustand persist wraps in { state, version }
 		if (state.displayMode)
-			localStorage.setItem("palot:displayMode", JSON.stringify(state.displayMode))
-		if (state.theme) localStorage.setItem("palot:theme", JSON.stringify(state.theme))
+			localStorage.setItem("hramble:displayMode", JSON.stringify(state.displayMode))
+		if (state.theme) localStorage.setItem("hramble:theme", JSON.stringify(state.theme))
 		if (state.colorScheme)
-			localStorage.setItem("palot:colorScheme", JSON.stringify(state.colorScheme))
-		if (state.drafts) localStorage.setItem("palot:drafts", JSON.stringify(state.drafts))
+			localStorage.setItem("hramble:colorScheme", JSON.stringify(state.colorScheme))
+		if (state.drafts) localStorage.setItem("hramble:drafts", JSON.stringify(state.drafts))
 		if (state.projectModels)
-			localStorage.setItem("palot:projectModels", JSON.stringify(state.projectModels))
+			localStorage.setItem("hramble:projectModels", JSON.stringify(state.projectModels))
 
 		// Remove old key after successful migration
 		localStorage.removeItem(oldKey)
@@ -48,9 +48,9 @@ migrateFromZustandPersist()
 
 // Migrate removed "compact" display mode to "default"
 function migrateDisplayMode(): void {
-	const raw = localStorage.getItem("palot:displayMode")
+	const raw = localStorage.getItem("hramble:displayMode")
 	if (raw === '"compact"') {
-		localStorage.setItem("palot:displayMode", '"default"')
+		localStorage.setItem("hramble:displayMode", '"default"')
 	}
 }
 migrateDisplayMode()
@@ -59,17 +59,17 @@ migrateDisplayMode()
 // Persisted atoms — each is independent with its own localStorage key
 // ============================================================
 
-export const displayModeAtom = atomWithStorage<DisplayMode>("palot:displayMode", "default")
+export const displayModeAtom = atomWithStorage<DisplayMode>("hramble:displayMode", "default")
 
-export const themeAtom = atomWithStorage<string>("palot:theme", "default")
+export const themeAtom = atomWithStorage<string>("hramble:theme", "default")
 
-export const colorSchemeAtom = atomWithStorage<ColorScheme>("palot:colorScheme", "light")
+export const colorSchemeAtom = atomWithStorage<ColorScheme>("hramble:colorScheme", "light")
 
 /**
  * Whether the user prefers opaque (non-transparent) windows.
  * When true, the renderer uses solid backgrounds instead of semi-transparent.
  */
-export const opaqueWindowsAtom = atomWithStorage<boolean>("palot:opaqueWindows", false)
+export const opaqueWindowsAtom = atomWithStorage<boolean>("hramble:opaqueWindows", false)
 
 /**
  * The active window chrome tier, set by the main process on load.
@@ -88,10 +88,10 @@ export const isTransparentAtom = atom((get) => {
 	return !opaque && (tier === "liquid-glass" || tier === "vibrancy")
 })
 
-export const draftsAtom = atomWithStorage<Record<string, string>>("palot:drafts", {})
+export const draftsAtom = atomWithStorage<Record<string, string>>("hramble:drafts", {})
 
 export const projectModelsAtom = atomWithStorage<Record<string, PersistedModelRef>>(
-	"palot:projectModels",
+	"hramble:projectModels",
 	{},
 )
 
@@ -100,7 +100,7 @@ export const projectModelsAtom = atomWithStorage<Record<string, PersistedModelRe
  * Once dismissed, the banner never reappears.
  */
 export const automationsBannerDismissedAtom = atomWithStorage<boolean>(
-	"palot:automationsBannerDismissed",
+	"hramble:automationsBannerDismissed",
 	false,
 )
 

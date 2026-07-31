@@ -10,7 +10,7 @@ import { atomWithStorage } from "jotai/utils"
  * When true, the app uses static fixture data instead of connecting
  * to the OpenCode server. Used for screenshots and marketing.
  */
-export const mockModeStorageAtom = atomWithStorage<boolean>("palot:mockMode", false)
+export const mockModeStorageAtom = atomWithStorage<boolean>("hramble:mockMode", false)
 
 /**
  * Check if ?mock=1 is present in the URL (works with both hash and regular URLs).

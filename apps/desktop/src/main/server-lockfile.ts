@@ -1,12 +1,12 @@
 /**
- * Lockfile for the Palot-managed OpenCode server process.
+ * Lockfile for the Hramble-managed OpenCode server process.
  *
- * Written when Palot spawns a server, removed on clean shutdown. On next
+ * Written when Hramble spawns a server, removed on clean shutdown. On next
  * launch, a stale lockfile (dead PID) tells us the previous instance
  * crashed and we need to spawn fresh. A live lockfile with a different
  * UID triggers the cross-user conflict dialog.
  *
- * Path: ~/.local/share/palot/server.lock
+ * Path: ~/.local/share/hramble/server.lock
  */
 
 import fs from "node:fs"

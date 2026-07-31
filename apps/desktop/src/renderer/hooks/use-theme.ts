@@ -7,7 +7,7 @@ import { type ColorScheme, getAvailableThemes, getTheme, type ThemeDefinition } 
 // useThemeEffect — synchronises persisted store to <html> element
 // ============================================================
 
-const STYLE_ID = "palot-theme-vars"
+const STYLE_ID = "hramble-theme-vars"
 
 function getOrCreateStyleElement(): HTMLStyleElement {
 	let el = document.getElementById(STYLE_ID) as HTMLStyleElement | null

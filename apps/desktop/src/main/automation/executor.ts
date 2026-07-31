@@ -105,7 +105,7 @@ function buildPermissionRuleset(preset: PermissionPreset): PermissionRuleset {
 
 /**
  * Returns the path to the automation's memory file.
- * Lives at ~/.config/palot/automations/<id>/memory.md
+ * Lives at ~/.config/hramble/automations/<id>/memory.md
  */
 function getMemoryFilePath(automationId: string): string {
 	return path.join(getConfigDir(), "automations", automationId, "memory.md")

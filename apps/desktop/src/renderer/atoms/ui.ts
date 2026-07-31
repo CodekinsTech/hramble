@@ -48,7 +48,7 @@ export interface ReviewPanelSettings {
 }
 
 export const reviewPanelSettingsAtom = atomWithStorage<ReviewPanelSettings>(
-	"palot:review-panel-settings",
+	"hramble:review-panel-settings",
 	{ diffStyle: "unified", expanded: false },
 )
 

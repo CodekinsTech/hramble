@@ -9,7 +9,7 @@ type Installed = { name: string; command: string[]; url?: string; enabled: boole
 type Preset = { id: string; name: string; command: string[]; note: string; envKey?: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const bridge = () => (window as any).palot
+const bridge = () => (window as any).hramble
 
 export function ConnectorsSettings() {
 	const [installed, setInstalled] = useState<Installed[]>([])

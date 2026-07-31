@@ -9,7 +9,7 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 
-const STORAGE_KEY = "palot:reactScan"
+const STORAGE_KEY = "hramble:reactScan"
 
 /**
  * Persisted toggle for React Scan.

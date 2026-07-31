@@ -1,5 +1,5 @@
 /**
- * Type-safe client factory for the Palot server.
+ * Type-safe client factory for the Hramble server.
  *
  * Import this from the desktop app to get a fully typed Hono RPC client.
  * This file re-exports only the AppType and a pre-typed hc factory,

@@ -1,5 +1,5 @@
 /**
- * Dynamic system tray for Palot.
+ * Dynamic system tray for Hramble.
  *
  * Shows live agent statuses grouped by project, pending action counts,
  * and quick-access actions. Rebuilds the context menu whenever session
@@ -118,7 +118,7 @@ export function createTray(windowGetter: () => BrowserWindow | undefined): void 
 	}
 
 	tray = new Tray(icon)
-	tray.setToolTip("Palot")
+	tray.setToolTip("Hramble")
 
 	// Click to show/focus window
 	tray.on("click", () => {
@@ -194,7 +194,7 @@ function rebuildMenu(): void {
 
 	// --- Quick actions ---
 	template.push({
-		label: "Show Palot",
+		label: "Show Hramble",
 		click: () => showWindow(),
 	})
 
@@ -448,7 +448,7 @@ function updateTrayTitle(
 		(s) => !s.parentID && (s.status === "busy" || s.status === "retry"),
 	).length
 
-	let tooltip = "Palot"
+	let tooltip = "Hramble"
 	if (totalSessions > 0) {
 		tooltip += ` - ${totalSessions} agent${totalSessions !== 1 ? "s" : ""}`
 		if (busyCount > 0) {

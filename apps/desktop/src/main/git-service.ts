@@ -150,7 +150,7 @@ export async function stashAndCheckout(directory: string, branch: string): Promi
 		const needsStash = !status.isClean()
 
 		if (needsStash) {
-			await git.stash(["push", "-m", `palot: auto-stash before switching to ${branch}`])
+			await git.stash(["push", "-m", `hramble: auto-stash before switching to ${branch}`])
 		}
 
 		// Now checkout
@@ -309,7 +309,7 @@ export async function applyDiffTextToLocal(
 
 	const os = await import("node:os")
 	const fs = await import("node:fs/promises")
-	const tmpFile = path.join(os.tmpdir(), `palot-remote-patch-${Date.now()}.patch`)
+	const tmpFile = path.join(os.tmpdir(), `hramble-remote-patch-${Date.now()}.patch`)
 
 	try {
 		await fs.writeFile(tmpFile, diffText)
@@ -366,7 +366,7 @@ export async function applyChangesToLocal(
 		// Write diff to a temp file, then apply it to the local directory
 		const os = await import("node:os")
 		const fs = await import("node:fs/promises")
-		const tmpFile = path.join(os.tmpdir(), `palot-patch-${Date.now()}.patch`)
+		const tmpFile = path.join(os.tmpdir(), `hramble-patch-${Date.now()}.patch`)
 		await fs.writeFile(tmpFile, diff)
 
 		const localGit = getGit(localDir)

@@ -123,7 +123,7 @@ The main process runs in Node.js, the renderer runs in a Chromium sandbox. They 
 
 ### Backend Service Layer -- `services/backend.ts`
 
-All hooks must import from `services/backend.ts`, NOT from `services/palot-server.ts` directly. The backend module detects Electron (`"hramble" in window`) and routes to IPC or HTTP automatically.
+All hooks must import from `services/backend.ts`, NOT from `services/hramble-server.ts` directly. The backend module detects Electron (`"hramble" in window`) and routes to IPC or HTTP automatically.
 
 ### Jotai + React 19
 

@@ -1,7 +1,7 @@
 /**
  * Onboarding Step 1: Welcome.
  *
- * Brief introduction to Palot and what the setup will cover.
+ * Brief introduction to Hramble and what the setup will cover.
  */
 
 import { Button } from "@hramble/ui/components/button"
@@ -25,7 +25,7 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
 				<div className="space-y-3">
 					<p className="text-lg text-muted-foreground">Your desktop companion for OpenCode.</p>
 					<p className="text-sm leading-relaxed text-muted-foreground/70">
-						Palot gives you a native experience for managing OpenCode sessions across all your
+						Hramble gives you a native experience for managing OpenCode sessions across all your
 						projects, with real-time streaming, native notifications, and multi-session support.
 					</p>
 				</div>

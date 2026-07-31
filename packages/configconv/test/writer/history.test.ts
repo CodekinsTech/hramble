@@ -52,13 +52,13 @@ function makeSession(overrides: { projectId?: string; sessionId?: string } = {})
 }
 
 function tempDir(): string {
-	return join(tmpdir(), `palot-history-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+	return join(tmpdir(), `hramble-history-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 }
 
 function tempDbPath(): string {
 	return join(
 		tmpdir(),
-		`palot-history-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+		`hramble-history-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
 	)
 }
 

@@ -6,7 +6,7 @@
  * from here instead of `hramble-server.ts` directly.
  *
  * In Electron mode, calls go through IPC to the main process.
- * In browser mode, calls go through HTTP to the Palot server.
+ * In browser mode, calls go through HTTP to the Hramble server.
  */
 
 import type {
@@ -35,7 +35,7 @@ const log = createLogger("backend")
 
 /**
  * Returns true when running inside Electron (preload bridge is available).
- * The `palot` object is exposed via `contextBridge.exposeInMainWorld`.
+ * The `hramble` object is exposed via `contextBridge.exposeInMainWorld`.
  */
 export const isElectron = typeof window !== "undefined" && "hramble" in window
 
@@ -142,7 +142,7 @@ export async function updateModelRecent(model: {
 /**
  * Checks if the backend is available.
  * In Electron, always returns true (main process is always there).
- * In browser, pings the Palot HTTP server.
+ * In browser, pings the Hramble HTTP server.
  */
 export async function checkBackendHealth(): Promise<boolean> {
 	if (isElectron) {

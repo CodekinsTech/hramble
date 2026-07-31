@@ -1,5 +1,5 @@
 /**
- * Onboarding handlers for the Palot desktop app.
+ * Onboarding handlers for the Hramble desktop app.
  *
  * Provides IPC-callable functions for the first-run experience:
  * - OpenCode CLI detection and version compatibility check
@@ -484,7 +484,7 @@ export async function previewMigration(
 ): Promise<MigrationPreview> {
 	const { universalConvert } = await import("@hramble/configconv")
 
-	// Convert from source provider to OpenCode (the target for Palot)
+	// Convert from source provider to OpenCode (the target for Hramble)
 	// biome-ignore lint/suspicious/noExplicitAny: scanResult is dynamically typed from IPC
 	const conversion = universalConvert(scanResult as any, { to: "opencode" })
 

@@ -24,7 +24,7 @@ type OllamaStatus = {
 type PullProgress = { status?: string; percent?: number; done?: boolean; error?: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const bridge = () => (window as any).palot?.ollama
+const bridge = () => (window as any).hramble?.ollama
 
 export function LocalModelCard() {
 	const [status, setStatus] = useState<OllamaStatus | null>(null)

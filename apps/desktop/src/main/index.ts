@@ -151,8 +151,19 @@ if (isDev) {
 // The single-instance lock and user-data directory are both keyed on app name,
 // so changing it here prevents the two from conflicting.
 if (isDev) {
-	app.setName("Palot Dev")
-	app.setPath("userData", path.join(app.getPath("appData"), "Palot Dev"))
+	// Migrate legacy "Palot Dev" userData (credentials/settings) → "Hramble Dev".
+	const appData = app.getPath("appData")
+	const oldUserData = path.join(appData, "Palot Dev")
+	const newUserData = path.join(appData, "Hramble Dev")
+	try {
+		if (fs.existsSync(oldUserData) && !fs.existsSync(newUserData)) {
+			fs.renameSync(oldUserData, newUserData)
+		}
+	} catch (err) {
+		console.error("[userData-migration] Palot Dev → Hramble Dev failed:", err)
+	}
+	app.setName("Hramble Dev")
+	app.setPath("userData", newUserData)
 }
 
 async function createWindow(): Promise<BrowserWindow> {

@@ -87,7 +87,7 @@ let eventLoopGeneration = 0
  * with an unreachable AbortController. By storing it on `window`, the
  * new module can abort the stale loop on reconnect.
  */
-const SSE_ABORT_KEY = "__palot_sse_abort__" as const
+const SSE_ABORT_KEY = "__hramble_sse_abort__" as const
 
 function getGlobalAbort(): AbortController | undefined {
 	// biome-ignore lint/suspicious/noExplicitAny: accessing dynamic window property for SSE abort controller

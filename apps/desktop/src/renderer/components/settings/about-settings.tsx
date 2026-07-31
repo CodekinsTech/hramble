@@ -60,7 +60,7 @@ export function AboutSettings() {
 	const openUrl = (url: string) => {
 		// Prefer the main-process external opener; fall back to window.open.
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const p = (window as any).palot
+		const p = (window as any).hramble
 		if (p?.openExternal) p.openExternal(url)
 		else window.open(url, "_blank", "noopener,noreferrer")
 	}

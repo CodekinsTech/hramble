@@ -328,7 +328,7 @@ function CommitDialog({
 							<Input
 								value={branchName}
 								onChange={(e) => setBranchName(e.target.value)}
-								placeholder="palot/feature-name"
+								placeholder="hramble/feature-name"
 								className="text-sm"
 							/>
 						)}

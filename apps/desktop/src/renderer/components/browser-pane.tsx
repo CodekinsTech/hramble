@@ -47,7 +47,7 @@ export function BrowserPane() {
 	// main-process bridge. Perform the action on the webview and reply.
 	useEffect(() => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const bridge = (window as any).palot
+		const bridge = (window as any).hramble
 		if (!bridge?.onBrowserCommand) return
 		return bridge.onBrowserCommand(
 			async (cmd: {

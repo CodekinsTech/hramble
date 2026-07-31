@@ -46,7 +46,7 @@ export function HrambleAvatar() {
 	// Track perch state so the box hides its avatar while she's out perching.
 	useEffect(() => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		return (window as any).palot?.onPerchActive?.((active: boolean) => setPerched(active))
+		return (window as any).hramble?.onPerchActive?.((active: boolean) => setPerched(active))
 	}, [])
 
 	// ESC from the main window docks her back (escape hatch if the perch hangs).
@@ -54,7 +54,7 @@ export function HrambleAvatar() {
 		if (!perched) return
 		const onKey = (e: KeyboardEvent) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			if (e.key === "Escape") (window as any).palot?.perchStop?.()
+			if (e.key === "Escape") (window as any).hramble?.perchStop?.()
 		}
 		window.addEventListener("keydown", onKey)
 		return () => window.removeEventListener("keydown", onKey)
@@ -62,7 +62,7 @@ export function HrambleAvatar() {
 
 	const togglePerch = () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const p = (window as any).palot
+		const p = (window as any).hramble
 		if (perched) p?.perchStop?.()
 		else p?.perchStart?.(avatar, true)
 	}
