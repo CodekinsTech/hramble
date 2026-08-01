@@ -1,7 +1,7 @@
-import { useAtom, useSetAtom } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { ChevronLeftIcon, ChevronRightIcon, RotateCwIcon, XIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import { browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
+import { browserAutoOpenAtom, browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
 
 // Electron's <webview> is a real embedded Chromium browser. Its JSX/DOM types
 // aren't in React's defaults, so we render it via a cast and type the ref to
@@ -38,10 +38,20 @@ function toUrl(input: string): string {
 export function BrowserPane() {
 	const [url, setUrl] = useAtom(browserUrlAtom)
 	const setPanelOpen = useSetAtom(browserPanelOpenAtom)
+	const autoOpen = useAtomValue(browserAutoOpenAtom)
 	const initialUrl = useRef(url).current
 	const [address, setAddress] = useState(url)
 	const [loading, setLoading] = useState(false)
 	const ref = useRef<WebviewEl | null>(null)
+
+	// Keep the latest auto-open preference in a ref so the long-lived
+	// browser-command effect (registered once) always reads the current value.
+	const autoOpenRef = useRef(autoOpen)
+	autoOpenRef.current = autoOpen
+	// Only pop the panel open if the user hasn't disabled auto-open.
+	const openPane = () => {
+		if (autoOpenRef.current) setPanelOpen(true)
+	}
 
 	// Agent-driven control: the agent's `browser` tool routes here via the
 	// main-process bridge. Perform the action on the webview and reply.
@@ -72,13 +82,13 @@ export function BrowserPane() {
 				try {
 					if (cmd.action === "artifact") {
 						// Render agent-generated HTML in the visible pane (the "artifact").
-						setPanelOpen(true)
+						openPane()
 						const html = cmd.html ?? ""
 						await wv.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
 						setAddress(cmd.title ? `artifact: ${cmd.title}` : "artifact")
 						reply({ ok: true, title: cmd.title ?? "artifact" })
 					} else if (cmd.action === "open") {
-						setPanelOpen(true)
+						openPane()
 						const target = toUrl(cmd.url || "")
 						setAddress(target)
 						setUrl(target)
@@ -93,7 +103,7 @@ export function BrowserPane() {
 					} else if (cmd.action === "click") {
 						// Real trusted click: locate the element, then dispatch actual
 						// mouse events at its coordinates (isTrusted, like a user click).
-						setPanelOpen(true)
+						openPane()
 						await wait(300) // let the pane lay out so coordinates are valid
 						const sel = cmd.selector ? JSON.stringify(cmd.selector) : "null"
 						const txt = cmd.text ? JSON.stringify(cmd.text) : "null"
@@ -122,7 +132,7 @@ export function BrowserPane() {
 					} else if (cmd.action === "type") {
 						// Real trusted typing: focus the field, then dispatch actual key
 						// events (isTrusted) character by character.
-						setPanelOpen(true)
+						openPane()
 						await wait(300)
 						const sel = cmd.selector ? JSON.stringify(cmd.selector) : "null"
 						const foc = await wv.executeJavaScript(`(() => {
@@ -152,7 +162,7 @@ export function BrowserPane() {
 						const after = await wv.executeJavaScript("({url:location.href})")
 						reply({ ok: true, url: after.url })
 					} else if (cmd.action === "screenshot") {
-						setPanelOpen(true)
+						openPane()
 						await new Promise((r) => setTimeout(r, 250)) // let it paint before capture
 						const img = await wv.capturePage()
 						const info = await wv.executeJavaScript("({url:location.href,title:document.title})")
@@ -197,7 +207,7 @@ export function BrowserPane() {
 							})()`),
 						)
 					} else if (cmd.action === "hover") {
-						setPanelOpen(true)
+						openPane()
 						await new Promise((r) => setTimeout(r, 200))
 						const sel = cmd.selector ? JSON.stringify(cmd.selector) : "null"
 						const loc = await wv.executeJavaScript(`(() => {
@@ -305,6 +315,14 @@ export function BrowserPane() {
 						className="h-7 w-full rounded-md border border-border bg-muted/40 px-2.5 text-xs outline-none focus:ring-2 focus:ring-ring"
 					/>
 				</form>
+				<button
+					type="button"
+					onClick={() => setPanelOpen(false)}
+					className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+					title="Close browser"
+				>
+					<XIcon className="size-4" />
+				</button>
 			</div>
 			<Webview
 				ref={ref}

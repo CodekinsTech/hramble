@@ -29,3 +29,22 @@ export function markHyperloopSession(sessionId: string) {
 
 /** Fast membership set derived from the persisted list. */
 export const hyperloopSessionSetAtom = atom((get) => new Set(get(hyperloopSessionIdsAtom)))
+
+/** A single Hyperloop step (serialisable — stored in localStorage). */
+export interface HyperStep {
+	text: string
+	status: "idle" | "running" | "done" | "failed"
+	sessionId?: string
+	timeEstimate?: string
+	preview?: string
+}
+
+/** The active Hyperloop run — persists across navigation so "View" → back works. */
+export interface HyperloopRun {
+	goal: string
+	steps: HyperStep[]
+	running: boolean
+	directory?: string
+}
+
+export const hyperloopRunAtom = atomWithStorage<HyperloopRun | null>("hramble:hyperloopRun", null)

@@ -206,15 +206,16 @@ export function SidebarLayout() {
 	const setWorkspaceMode = useSetAtom(workspaceModeAtom)
 	const hyperloopSet = useAtomValue(hyperloopSessionSetAtom)
 
-	// Sub-agents are filtered at the API level (roots: true); here we additionally
-	// split by workspace so Code hides Hyperloop runs and vice-versa.
+	// Sub-agents are filtered at the API level (roots: true). The 7 Hyperloop step
+	// sessions are an implementation detail — the user drives everything from the
+	// Hyperloop panel, so they're NEVER listed in the sidebar (in either mode).
+	// Hyperloop mode therefore shows no session list at all; Code mode shows only
+	// normal (non-Hyperloop) sessions.
 	const visibleAgents = useMemo(
 		() =>
-			agents.filter((a) =>
-				workspaceMode === "hyperloop"
-					? hyperloopSet.has(a.sessionId)
-					: !hyperloopSet.has(a.sessionId),
-			),
+			workspaceMode === "hyperloop"
+				? []
+				: agents.filter((a) => !hyperloopSet.has(a.sessionId)),
 		[agents, workspaceMode, hyperloopSet],
 	)
 
@@ -343,7 +344,7 @@ export function SidebarLayout() {
 						    can drive it regardless of the current route. */}
 						<div
 							className="shrink-0 overflow-hidden border-l border-border transition-[width] duration-250 ease-in-out"
-							style={{ width: browserPanelOpen ? "45%" : 0 }}
+							style={{ width: browserPanelOpen ? "45vw" : 0 }}
 						>
 							<div className="h-full" style={{ width: "45vw" }}>
 								<BrowserPane />

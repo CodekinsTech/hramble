@@ -20,6 +20,13 @@ extraResources:
     to: bin
     filter:
       - "**/*"
+  # OpenCode harness — the Claude-grade coding brain (system prompt, plan/general
+  # agents, plugins, skills). Seeded into a managed config dir on first run by
+  # harness-installer.ts, then loaded via OPENCODE_CONFIG_DIR at server spawn.
+  - from: resources/opencode-harness
+    to: opencode-harness
+    filter:
+      - "**/*"
   # Tray icon assets — must be at the root of process.resourcesPath
   # so tray.ts can find them via path.join(process.resourcesPath, "iconTemplate.png")
   - from: resources/iconTemplate.png

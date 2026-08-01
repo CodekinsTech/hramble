@@ -16,13 +16,14 @@ import {
 	usePromptInputController,
 } from "@hramble/ui/components/ai-elements/prompt-input"
 import { cn } from "@hramble/ui/lib/utils"
-import { useAtomValue, useSetAtom } from "jotai"
-import { workspaceModeAtom } from "../../atoms/workspace"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { type HyperStep, hyperloopRunAtom, markHyperloopSession, workspaceModeAtom } from "../../atoms/workspace"
 import {
 	ArrowUpToLineIcon,
 	CheckIcon,
 	ChevronUpIcon,
 	GitForkIcon,
+	InfinityIcon,
 	ListOrderedIcon,
 	Loader2Icon,
 	MonitorIcon,
@@ -1050,6 +1051,26 @@ function ChatInputSection({
 	const [goal, setGoal] = useState("")
 	const [decomposing, setDecomposing] = useState(false)
 
+	// Hyperloop: 7 parallel agents each working a separate step simultaneously.
+	const [hyperRun, setHyperRun] = useAtom(hyperloopRunAtom)
+	// Only restore a persisted run if it belongs to the current project directory
+	const hyperRunForDir = hyperRun?.directory === agent.directory ? hyperRun : null
+	const [hyperOpen, setHyperOpen] = useState(() => hyperRunForDir !== null)
+	// The Hyperloop panel belongs to Hyperloop mode ONLY — never show it in Code mode.
+	const hyperPanelOpen = workspaceMode === "hyperloop" && hyperOpen
+	const [hyperGoal, setHyperGoal] = useState(() => hyperRunForDir?.goal ?? "")
+	const [hyperDecomposing, setHyperDecomposing] = useState(false)
+	const hyperSteps = hyperRunForDir?.steps ?? []
+	const hyperRunning = hyperRunForDir?.running ?? false
+	const setHyperSteps = (updater: HyperStep[] | ((prev: HyperStep[]) => HyperStep[])) =>
+		setHyperRun((prev) => {
+			const next = typeof updater === "function" ? updater(prev?.steps ?? []) : updater
+			return prev ? { ...prev, steps: next } : { goal: hyperGoal, steps: next, running: false, directory: agent.directory }
+		})
+	const setHyperRunning = (running: boolean) =>
+		setHyperRun((prev) => (prev ? { ...prev, running } : null))
+	const [hyperReprompts, setHyperReprompts] = useState<string[]>(() => Array(7).fill(""))
+
 	// Initialize model, variant, and agent from the session's last user message.
 	const sessionMessages = useAtomValue(messagesFamily(agent.sessionId))
 	const projectModels = useAtomValue(projectModelsAtom)
@@ -1337,11 +1358,169 @@ function ChatInputSection({
 				setSteps(Array.from({ length: STEP_COUNT }, (_, i) => parsed[i] ?? ""))
 				setStepsOpen(true)
 			}
-			await client.session.delete({ sessionID: scratchId }).catch(() => {})
+			await client.session.delete({ sessionID: scratchId, directory: agent.directory }).catch(() => {})
 		} finally {
 			setDecomposing(false)
 		}
 	}, [goal, decomposing, agent.directory, effectiveModel])
+
+	// Hyperloop: decompose one big goal into 7 parallel steps via AI.
+	const hyperDecompose = useCallback(async () => {
+		const g = hyperGoal.trim()
+		if (!g || hyperDecomposing) return
+		const client = getProjectClient(agent.directory)
+		if (!client) return
+		setHyperDecomposing(true)
+		setHyperSteps([])
+		try {
+			const created = await client.session.create({ title: "Hyperloop plan", directory: agent.directory })
+			const scratchId = created.data?.id
+			if (!scratchId) return
+			await client.session.promptAsync({
+				sessionID: scratchId,
+				directory: agent.directory,
+				parts: [
+					{
+						type: "text",
+						text: `Break this goal into exactly 7 concrete implementation steps that can be worked on in PARALLEL by separate agents (each step touches different files/areas). Make each step a precise, self-contained instruction — include file names and what to do. At the end of each line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nReply ONLY as a numbered list (1., 2., …), one step per line. No preamble, no sub-bullets.\n\nExample line: 1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${g}`,
+					},
+				],
+				model: effectiveModel
+					? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
+					: undefined,
+			})
+			// Poll until the session finishes. A finished session drops out of the status map,
+			// so track seenBusy: once it's been busy and then disappears, it's genuinely done.
+			let seenBusy = false
+			for (let i = 0; i < 120; i++) {
+				await new Promise((r) => setTimeout(r, 1000))
+				const status = await client.session.status({ directory: agent.directory }).catch(() => null)
+				const sessionStatus = (status?.data as Record<string, { type: string }> | null)?.[scratchId]
+				if (sessionStatus?.type === "busy") { seenBusy = true; continue }
+				if (seenBusy) break
+				if (i >= 12) break
+			}
+			// Fetch the last assistant message
+			const msgs = await client.session.messages({ sessionID: scratchId, directory: agent.directory }).catch(() => null)
+			type MsgEntry = { info: { role: string }; parts: Array<{ type: string; text?: string }> }
+			const allMsgs: MsgEntry[] = (msgs?.data as MsgEntry[]) ?? []
+			const lastAssistant = [...allMsgs].reverse().find((m) => m.info?.role === "assistant")
+			const text = (lastAssistant?.parts ?? [])
+				.map((p) => (p.type === "text" ? p.text ?? "" : ""))
+				.join("\n")
+			const parsed = text
+				.split("\n")
+				.filter((l) => /^\s*\d+[.)]\s+/.test(l))
+				.map((l) => {
+					const raw = l.replace(/^\s*\d+[.)]\s*/, "").trim()
+					const timeMatch = raw.match(/\[~([^\]]+)\]\s*$/)
+					return {
+						text: timeMatch ? raw.slice(0, raw.lastIndexOf("[~")).trim() : raw,
+						timeEstimate: timeMatch ? `~${timeMatch[1]}` : undefined,
+					}
+				})
+				.filter((s) => s.text.length > 0)
+				.slice(0, 7)
+			if (parsed.length > 0) {
+				setHyperSteps(parsed.map((s) => ({ ...s, status: "idle" as const })))
+			}
+			await client.session.delete({ sessionID: scratchId, directory: agent.directory }).catch(() => {})
+		} finally {
+			setHyperDecomposing(false)
+		}
+	}, [hyperGoal, hyperDecomposing, agent.directory, effectiveModel])
+
+	// Hyperloop: launch all steps simultaneously — each in its own session.
+	const hyperLaunch = useCallback(async () => {
+		if (hyperRunning || hyperSteps.length === 0) return
+		const client = getProjectClient(agent.directory)
+		if (!client) return
+		setHyperRunning(true)
+		const dir = agent.directory
+		const sessionIds = await Promise.all(
+			hyperSteps.map((s, i) =>
+				client.session
+					.create({ title: `Hyperloop ${i + 1}: ${s.text.slice(0, 40)}`, directory: dir })
+					.then((r) => r.data?.id ?? null)
+					.catch(() => null),
+			),
+		)
+		// Tag every step session as Hyperloop so it's hidden from the sidebar.
+		for (const id of sessionIds) if (id) markHyperloopSession(id)
+		setHyperSteps((prev) =>
+			prev.map((s, i) => ({ ...s, status: "running" as const, sessionId: sessionIds[i] ?? undefined })),
+		)
+		const runOne = async (i: number) => {
+			const sid = sessionIds[i]
+			const step = hyperSteps[i]
+			if (!sid || !step) {
+				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
+				return
+			}
+			try {
+				await client.session.promptAsync({
+					sessionID: sid,
+					directory: dir,
+					parts: [{ type: "text", text: step.text }],
+					model: effectiveModel
+						? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
+						: undefined,
+				})
+				// Poll until idle (max 10 min). A finished session drops out of the status map,
+				// so break as soon as it's been busy and then disappears — not on timeout.
+				let seenBusy = false
+				for (let t = 0; t < 600; t++) {
+					await new Promise((r) => setTimeout(r, 1000))
+					const status = await client.session.status({ directory: dir }).catch(() => null)
+					const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
+					if (st?.type === "busy") { seenBusy = true; continue }
+					if (seenBusy) break
+					if (t >= 12) break
+				}
+				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const } : s)))
+			} catch {
+				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
+			}
+		}
+		await Promise.all(hyperSteps.map((_, i) => runOne(i)))
+		setHyperRunning(false)
+	}, [hyperRunning, hyperSteps, agent.directory, effectiveModel])
+
+	// Hyperloop: send a follow-up message to a specific step's session.
+	const hyperReprompt = useCallback(
+		async (i: number, text: string) => {
+			const step = hyperSteps[i]
+			if (!step?.sessionId || !text.trim()) return
+			const client = getProjectClient(agent.directory)
+			if (!client) return
+			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "running" as const } : s)))
+			setHyperReprompts((prev) => prev.map((r, j) => (j === i ? "" : r)))
+			try {
+				const res = await client.session.prompt({
+					sessionID: step.sessionId,
+					parts: [{ type: "text", text }],
+					model: effectiveModel
+						? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
+						: undefined,
+				})
+				const preview = (res.data?.parts ?? [])
+					.map((p) => (p.type === "text" ? p.text : ""))
+					.join("\n")
+					.trim()
+					.split("\n")
+					.filter((l) => l.trim())
+					.slice(-2)
+					.join(" · ")
+					.slice(0, 140)
+				setHyperSteps((prev) =>
+					prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview } : s)),
+				)
+			} catch {
+				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
+			}
+		},
+		[hyperSteps, agent.directory, effectiveModel],
+	)
 
 	const handleSend = useCallback(
 		async (text: string, files?: FileAttachment[]) => {
@@ -1779,6 +1958,210 @@ function ChatInputSection({
 									onSelect={handleMentionSelect}
 									onClose={handleMentionClose}
 								/>
+								{hyperPanelOpen && (
+									<div className="mb-2 rounded-xl border border-primary/30 bg-muted/30 p-3">
+										<div className="mb-2 flex items-center justify-between">
+											<span className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
+												<InfinityIcon className="size-3.5 text-primary" />
+												Hyperloop — 7 parallel agents
+												{hyperRunning && (
+													<span className="text-primary">
+														· {hyperSteps.filter((s) => s.status === "done").length}/{hyperSteps.length} done
+													</span>
+												)}
+											</span>
+											<button
+												type="button"
+												onClick={() => setHyperOpen(false)}
+												className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+											>
+												<XIcon className="size-3.5" />
+											</button>
+										</div>
+
+										{/* Goal input — shown when no steps yet */}
+										{hyperSteps.length === 0 && (
+											<div className="flex items-center gap-2">
+												<input
+													value={hyperGoal}
+													onChange={(e) => setHyperGoal(e.target.value)}
+													onKeyDown={(e) => {
+														if (e.key === "Enter") {
+															e.preventDefault()
+															hyperDecompose()
+														}
+													}}
+													placeholder="Describe your goal — AI splits it into 7 parallel steps"
+													disabled={hyperDecomposing}
+													className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+												/>
+												<button
+													type="button"
+													onClick={hyperDecompose}
+													disabled={!hyperGoal.trim() || hyperDecomposing || !isConnected}
+													className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 font-medium text-xs hover:bg-muted disabled:opacity-50"
+												>
+													{hyperDecomposing ? (
+														<Loader2Icon className="size-3.5 animate-spin" />
+													) : (
+														<SparklesIcon className="size-3.5" />
+													)}
+													{hyperDecomposing ? "Planning…" : "Decompose"}
+												</button>
+											</div>
+										)}
+
+										{/* Step cards — vertical column */}
+										{hyperSteps.length > 0 && (
+											<div className="space-y-1.5">
+												{hyperSteps.map((step, i) => (
+													<div
+														key={i}
+														className={`rounded-lg border p-2.5 transition-colors ${
+															step.status === "running"
+																? "border-primary/60 bg-primary/5"
+																: step.status === "done"
+																	? "border-emerald-500/40"
+																	: step.status === "failed"
+																		? "border-red-500/40"
+																		: "border-border"
+														}`}
+													>
+														<div className="flex items-center gap-2">
+															<span className="w-4 shrink-0 text-center text-[11px] text-muted-foreground">
+																{step.status === "running" ? (
+																	<InfinityIcon className="size-3.5 animate-spin text-primary" />
+																) : step.status === "done" ? (
+																	<CheckIcon className="size-3.5 text-emerald-500" />
+																) : step.status === "failed" ? (
+																	<XIcon className="size-3.5 text-red-500" />
+																) : (
+																	i + 1
+																)}
+															</span>
+															<span className="flex-1 min-w-0">
+																	<span className="block truncate text-[13px] font-medium">{step.text}</span>
+																	{step.timeEstimate && <span className="text-[10px] text-muted-foreground">{step.timeEstimate}</span>}
+																</span>
+															<span
+																className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+																	step.status === "done"
+																		? "bg-emerald-500/10 text-emerald-600"
+																		: step.status === "running"
+																			? "bg-primary/10 text-primary"
+																			: step.status === "failed"
+																				? "bg-red-500/10 text-red-500"
+																				: "bg-muted text-muted-foreground"
+																}`}
+															>
+																{step.status === "idle" ? "queued" : step.status}
+															</span>
+														</div>
+														{step.preview && (
+															<p className="mt-1 line-clamp-2 pl-6 text-[11px] text-muted-foreground">
+																{step.preview}
+															</p>
+														)}
+														{(step.sessionId || step.status === "running" || step.status === "failed") && (
+															<div className="mt-1 flex gap-1.5 pl-6">
+																{step.status === "running" && step.sessionId && (
+																	<button type="button" onClick={async () => {
+																		const c = getProjectClient(agent.directory)
+																		if (c && step.sessionId) {
+																			await c.session.abort({ sessionID: step.sessionId }).catch(() => {})
+																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "failed" as const } : s))
+																		}
+																	}} className="rounded px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10">Stop</button>
+																)}
+																{step.status === "failed" && (
+																	<button type="button" onClick={async () => {
+																		const c = getProjectClient(agent.directory)
+																		if (!c) return
+																		setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "running" as const } : s))
+																		try {
+																			const r = await c.session.create({ title: `Retry ${i + 1}: ${step.text.slice(0, 40)}` })
+																			const sid = r.data?.id
+																			if (!sid) throw new Error("no id")
+																			markHyperloopSession(sid)
+																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, sessionId: sid } : s))
+																			await c.session.prompt({ sessionID: sid, parts: [{ type: "text", text: step.text }], model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined })
+																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "done" as const } : s))
+																		} catch {
+																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "failed" as const } : s))
+																		}
+																	}} className="rounded px-2 py-0.5 text-[10px] text-amber-500 hover:bg-amber-500/10">Retry</button>
+																)}
+															</div>
+														)}
+														{step.status === "done" && (
+															<div className="mt-1.5 flex gap-1.5 pl-6">
+																<input
+																	value={hyperReprompts[i] ?? ""}
+																	onChange={(e) =>
+																		setHyperReprompts((prev) =>
+																			prev.map((r, j) => (j === i ? e.target.value : r)),
+																		)
+																	}
+																	onKeyDown={(e) => {
+																		if (e.key === "Enter") {
+																			e.preventDefault()
+																			hyperReprompt(i, hyperReprompts[i] ?? "")
+																		}
+																	}}
+																	placeholder={`Follow up on step ${i + 1}…`}
+																	className="h-7 flex-1 rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+																/>
+																<button
+																	type="button"
+																	onClick={() => hyperReprompt(i, hyperReprompts[i] ?? "")}
+																	disabled={!hyperReprompts[i]?.trim()}
+																	className="rounded-md border border-border px-2 py-1 text-[11px] text-primary hover:bg-muted disabled:opacity-40"
+																>
+																	Send
+																</button>
+															</div>
+														)}
+													</div>
+												))}
+											</div>
+										)}
+
+										{/* Action row */}
+										{hyperSteps.length > 0 && (
+											<div className="mt-2 flex items-center gap-2">
+												{!hyperRunning ? (
+													<button
+														type="button"
+														onClick={hyperLaunch}
+														disabled={!isConnected || hyperSteps.every((s) => s.status !== "idle")}
+														className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:opacity-90 disabled:opacity-50"
+													>
+														<PlayIcon className="size-3.5" />
+														Launch all {hyperSteps.length}
+													</button>
+												) : (
+													<span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+														<Loader2Icon className="size-3.5 animate-spin" />
+														Running in parallel…
+													</span>
+												)}
+												<button
+													type="button"
+													onClick={() => {
+														setHyperRun(null)
+														setHyperGoal("")
+														setHyperReprompts(Array(7).fill(""))
+													}}
+													disabled={hyperRunning}
+													className="rounded-md px-2 py-1.5 font-medium text-muted-foreground text-xs hover:text-foreground disabled:opacity-40"
+												>
+													Re-plan
+												</button>
+											</div>
+										)}
+									</div>
+								)}
+
 								{stepsOpen && (
 									<div className="mb-2 rounded-xl border border-border bg-muted/30 p-3">
 										<div className="mb-2 flex items-center justify-between">
@@ -1952,14 +2335,25 @@ function ChatInputSection({
 									{/* Toolbar inside the card — agent + model + variant selectors + submit */}
 									<PromptInputFooter>
 										<PromptInputTools>
-											<AttachButton disabled={!isConnected} />
+											{workspaceMode === "hyperloop" && (
+										<PromptInputButton
+												onClick={() => setHyperOpen((v) => !v)}
+												className={
+													hyperOpen || hyperSteps.length > 0 ? "text-primary" : ""
+												}
+												title="Hyperloop — 7 parallel agents, each on a separate step"
+											>
+												<InfinityIcon className="size-4" />
+											</PromptInputButton>
+										)}
 											<PromptInputButton
 												onClick={() => setStepsOpen((v) => !v)}
 												className={stepsOpen || hasSteps ? "text-primary" : ""}
-												title="Step list — queue up to 7 steps and run them in sequence"
+												title="Loop — queue up to 7 steps and run them in sequence"
 											>
 												<ListOrderedIcon className="size-4" />
 											</PromptInputButton>
+											<AttachButton disabled={!isConnected} />
 											<PromptToolbar
 												agents={openCodeAgents ?? []}
 												selectedAgent={selectedAgent}

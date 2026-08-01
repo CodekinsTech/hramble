@@ -9,6 +9,7 @@ import { Switch } from "@hramble/ui/components/switch"
 import { useAtomValue, useSetAtom } from "jotai"
 import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
+import { browserAutoOpenAtom } from "../../atoms/browser"
 import { type DisplayMode, displayModeAtom, opaqueWindowsAtom } from "../../atoms/preferences"
 import { useColorScheme, useSetColorScheme } from "../../hooks/use-theme"
 import type { ColorScheme } from "../../lib/themes"
@@ -34,7 +35,25 @@ export function GeneralSettings() {
 				<OpaqueWindowsRow />
 				<DisplayModeRow />
 			</SettingsSection>
+
+			<SettingsSection title="Browser">
+				<BrowserAutoOpenRow />
+			</SettingsSection>
 		</div>
+	)
+}
+
+function BrowserAutoOpenRow() {
+	const autoOpen = useAtomValue(browserAutoOpenAtom)
+	const setAutoOpen = useSetAtom(browserAutoOpenAtom)
+
+	return (
+		<SettingsRow
+			label="Auto-open browser panel"
+			description="Pop the browser panel open when the agent uses it. Turn off to keep it closed until you open it with the globe button."
+		>
+			<Switch checked={autoOpen} onCheckedChange={setAutoOpen} />
+		</SettingsRow>
 	)
 }
 

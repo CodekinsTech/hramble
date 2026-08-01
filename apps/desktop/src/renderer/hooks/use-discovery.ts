@@ -147,7 +147,9 @@ export function useDiscovery() {
 							return loadProjectSessions(
 								project.worktree!,
 								sandboxDirs?.size ? sandboxDirs : undefined,
-								{ limit: 5, roots: true },
+								// Prefetch enough per project to populate the flat "Sessions"
+								// list (the folder tree that used to lazy-load more is gone).
+								{ limit: 20, roots: true },
 							)
 						}),
 					)

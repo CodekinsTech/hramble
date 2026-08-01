@@ -40,6 +40,7 @@ import { useServerConnection } from "../hooks/use-server"
 import type { ChatTurn } from "../hooks/use-session-chat"
 import type { Agent, FileAttachment, QuestionAnswer } from "../lib/types"
 import { fetchOpenInTargets, isElectron, openInTarget } from "../services/backend"
+import { messagesFamily } from "../atoms/messages"
 import { useSetAppBarContent } from "./app-bar-context"
 import { ChatView } from "./chat"
 import { HrambleWordmark } from "./hramble-wordmark"
@@ -393,14 +394,18 @@ function SessionAppBarContent({
 }) {
 	const navigate = useNavigate()
 	const diffStats = useAtomValue(sessionDiffStatsFamily(agent.sessionId))
+	const messages = useAtomValue(messagesFamily(agent.sessionId))
+	const hasMessages = messages.length > 0
 
 	return (
 		<div className="flex h-full w-full min-w-0 items-center gap-2.5">
-			{/* App name */}
-			<HrambleWordmark className="hidden h-[11px] w-auto shrink-0 text-muted-foreground/70 md:block" />
-
-			{/* Separator */}
-			<div className="hidden h-3 w-px shrink-0 bg-border/60 md:block" />
+			{/* App name — hidden once the session has messages */}
+			{!hasMessages && (
+				<>
+					<HrambleWordmark className="hidden h-[11px] w-auto shrink-0 text-muted-foreground/70 md:block" />
+					<div className="hidden h-3 w-px shrink-0 bg-border/60 md:block" />
+				</>
+			)}
 
 			{/* Breadcrumb: project / [branch badge] / session name */}
 			<div

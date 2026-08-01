@@ -656,6 +656,8 @@ interface StatusBarProps {
 	branchSlot?: React.ReactNode
 	/** Optional extra slot rendered on the left side (e.g. worktree toggle) */
 	extraSlot?: React.ReactNode
+	/** Optional folder picker rendered at the far left (Claude-style working dir) */
+	folderSlot?: React.ReactNode
 	/** Session ID for context usage computation */
 	sessionId?: string
 	/** Provider data for context limit lookup */
@@ -681,6 +683,7 @@ export function StatusBar({
 	interruptCount,
 	branchSlot,
 	extraSlot,
+	folderSlot,
 	sessionId,
 	providers,
 	compaction,
@@ -700,6 +703,7 @@ export function StatusBar({
 		<div className="flex min-w-0 items-center gap-3 overflow-hidden px-2 pt-2 text-[11px] text-muted-foreground/60">
 			{/* Left side — environment + connection + interrupt hint */}
 			<div className="flex shrink-0 items-center gap-3">
+				{folderSlot}
 				{extraSlot ?? (
 					<div className="flex items-center gap-1">
 						<MonitorIcon className="size-3" />

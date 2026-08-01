@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://localhost:11434/v1"
+      },
+      "models": {
+        "qwen3-coder:30b": {
+          "name": "Qwen3 Coder 30B (local)"
+        },
+        "qwen2.5-coder:14b": {
+          "name": "Qwen2.5 Coder 14B (local)"
+        }
+      }
+    }
+  },
+  "agent": {
+    "build": {
+      "prompt": "{file:{{HARNESS_DIR}}/professional-coder.md}"
+    },
+    "plan": {
+      "prompt": "{file:{{HARNESS_DIR}}/plan-preamble.md}\n{file:{{HARNESS_DIR}}/professional-coder.md}",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "patch": false
+      }
+    },
+    "general": {
+      "prompt": "{file:{{HARNESS_DIR}}/professional-coder.md}"
+    }
+  },
+  "instructions": [
+    "{{HARNESS_DIR}}/memory-harness.md",
+    "HRAMBLE.md"
+  ],
+  "plugin": [
+    "{{HARNESS_DIR}}/plugin/hramble-memory.js",
+    "{{HARNESS_DIR}}/plugin/hramble-repomap.js",
+    "{{HARNESS_DIR}}/plugin/hramble-browser.js",
+    "{{HARNESS_DIR}}/plugin/hramble-safety.js",
+    "{{HARNESS_DIR}}/plugin/hramble-claude-guard.js",
+    "{{HARNESS_DIR}}/plugin/hramble-hooks.js",
+    "{{HARNESS_DIR}}/plugin/hramble-leanprompt.js",
+    "{{HARNESS_DIR}}/plugin/hramble-artifact.js",
+    "{{HARNESS_DIR}}/plugin/hramble-preview.js",
+    "{{HARNESS_DIR}}/plugin/hramble-notebook.js",
+    "{{HARNESS_DIR}}/plugin/hramble-tasks.js",
+    "{{HARNESS_DIR}}/plugin/hramble-workflow.js",
+    "{{HARNESS_DIR}}/plugin/hramble-monitor.js",
+    "{{HARNESS_DIR}}/plugin/hramble-schedule.js",
+    "{{HARNESS_DIR}}/plugin/hramble-notify.js",
+    "{{HARNESS_DIR}}/plugin/hramble-messages.js"
+  ],
+  "skills": {
+    "paths": [
+      "{{HARNESS_DIR}}/skills"
+    ]
+  }
+}

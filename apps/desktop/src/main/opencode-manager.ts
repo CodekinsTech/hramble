@@ -6,6 +6,7 @@ import { dialog } from "electron"
 import type { LocalServerConfig } from "../preload/api"
 import { getCredential } from "./credential-store"
 import { findFreePort } from "./find-free-port"
+import { getManagedConfigDir } from "./harness-installer"
 import { createLogger } from "./logger"
 import { startNotificationWatcher, stopNotificationWatcher } from "./notification-watcher"
 import { getListeningProcessOwner, isCurrentUser, isProcessAlive } from "./process-owner"
@@ -336,10 +337,18 @@ async function spawnServer(
 		binDir: opencodeBinDir,
 	})
 
+	// Layer Hramble's managed harness (Claude-grade prompt, plan/general agents,
+	// plugins, skills) on top of the user's own OpenCode config. OPENCODE_CONFIG_DIR
+	// is additive, so this never clobbers the user's providers/models/MCP. Null in
+	// dev builds, where ~/.config/opencode is used directly.
+	const managedConfigDir = getManagedConfigDir()
+	const env: NodeJS.ProcessEnv = { ...process.env, PATH: augmentedPath }
+	if (managedConfigDir) env.OPENCODE_CONFIG_DIR = managedConfigDir
+
 	const proc = spawn("opencode", args, {
 		cwd: homedir(),
 		stdio: "pipe",
-		env: { ...process.env, PATH: augmentedPath },
+		env,
 	})
 
 	const url = `http://${hostname}:${port}`

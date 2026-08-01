@@ -6,6 +6,7 @@ import { app, BrowserWindow, Menu, session, shell } from "electron"
 import { initAutomations, shutdownAutomations } from "./automation"
 import { migrateLegacyStorage } from "./automation/paths"
 import { initCredentialStore } from "./credential-store"
+import { installHarness } from "./harness-installer"
 import { getOpaqueWindowsPref, registerIpcHandlers } from "./ipc-handlers"
 import { installLiquidGlass, resolveWindowChrome } from "./liquid-glass"
 import { createLogger } from "./logger"
@@ -294,6 +295,11 @@ if (!gotLock) {
 		// One-time move of legacy "palot" storage → "hramble". MUST run first, before
 		// anything touches getDataDir()/getConfigDir() (automations DB, server lockfile).
 		migrateLegacyStorage()
+
+		// Seed the Claude-grade OpenCode harness (system prompt, plan/general agents,
+		// plugins, skills) into a managed config dir. Must run before the OpenCode
+		// server is spawned so OPENCODE_CONFIG_DIR (set in opencode-manager) points at it.
+		installHarness()
 
 		// Bypass Chromium's Private Network Access checks for OpenCode server requests.
 		// Chromium (134+/Electron 40+) blocks renderer fetch() to private network addresses
