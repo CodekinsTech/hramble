@@ -86,12 +86,20 @@ export function createTray(windowGetter: () => BrowserWindow | undefined): void 
 	let icon: Electron.NativeImage
 
 	if (IS_MAC) {
+		// Prefer the exact full-colour cat-head mark (non-template so it keeps its
+		// colours in the menu bar). createFromPath auto-loads the @2x variant for
+		// retina. Fall back to the monochrome template if the colour icon is missing.
+		const colorPath = path.join(resourcesPath, "iconTrayColor.png")
 		const templatePath = path.join(resourcesPath, "iconTemplate.png")
-		if (!fs.existsSync(templatePath)) {
-			log.error(`Tray icon not found at ${templatePath} — tray will be invisible`)
+		if (fs.existsSync(colorPath)) {
+			icon = nativeImage.createFromPath(colorPath)
+		} else {
+			if (!fs.existsSync(templatePath)) {
+				log.error(`Tray icon not found at ${templatePath} — tray will be invisible`)
+			}
+			icon = nativeImage.createFromPath(templatePath)
+			icon.setTemplateImage(true)
 		}
-		icon = nativeImage.createFromPath(templatePath)
-		icon.setTemplateImage(true)
 	} else if (IS_LINUX) {
 		// Linux: use 22x22 icon (standard tray size), fallback to icon.png if not available.
 		// Explicitly resize to 22x22 to ensure the GTK pixbuf is in a format the

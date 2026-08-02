@@ -33,6 +33,10 @@ extraResources:
     to: iconTemplate.png
   - from: resources/iconTemplate@2x.png
     to: iconTemplate@2x.png
+  - from: resources/iconTrayColor.png
+    to: iconTrayColor.png
+  - from: resources/iconTrayColor@2x.png
+    to: iconTrayColor@2x.png
   - from: resources/icon.png
     to: icon.png
   - from: resources/iconTray.png
