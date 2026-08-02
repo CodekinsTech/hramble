@@ -5,17 +5,91 @@
 // HTTP API rather than shelling out, so it works whether Ollama was installed
 // via the app, Homebrew, or the install script.
 
-import { execFile } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
+import os from "node:os"
 import { promisify } from "node:util"
 import { BrowserWindow, ipcMain, shell } from "electron"
+import { createLogger } from "./logger"
 
 const execFileAsync = promisify(execFile)
+const log = createLogger("ollama")
 
 const OLLAMA_URL = "http://localhost:11434"
 
 /** The model we recommend: MoE (30B total / ~3B active) so it's fast, and
  *  trained for agentic tool use — small dense models drop the agent loop. */
 export const RECOMMENDED_MODEL = "qwen3-coder:30b"
+
+/**
+ * Pick a safe context window for THIS machine.
+ *
+ * Ollama defaults every model to a tiny 4096-token window — far too small for a
+ * coding agent's prompt, so large prompts silently truncate and the model breaks.
+ * But too large (e.g. 32K on a 32GB Mac) blows the GPU memory budget for the 30B
+ * model and generation OOMs. So we scale the context to installed RAM, tuned so
+ * the recommended 30B (~18GB) plus its KV cache still fits GPU memory.
+ */
+export function targetContextLength(): number {
+	const gb = os.totalmem() / 1024 ** 3
+	if (gb >= 60) return 32768 // 64GB+ — room for a big cache
+	if (gb >= 28) return 16384 // 32GB — verified sweet spot for the 30B (32K OOMs)
+	if (gb >= 14) return 8192 // 16GB — small model territory
+	return 4096 // 8GB — bare minimum
+}
+
+/** Is the Ollama HTTP daemon reachable? */
+async function daemonRunning(): Promise<boolean> {
+	try {
+		await fetchJson("/api/version", 1500)
+		return true
+	} catch {
+		return false
+	}
+}
+
+/**
+ * Ensure Ollama is running WITH the right context window. If the daemon isn't
+ * up, Hramble starts it itself with OLLAMA_CONTEXT_LENGTH set — so local models
+ * "just work" without the user hand-configuring anything. If a daemon is already
+ * running (e.g. the user's own Ollama app) we leave it alone rather than fight
+ * for the port; its context is whatever it was started with.
+ */
+export async function ensureManagedOllama(): Promise<void> {
+	if (await daemonRunning()) {
+		log.info("[ollama] daemon already running — leaving it as-is")
+		return
+	}
+	const ctx = targetContextLength()
+	try {
+		// Resolve the binary via a login shell so we pick up Homebrew / app PATHs.
+		const { stdout } = await execFileAsync("/bin/bash", ["-lc", "command -v ollama"], {
+			timeout: 4000,
+		})
+		const bin = stdout.trim()
+		if (!bin) {
+			log.warn("[ollama] binary not found — cannot auto-start")
+			return
+		}
+		log.info("[ollama] starting managed daemon", { bin, contextLength: ctx })
+		const child = spawn(bin, ["serve"], {
+			env: { ...process.env, OLLAMA_CONTEXT_LENGTH: String(ctx) },
+			detached: true,
+			stdio: "ignore",
+		})
+		child.unref()
+		// Give it a moment to bind the port.
+		for (let i = 0; i < 20; i++) {
+			await new Promise((r) => setTimeout(r, 500))
+			if (await daemonRunning()) {
+				log.info("[ollama] managed daemon up", { contextLength: ctx })
+				return
+			}
+		}
+		log.warn("[ollama] daemon did not come up in time")
+	} catch (e) {
+		log.warn("[ollama] auto-start failed", e)
+	}
+}
 
 type OllamaModel = { name: string; size: number }
 
@@ -37,6 +111,10 @@ async function binaryInstalled(): Promise<boolean> {
 }
 
 export function registerOllama() {
+	// Auto-start Ollama with a hardware-tuned context window so local models work
+	// out of the box (no user config, no 4K-truncation). Fire-and-forget on boot.
+	void ensureManagedOllama()
+
 	// Status: is Ollama installed, is it running, and what's already pulled?
 	ipcMain.handle("ollama:status", async () => {
 		try {
@@ -48,6 +126,7 @@ export function registerOllama() {
 				models,
 				hasRecommended: models.some((m) => m.name.startsWith(RECOMMENDED_MODEL.split(":")[0])),
 				recommended: RECOMMENDED_MODEL,
+				contextLength: targetContextLength(),
 			}
 		} catch {
 			// Daemon unreachable — distinguish "not installed" from "not started".
@@ -57,6 +136,7 @@ export function registerOllama() {
 				models: [],
 				hasRecommended: false,
 				recommended: RECOMMENDED_MODEL,
+				contextLength: targetContextLength(),
 			}
 		}
 	})
