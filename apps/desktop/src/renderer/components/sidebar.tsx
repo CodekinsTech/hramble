@@ -26,7 +26,7 @@ import {
 } from "@hramble/ui/components/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { useNavigate, useParams } from "@tanstack/react-router"
-import { useAtomValue } from "jotai"
+import { useAtomValue, useSetAtom } from "jotai"
 import {
 	AlertCircleIcon,
 	BotIcon,
@@ -45,6 +45,13 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { activeServerConfigAtom } from "../atoms/connection"
 import { automationsEnabledAtom } from "../atoms/feature-flags"
+import {
+	type HyperloopRun,
+	hyperloopRunAtom,
+	hyperloopRunsAtom,
+	hyperloopSessionSetAtom,
+	workspaceModeAtom,
+} from "../atoms/workspace"
 import type { Agent, AgentStatus, SidebarProject } from "../lib/types"
 import { ServerIndicator } from "./server-indicator"
 import { HrambleAvatar } from "./hramble-avatar"
@@ -94,6 +101,35 @@ interface AppSidebarContentProps {
 // ============================================================
 
 /**
+ * A single Hyperloop run in the sidebar — ONE row per run (goal), not the 7
+ * step sessions. Clicking it reopens the run in the Hyperloop panel.
+ */
+function HyperloopRunItem({
+	run,
+	isSelected,
+	onOpen,
+}: {
+	run: HyperloopRun
+	isSelected: boolean
+	onOpen: () => void
+}) {
+	const done = run.steps.filter((s) => s.status === "done").length
+	const failed = run.steps.some((s) => s.status === "failed")
+	const dot = run.running ? "bg-primary animate-pulse" : failed ? "bg-red-500" : "bg-green-500"
+	return (
+		<SidebarMenuItem>
+			<SidebarMenuButton isActive={isSelected} tooltip={run.goal} onClick={onOpen}>
+				<span className={`size-2 shrink-0 rounded-full ${dot}`} />
+				<span className="min-w-0 flex-1 truncate text-[13px]">{run.goal || "Untitled run"}</span>
+				<span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+					{done}/{run.steps.length}
+				</span>
+			</SidebarMenuButton>
+		</SidebarMenuItem>
+	)
+}
+
+/**
  * Default sidebar content: Active Now, Recent, Projects groups + Settings footer.
  * Rendered inside the `<Sidebar>` shell provided by `SidebarLayout`.
  */
@@ -113,13 +149,29 @@ export function AppSidebarContent({
 	const automationsEnabled = useAtomValue(automationsEnabledAtom)
 	const activeServer = useAtomValue(activeServerConfigAtom)
 	const isLocalServer = activeServer.type === "local"
+	// Each mode gets its OWN session history: Code shows normal sessions,
+	// Hyperloop shows only Hyperloop-tagged ones. (Same projects; separate lists.)
+	const workspaceMode = useAtomValue(workspaceModeAtom)
+	const hyperloopSessions = useAtomValue(hyperloopSessionSetAtom)
+	// Hyperloop history: one entry per run (not the 7 step sessions).
+	const hyperloopRuns = useAtomValue(hyperloopRunsAtom)
+	const activeRun = useAtomValue(hyperloopRunAtom)
+	const setActiveRun = useSetAtom(hyperloopRunAtom)
 
-	// Single flat list of sessions (Claude-style) — all top-level sessions,
-	// active ones first, then by most-recently-active. No project-folder tree.
+	// Flat list of sessions (Claude-style), filtered to the active mode, active
+	// ones first, then by most-recently-active. No project-folder tree.
 	const sessionList = useMemo(
 		() =>
 			agents
 				.filter((a) => !a.parentId)
+				.filter((a) => {
+					// A session is Hyperloop if it's tagged OR named like a Hyperloop step
+					// ("Hyperloop plan", "Hyperloop 3: …"). The name check catches older
+					// runs whose step sessions predate tagging, so they never leak into the
+					// Code list — the 7 steps are not pages the user should browse.
+					const isHyper = hyperloopSessions.has(a.id) || /^Hyperloop(\s|:|$)/i.test(a.name)
+					return workspaceMode === "hyperloop" ? isHyper : !isHyper
+				})
 				.sort((a, b) => {
 					const aActive =
 						a.status === "running" || a.status === "waiting" || a.status === "failed"
@@ -129,10 +181,10 @@ export function AppSidebarContent({
 					return b.lastActiveAt - a.lastActiveAt
 				})
 				.slice(0, SESSION_COUNT),
-		[agents],
+		[agents, workspaceMode, hyperloopSessions],
 	)
 
-	const hasContent = agents.length > 0 || projects.length > 0
+	const hasContent = agents.length > 0 || projects.length > 0 || hyperloopRuns.length > 0
 	const showEmptyState = !hasContent
 
 	return (
@@ -196,7 +248,7 @@ export function AppSidebarContent({
 				{/* Sessions — flat list, Claude-style (no project-folder tree) */}
 				{hasContent && (
 					<SidebarGroup>
-						<SidebarGroupLabel>Sessions</SidebarGroupLabel>
+						<SidebarGroupLabel>{workspaceMode === "hyperloop" ? "Hyperloop runs" : "Sessions"}</SidebarGroupLabel>
 						{/* Action buttons: command palette + add folder */}
 						<div className="absolute top-3.5 right-3 flex items-center gap-0.5">
 							<Tooltip>
@@ -234,19 +286,40 @@ export function AppSidebarContent({
 						</div>
 						<SidebarGroupContent>
 							<SidebarMenu>
-							{sessionList.map((agent) => (
-								<SessionItem
-									key={agent.id}
-									agent={agent}
-									isSelected={agent.id === selectedSessionId}
-									onRename={onRenameSession}
-									onDelete={onDeleteSession}
-									onFork={onForkSession}
-									showProject
-								/>
-							))}
-							{sessionList.length === 0 && (
-								<p className="px-2 py-1.5 text-xs text-muted-foreground/60">No sessions yet</p>
+							{workspaceMode === "hyperloop" ? (
+								<>
+									{hyperloopRuns.map((run) => (
+										<HyperloopRunItem
+											key={run.id}
+											run={run}
+											isSelected={run.id === activeRun?.id}
+											onOpen={() => {
+												setActiveRun(run)
+												navigate({ to: "/" })
+											}}
+										/>
+									))}
+									{hyperloopRuns.length === 0 && (
+										<p className="px-2 py-1.5 text-xs text-muted-foreground/60">No runs yet</p>
+									)}
+								</>
+							) : (
+								<>
+									{sessionList.map((agent) => (
+										<SessionItem
+											key={agent.id}
+											agent={agent}
+											isSelected={agent.id === selectedSessionId}
+											onRename={onRenameSession}
+											onDelete={onDeleteSession}
+											onFork={onForkSession}
+											showProject
+										/>
+									))}
+									{sessionList.length === 0 && (
+										<p className="px-2 py-1.5 text-xs text-muted-foreground/60">No sessions yet</p>
+									)}
+								</>
 							)}
 							</SidebarMenu>
 						</SidebarGroupContent>

@@ -13,7 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
-import { CodeIcon, InfinityIcon, PanelLeftIcon, PlusIcon } from "lucide-react"
+import { CodeIcon, HomeIcon, InfinityIcon, PanelLeftIcon, SearchIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
@@ -36,7 +36,7 @@ import { UpdateBanner } from "./update-banner"
 
 /** Top-of-sidebar tabs that switch between the normal coder and the autonomous
  *  Hyperloop workspace. Same projects; different session list + run behaviour. */
-function WorkspaceSwitcher({
+export function WorkspaceSwitcher({
 	mode,
 	onChange,
 }: {
@@ -133,13 +133,14 @@ function NarrowWindowCollapser() {
 // ============================================================
 
 /**
- * Absolutely positioned window controls (sidebar toggle + new session) that
- * stay next to the macOS traffic lights regardless of sidebar state.
+ * Absolutely positioned window control (sidebar toggle) that stays next to the
+ * macOS traffic lights regardless of sidebar state.
  * Must be rendered inside a SidebarProvider.
  */
 function WindowControls() {
 	const { toggleSidebar } = useSidebar()
 	const navigate = useNavigate()
+	const setCommandPaletteOpen = useSetCommandPaletteOpen()
 
 	return (
 		<div
@@ -173,13 +174,28 @@ function WindowControls() {
 							variant="ghost"
 							size="icon"
 							className="size-7 shrink-0"
-							onClick={() => navigate({ to: "/" })}
+							onClick={() => navigate({ to: "/home" })}
 						/>
 					}
 				>
-					<PlusIcon className="size-3.5" />
+					<HomeIcon className="size-3.5" />
 				</TooltipTrigger>
-				<TooltipContent>New session (&#8984;N)</TooltipContent>
+				<TooltipContent>Home</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => setCommandPaletteOpen(true)}
+						/>
+					}
+				>
+					<SearchIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Search (&#8984;K)</TooltipContent>
 			</Tooltip>
 		</div>
 	)

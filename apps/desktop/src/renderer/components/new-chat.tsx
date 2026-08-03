@@ -27,7 +27,9 @@ import {
 	GitForkIcon,
 	GitPullRequestIcon,
 	InfinityIcon,
+	ListIcon,
 	MonitorIcon,
+	NetworkIcon,
 	PencilIcon,
 	PlayIcon,
 	RotateCwIcon,
@@ -45,7 +47,8 @@ import {
 import { appStore } from "../atoms/store"
 import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
 import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
-import { type HyperStep, hyperloopRunAtom, markHyperloopSession, workspaceModeAtom } from "../atoms/workspace"
+import { type HyperStep, hyperloopRunAtom, markHyperloopSession, upsertHyperloopRun, workspaceModeAtom } from "../atoms/workspace"
+import { type GraphNodeStatus, graphViewAtom, recordGraph } from "../atoms/graph"
 import { useAgents, useProjectList } from "../hooks/use-agents"
 import { NEW_CHAT_DRAFT_KEY, useDraftActions, useDraftSnapshot } from "../hooks/use-draft"
 import type { ModelRef } from "../hooks/use-opencode-data"
@@ -70,6 +73,7 @@ import { PromptAttachmentPreview } from "./chat/prompt-attachments"
 import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
 import { HrambleWordmark } from "./hramble-wordmark"
 import { HrambleLogo } from "./hramble-logo"
+import { GraphView } from "./graph-view"
 
 // ============================================================
 // Worktree mode toggle
@@ -253,6 +257,44 @@ export function NewChat() {
 	const [editingStep, setEditingStep] = useState<number | null>(null)
 	// Which recap paragraph is expanded to show its full details inline (null = none).
 	const [expandedRecap, setExpandedRecap] = useState<number | null>(null)
+	// List ⇄ Graph view toggle for the Hyperloop panel (the graph is a VIEW, not a mode).
+	const [graphView, setGraphView] = useAtom(graphViewAtom)
+	// Mirror the Hyperloop run into the work-graph store (.hramble/graph) so the
+	// Graph view can draw it: a command node + one node per step, keyed by the run
+	// id. The store folds repeat events by id, so re-writing on each change is cheap.
+	useEffect(() => {
+		const run = hyperRunForDir
+		if (!run?.id || !run.steps.length) return
+		const dir = run.directory || selectedDirectory
+		if (!dir || dir === "/") return
+		const runId = run.id
+		const map: Record<HyperStep["status"], GraphNodeStatus> = {
+			idle: "queued",
+			running: "working",
+			repairing: "repair",
+			done: "done",
+			failed: "failed",
+		}
+		void recordGraph(dir, runId, {
+			id: "cmd",
+			kind: "command",
+			title: run.goal,
+			status: run.running ? "working" : "done",
+		})
+		run.steps.forEach((s, i) => {
+			void recordGraph(dir, runId, {
+				id: `s${i}`,
+				parent: "cmd",
+				kind: "implement",
+				title: s.text.slice(0, 60),
+				status: map[s.status],
+				summary: s.preview,
+			})
+		})
+		// Keep the run in the Hyperloop history (one entry per run) so the sidebar
+		// can list it — reopening it just restores this object into hyperloopRunAtom.
+		upsertHyperloopRun(run)
+	}, [hyperRunForDir, selectedDirectory])
 	const hyperDecomposeAbort = useRef(false)
 	const hyperScratchId = useRef<string | null>(null)
 	const hyperSteps = hyperRunForDir?.steps ?? []
@@ -580,7 +622,7 @@ export function NewChat() {
 	)
 
 	const hyperDecompose = async () => {
-		if (!hyperGoal.trim() || !selectedDirectory) return
+		if (!hyperGoal.trim() || badFolder) return
 		const client = getProjectClient(selectedDirectory)
 		if (!client) return
 		hyperDecomposeAbort.current = false
@@ -645,7 +687,7 @@ export function NewChat() {
 				.filter((s) => s.text.length > 0)
 				.slice(0, 7)
 			if (!hyperDecomposeAbort.current && parsed.length > 0) {
-				setHyperRun({ goal: hyperGoal, steps: parsed.map((s) => ({ ...s, status: "idle" as const })), running: false, directory: selectedDirectory })
+				setHyperRun({ id: crypto.randomUUID(), goal: hyperGoal, steps: parsed.map((s) => ({ ...s, status: "idle" as const })), running: false, directory: selectedDirectory })
 			}
 			await client.session.delete({ sessionID: scratchId, directory: selectedDirectory }).catch(() => {})
 		} finally {
@@ -677,9 +719,121 @@ export function NewChat() {
 		}
 	}
 
+	// Max automatic retries when a step fails verification, before giving up and
+	// surfacing it as "failed" instead of silently accepting a broken result.
+	const MAX_REPAIR_ATTEMPTS = 2
+
+	/**
+	 * Objectively check whether a step actually did something, instead of trusting
+	 * "the session went idle" (which is all Hyperloop checked before — a run could
+	 * finish with every step reporting "done" while nothing was ever built. See the
+	 * "miss cafe" audit: step 1's whole reply was literal text printing a fake
+	 * `<function=write>` call — no real tool call at all — and several other steps
+	 * hit `Model tried to call unavailable tool 'explore'`, yet all were marked done).
+	 *
+	 * This can only catch MECHANICAL failures (no tool call happened / a tool
+	 * errored / a hallucinated tool was attempted) — it cannot judge whether the
+	 * result is actually what the user wanted. That's a real, permanent limit of
+	 * automated verification, not a gap in this check.
+	 */
+	const verifyStepMessages = async (
+		client: NonNullable<ReturnType<typeof getProjectClient>>,
+		sessionID: string,
+		directory: string,
+	): Promise<{ ok: boolean; reason?: string }> => {
+		try {
+			const msgs = await client.session.messages({ sessionID, directory }).catch(() => null)
+			type ToolPart = { type: string; tool?: string; state?: { status?: string; output?: string; error?: string } }
+			const arr = (msgs?.data as Array<{ parts: ToolPart[] }>) ?? []
+			const toolParts = arr.flatMap((m) => m.parts ?? []).filter((p) => p.type === "tool")
+
+			if (toolParts.length === 0) {
+				return { ok: false, reason: "No tool call was made — the model replied with text instead of doing the work" }
+			}
+			// OpenCode represents "the model called a tool that doesn't exist" as a
+			// synthetic tool part named "invalid" with status "completed" (not
+			// "error") — so status alone won't catch it; check the tool name too.
+			const hallucinated = toolParts.find((p) => p.tool === "invalid")
+			if (hallucinated) {
+				return {
+					ok: false,
+					reason: (hallucinated.state?.output || hallucinated.state?.error || "Tried to call a tool that doesn't exist").slice(0, 300),
+				}
+			}
+			const errored = toolParts.find((p) => p.state?.status === "error")
+			if (errored) {
+				return { ok: false, reason: `${errored.tool} failed: ${(errored.state?.error || "").slice(0, 250)}` }
+			}
+			return { ok: true }
+		} catch {
+			// Can't verify (server hiccup, etc.) — don't punish the step for our own fetch failure.
+			return { ok: true }
+		}
+	}
+
+	/**
+	 * Run a step's prompt, wait for it to finish, then verify it actually did
+	 * something real before accepting "done". On a mechanical failure, retry in
+	 * the SAME session (so the model sees its own error) with the failure fed
+	 * back, up to MAX_REPAIR_ATTEMPTS — this is the self-repair loop.
+	 */
+	const runStepUntilVerified = async (
+		client: NonNullable<ReturnType<typeof getProjectClient>>,
+		dir: string,
+		i: number,
+		sid: string,
+		promptText: string,
+		attempt: number,
+	): Promise<void> => {
+		await client.session.promptAsync({
+			sessionID: sid,
+			directory: dir,
+			parts: [{ type: "text", text: promptText }],
+			model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined,
+		})
+		// Poll until the session goes idle (max 10 min). A finished session drops out
+		// of the status map, so track seenBusy: break as soon as it's been busy and
+		// then disappears — instead of spinning the full timeout.
+		let seenBusy = false
+		for (let t = 0; t < 600; t++) {
+			await new Promise((r) => setTimeout(r, 1000))
+			const status = await client.session.status({ directory: dir }).catch(() => null)
+			const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
+			if (st?.type === "busy") {
+				seenBusy = true
+				continue
+			}
+			if (seenBusy) break
+			if (t >= 12) break
+		}
+
+		const verdict = await verifyStepMessages(client, sid, dir)
+		const summary = await fetchStepSummary(client, sid, dir)
+
+		if (verdict.ok) {
+			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview: summary || s.preview } : s)))
+			return
+		}
+		if (attempt < MAX_REPAIR_ATTEMPTS) {
+			setHyperSteps((prev) =>
+				prev.map((s, j) => (j === i ? { ...s, status: "repairing" as const, preview: `Retrying — ${verdict.reason}` } : s)),
+			)
+			const corrective = `Your previous attempt did not succeed: ${verdict.reason}\n\nRetry the task below. Only use tools that actually exist in this environment — if a tool call fails because the tool doesn't exist, don't try it again, use a different real tool (e.g. read, write, edit, patch, bash, grep, glob) instead. Make sure to actually call a tool rather than just describing what you would do.\n\nTask: ${promptText}`
+			return runStepUntilVerified(client, dir, i, sid, corrective, attempt + 1)
+		}
+		setHyperSteps((prev) =>
+			prev.map((s, j) =>
+				j === i ? { ...s, status: "failed" as const, preview: `Failed after ${attempt + 1} attempts — ${verdict.reason}` } : s,
+			),
+		)
+	}
+
 	// Whether every step has finished (done or failed) — enables the recap collapse.
 	const allStepsSettled =
 		hyperSteps.length > 0 && hyperSteps.every((s) => s.status === "done" || s.status === "failed")
+	// "Launch all" only makes sense before anything has started — once any step is
+	// running/done/failed, re-launching would redo the whole run. So gate on it.
+	const hyperNotLaunched = hyperSteps.length > 0 && hyperSteps.every((s) => s.status === "idle")
 
 	// Collapse the tall step column into a compact on-page recap. Lazily fills in
 	// summaries for any completed step that doesn't have one yet (e.g. an older run).
@@ -716,6 +870,7 @@ export function NewChat() {
 	// "Run"/"Retry" buttons so the user can tweak one step without re-running all 7.
 	const runSingleStep = async (i: number) => {
 		const dir = hyperRun?.directory ?? selectedDirectory
+		if (!dir || dir === "/" || dir.length <= 1) return
 		const client = getProjectClient(dir)
 		const step = hyperSteps[i]
 		if (!client || !step || !step.text.trim()) return
@@ -727,30 +882,14 @@ export function NewChat() {
 			if (!sid) throw new Error("no id")
 			markHyperloopSession(sid)
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, sessionId: sid } : s)))
-			await client.session.promptAsync({
-				sessionID: sid,
-				directory: dir,
-				parts: [{ type: "text", text: step.text }],
-				model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined,
-			})
-			let seenBusy = false
-			for (let t = 0; t < 600; t++) {
-				await new Promise((res) => setTimeout(res, 1000))
-				const status = await client.session.status({ directory: dir }).catch(() => null)
-				const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
-				if (st?.type === "busy") { seenBusy = true; continue }
-				if (seenBusy) break
-				if (t >= 12) break
-			}
-			const summary = await fetchStepSummary(client, sid, dir)
-			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview: summary || s.preview } : s)))
+			await runStepUntilVerified(client, dir, i, sid, step.text, 0)
 		} catch {
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 		}
 	}
 
 	const hyperLaunchAll = async () => {
-		if (!hyperSteps.length || !selectedDirectory) return
+		if (!hyperSteps.length || badFolder) return
 		setHyperCollapsed(false)
 		const client = getProjectClient(selectedDirectory)
 		if (!client) return
@@ -783,30 +922,7 @@ export function NewChat() {
 				return
 			}
 			try {
-				await client.session.promptAsync({
-					sessionID: sid,
-					directory: dir,
-					parts: [{ type: "text", text: step.text }],
-					model: effectiveModel
-						? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
-						: undefined,
-				})
-				// Poll until session goes idle (max 10 min per step). A finished session drops
-				// out of the status map, so track seenBusy: break as soon as it's been busy and
-				// then disappears — instead of spinning the full timeout.
-				let seenBusy = false
-				for (let t = 0; t < 600; t++) {
-					await new Promise((r) => setTimeout(r, 1000))
-					const status = await client.session.status({ directory: dir }).catch(() => null)
-					const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
-					if (st?.type === "busy") { seenBusy = true; continue }
-					if (seenBusy) break        // was working, now gone → done
-					if (t >= 12) break         // never went busy after 12s → nothing to wait for
-				}
-				// Grab a one-paragraph summary of what this agent actually did (its
-				// last assistant message) so the collapsed recap can show it.
-				const summary = await fetchStepSummary(client, sid, dir)
-				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview: summary || s.preview } : s)))
+				await runStepUntilVerified(client, dir, i, sid, step.text, 0)
 			} catch {
 				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 			}
@@ -1097,6 +1213,16 @@ export function NewChat() {
 											)}
 										</span>
 										<div className="flex items-center gap-1">
+											{hyperSteps.length > 0 && (
+												<button
+													type="button"
+													title={graphView ? "Show as list" : "Show as graph"}
+													onClick={() => setGraphView((v) => !v)}
+													className={`rounded p-0.5 ${graphView ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+												>
+													{graphView ? <ListIcon className="size-3.5" /> : <NetworkIcon className="size-3.5" />}
+												</button>
+											)}
 											{hyperSteps.length > 0 && !hyperRunning && (
 												<button
 													type="button"
@@ -1132,38 +1258,71 @@ export function NewChat() {
 											</button>
 										</div>
 									</div>
+									{allStepsSettled &&
+										(() => {
+											const failedCount = hyperSteps.filter((s) => s.status === "failed").length
+											if (failedCount === 0) return null
+											const isLocalModel = effectiveModel?.providerID === "ollama"
+											return (
+												<p className="mb-2 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+													{failedCount === hyperSteps.length
+														? `All ${failedCount} steps failed even after retrying`
+														: `${failedCount} of ${hyperSteps.length} steps failed even after retrying`}
+													{isLocalModel
+														? " — this local model may not be capable enough for multi-step tool use. Try a larger or cloud model."
+														: " — this model struggled with these steps. Try a different or more capable model."}
+												</p>
+											)
+										})()}
 									{hyperSteps.length === 0 && (
-										<div className="flex gap-2">
-											<input
-												className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-												placeholder="Describe your goal — AI will split it into 7 parallel tasks…"
-												value={hyperGoal}
-												onChange={(e) => setHyperGoal(e.target.value)}
-												onKeyDown={(e) => { if (e.key === "Enter") hyperDecompose() }}
-												disabled={hyperDecomposing || !selectedDirectory}
-											/>
-										<button
-											type="button"
-											onClick={() => {
-												if (hyperDecomposing) {
-													hyperDecomposeAbort.current = true
-													const client = getProjectClient(selectedDirectory)
-													if (client && hyperScratchId.current) {
-														client.session.abort({ sessionID: hyperScratchId.current }).catch(() => {})
+										<div className="flex flex-col gap-1.5">
+											{badFolder && (
+												<button
+													type="button"
+													onClick={chooseFolder}
+													className="flex items-center gap-1.5 self-start rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 text-xs hover:bg-amber-500/20 dark:text-amber-400"
+												>
+													<FolderIcon className="size-3.5 shrink-0" />
+													Select a project folder before running Hyperloop — otherwise agents have nowhere real to write files
+												</button>
+											)}
+											<div className="flex gap-2">
+												<input
+													className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+													placeholder="Describe your goal — AI will split it into 7 parallel tasks…"
+													value={hyperGoal}
+													onChange={(e) => setHyperGoal(e.target.value)}
+													onKeyDown={(e) => { if (e.key === "Enter") hyperDecompose() }}
+													disabled={hyperDecomposing || badFolder}
+												/>
+											<button
+												type="button"
+												onClick={() => {
+													if (hyperDecomposing) {
+														hyperDecomposeAbort.current = true
+														const client = getProjectClient(selectedDirectory)
+														if (client && hyperScratchId.current) {
+															client.session.abort({ sessionID: hyperScratchId.current }).catch(() => {})
+														}
+														setHyperDecomposing(false)
+													} else {
+														hyperDecompose()
 													}
-													setHyperDecomposing(false)
-												} else {
-													hyperDecompose()
-												}
-											}}
-											disabled={!hyperDecomposing && (!hyperGoal.trim() || !selectedDirectory)}
-											className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-										>
-											{hyperDecomposing ? <InfinityIcon className="size-3.5 animate-spin" /> : "Decompose"}
-										</button>
+												}}
+												disabled={!hyperDecomposing && (!hyperGoal.trim() || badFolder)}
+												className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+											>
+												{hyperDecomposing ? <InfinityIcon className="size-3.5 animate-spin" /> : "Decompose"}
+											</button>
+											</div>
 										</div>
 									)}
-									{hyperSteps.length > 0 && hyperCollapsed && (
+									{hyperSteps.length > 0 && graphView && (
+										<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background/40">
+											<GraphView directory={hyperRunForDir?.directory ?? selectedDirectory} sessionId={hyperRunForDir?.id ?? null} />
+										</div>
+									)}
+									{hyperSteps.length > 0 && hyperCollapsed && !graphView && (
 										<div className="flex min-h-0 flex-1 flex-col gap-3">
 											<p className="text-xs text-muted-foreground/70">
 												Here's what each agent built — type below to request small changes, or open a
@@ -1210,14 +1369,16 @@ export function NewChat() {
 											</button>
 										</div>
 									)}
-									{hyperSteps.length > 0 && !hyperCollapsed && (
+									{hyperSteps.length > 0 && !hyperCollapsed && !graphView && (
 										<div className="flex min-h-0 flex-1 flex-col gap-1.5">
 											<div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
 											{hyperSteps.map((step, i) => {
 													const isEditing = editingStep === i
 													const isRunning = step.status === "running"
+													const isRepairing = step.status === "repairing"
+													const isBusy = isRunning || isRepairing
 													return (
-													<div key={i} className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-xs ${step.status === "done" ? "border-green-500/30 bg-green-500/5" : step.status === "failed" ? "border-red-500/30 bg-red-500/5" : isRunning ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"}`}>
+													<div key={i} className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2 text-xs ${step.status === "done" ? "border-green-500/30 bg-green-500/5" : step.status === "failed" ? "border-red-500/30 bg-red-500/5" : isRepairing ? "border-amber-500/30 bg-amber-500/5" : isRunning ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20"}`}>
 														<div className="flex items-start gap-2">
 															<span className="mt-0.5 shrink-0 font-mono text-muted-foreground">{i + 1}</span>
 															{isEditing ? (
@@ -1235,20 +1396,26 @@ export function NewChat() {
 																</span>
 															)}
 															{isRunning && <InfinityIcon className="size-3.5 shrink-0 animate-spin text-primary" />}
-															{!isRunning && step.status === "done" && <CheckIcon className="size-3.5 shrink-0 text-green-500" />}
-															{!isRunning && step.status === "failed" && <XIcon className="size-3.5 shrink-0 text-red-500" />}
+															{isRepairing && <RotateCwIcon className="size-3.5 shrink-0 animate-spin text-amber-500" />}
+															{!isBusy && step.status === "done" && <CheckIcon className="size-3.5 shrink-0 text-green-500" />}
+															{!isBusy && step.status === "failed" && <XIcon className="size-3.5 shrink-0 text-red-500" />}
 														</div>
+														{isRepairing && (
+															<p className="pl-5 text-[10px] text-amber-600 dark:text-amber-400">
+																First attempt didn't verify — retrying with the error fed back…
+															</p>
+														)}
 														<div className="flex flex-wrap gap-1.5 pl-5">
-															{!isRunning && !isEditing && (
+															{!isBusy && !isEditing && (
 																<button type="button" onClick={() => setEditingStep(i)} className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"><PencilIcon className="size-3" /> Edit</button>
 															)}
-															{!isRunning && (
+															{!isBusy && (
 																<button type="button" onClick={() => runSingleStep(i)} className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-primary hover:bg-primary/10"><PlayIcon className="size-3" /> {step.status === "done" || step.status === "failed" ? "Re-run" : "Run"} this step</button>
 															)}
 															{isEditing && (
 																<button type="button" onClick={() => setEditingStep(null)} className="rounded px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground">Done</button>
 															)}
-															{isRunning && step.sessionId && (
+															{isBusy && step.sessionId && (
 																<button type="button" onClick={async () => {
 																	const c2 = getProjectClient(hyperRun?.directory ?? selectedDirectory)
 																	if (c2 && step.sessionId) {
@@ -1262,16 +1429,37 @@ export function NewChat() {
 													)
 											})}
 											</div>
-											<div className="mt-1 flex gap-2">
-												<button
-													type="button"
-													onClick={hyperLaunchAll}
-													disabled={hyperRunning || !selectedDirectory}
-													className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-												>
-													{hyperRunning ? "Running…" : `Launch all ${hyperSteps.length}`}
-												</button>
-												<button type="button" onClick={() => { setHyperRun(null); setHyperCollapsed(false) }} disabled={hyperRunning} className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
+											<div className="mt-1 flex items-center gap-2">
+												{hyperNotLaunched && badFolder && (
+													<button
+														type="button"
+														onClick={chooseFolder}
+														className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 text-xs hover:bg-amber-500/20 dark:text-amber-400"
+													>
+														<FolderIcon className="size-3.5 shrink-0" />
+														Select a project folder to launch
+													</button>
+												)}
+												{hyperNotLaunched && !badFolder && (
+													<button
+														type="button"
+														onClick={hyperLaunchAll}
+														className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+													>
+														Launch all {hyperSteps.length}
+													</button>
+												)}
+												{hyperRunning && (
+													<span className="px-1 text-xs text-muted-foreground">
+														Running… {hyperSteps.filter((s) => s.status === "done").length}/{hyperSteps.length}
+													</span>
+												)}
+												{allStepsSettled && (
+													<span className="px-1 text-xs text-green-600 dark:text-green-500">
+														Done · {hyperSteps.filter((s) => s.status === "done").length}/{hyperSteps.length}
+													</span>
+												)}
+												<button type="button" onClick={() => { setHyperRun(null); setHyperCollapsed(false) }} disabled={hyperRunning} className="ml-auto rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50">
 													Re-plan
 												</button>
 											</div>

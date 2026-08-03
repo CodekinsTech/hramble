@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("hramble", {
 
 	/** Returns app version and dev/production mode. */
 	getAppInfo: () => ipcRenderer.invoke("app:info"),
+	getHomeDir: (): Promise<string> => ipcRenderer.invoke("home:dir"),
 
 	// --- Window chrome / liquid glass ---
 
@@ -148,6 +149,16 @@ contextBridge.exposeInMainWorld("hramble", {
 			ipcRenderer.invoke("git:apply-diff-text", localDir, diffText),
 		getRemoteUrl: (directory: string, remote?: string) =>
 			ipcRenderer.invoke("git:remote-url", directory, remote),
+	},
+
+	// --- Work-graph store (.hramble/graph) ---
+
+	graph: {
+		record: (directory: string, sessionId: string, event: unknown) =>
+			ipcRenderer.invoke("graph:record", directory, sessionId, event),
+		session: (directory: string, sessionId: string) =>
+			ipcRenderer.invoke("graph:session", directory, sessionId),
+		sessions: (directory: string) => ipcRenderer.invoke("graph:sessions", directory),
 	},
 
 	// --- Window preferences (opaque windows / transparency) ---

@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, systemPreferences } from "electron"
 import {
 	acceptRun,
@@ -165,6 +167,15 @@ export function registerIpcHandlers(): void {
 		version: app.getVersion(),
 		isDev: !app.isPackaged,
 	}))
+
+	// Working directory for the Home chat (general assistant, no repo). A stable
+	// folder under userData so the OpenCode session has a real cwd but isn't tied
+	// to any of the user's code projects.
+	ipcMain.handle("home:dir", async () => {
+		const dir = path.join(app.getPath("userData"), "home-chat")
+		await mkdir(dir, { recursive: true })
+		return dir
+	})
 
 	// --- Objective shell run (for Step List verification gates) ---
 	// Runs a command in a project directory and returns its real exit code +

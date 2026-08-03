@@ -10,6 +10,7 @@ import { AutomationRunDetail } from "./components/automations/automation-run-det
 import { AutomationsPage } from "./components/automations/automations-page"
 import { InboxEmptyState } from "./components/automations/inbox-empty-state"
 import { ErrorPage } from "./components/error-page"
+import { HomeChat } from "./components/home-chat"
 import { NewChat } from "./components/new-chat"
 import { NotFoundPage } from "./components/not-found-page"
 import { RootLayout } from "./components/root-layout"
@@ -47,6 +48,12 @@ const indexRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "/",
 	component: NewChat,
+})
+
+const homeRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "home",
+	component: HomeChat,
 })
 
 const projectRoute = createRoute({
@@ -172,6 +179,7 @@ const automationRunRoute = createRoute({
 const routeTree = rootRoute.addChildren([
 	sidebarLayout.addChildren([
 		indexRoute,
+		homeRoute,
 		projectRoute.addChildren([projectIndexRoute, sessionRoute]),
 		automationsRoute.addChildren([
 			automationsIndexRoute,

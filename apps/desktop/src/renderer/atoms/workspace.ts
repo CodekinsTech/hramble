@@ -33,7 +33,11 @@ export const hyperloopSessionSetAtom = atom((get) => new Set(get(hyperloopSessio
 /** A single Hyperloop step (serialisable — stored in localStorage). */
 export interface HyperStep {
 	text: string
-	status: "idle" | "running" | "done" | "failed"
+	// "repairing" = the step's first attempt failed an objective check (no real
+	// tool call, a tool errored, or a hallucinated/unavailable tool was tried) and
+	// it's being automatically retried with the failure fed back — see
+	// verifyStepMessages/runStepUntilVerified in new-chat.tsx.
+	status: "idle" | "running" | "repairing" | "done" | "failed"
 	sessionId?: string
 	timeEstimate?: string
 	preview?: string
@@ -41,6 +45,8 @@ export interface HyperStep {
 
 /** The active Hyperloop run — persists across navigation so "View" → back works. */
 export interface HyperloopRun {
+	/** Stable id for this run — used as the work-graph session key (.hramble/graph). */
+	id?: string
 	goal: string
 	steps: HyperStep[]
 	running: boolean
@@ -48,3 +54,21 @@ export interface HyperloopRun {
 }
 
 export const hyperloopRunAtom = atomWithStorage<HyperloopRun | null>("hramble:hyperloopRun", null)
+
+/**
+ * History of Hyperloop runs — ONE entry per run (goal), newest first. This is
+ * what the Hyperloop sidebar lists, so the user sees a clean run history instead
+ * of the 7 underlying step sessions (which stay hidden as an implementation
+ * detail). Clicking a run reopens it into `hyperloopRunAtom`.
+ */
+export const hyperloopRunsAtom = atomWithStorage<HyperloopRun[]>("hramble:hyperloopRuns", [])
+
+const MAX_RUNS = 30
+
+/** Insert or update a run by id (newest first, capped). No-op without an id. */
+export function upsertHyperloopRun(run: HyperloopRun) {
+	if (!run.id) return
+	const cur = appStore.get(hyperloopRunsAtom)
+	const rest = cur.filter((r) => r.id !== run.id)
+	appStore.set(hyperloopRunsAtom, [run, ...rest].slice(0, MAX_RUNS))
+}

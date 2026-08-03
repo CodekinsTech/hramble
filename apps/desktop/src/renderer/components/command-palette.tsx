@@ -145,9 +145,9 @@ export function CommandPalette({ open, onOpenChange, agents, onForkSession }: Co
 	const hasSession = !!activeAgent
 
 	return (
-		<CommandDialog open={open} onOpenChange={onOpenChange}>
-			<CommandInput placeholder="Type a command or search..." />
-			<CommandList>
+		<CommandDialog open={open} onOpenChange={onOpenChange} className="max-w-2xl">
+			<CommandInput placeholder="Type a command or search..." className="text-base" />
+			<CommandList className="max-h-[60vh]">
 				<CommandEmpty>No results found.</CommandEmpty>
 
 				<CommandGroup heading="Actions">

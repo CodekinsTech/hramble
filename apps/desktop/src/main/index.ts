@@ -15,6 +15,7 @@ import { stopServer } from "./opencode-manager"
 import { initSettingsStore } from "./settings-store"
 import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
 import { registerConnectors } from "./connectors" // MCP connectors management
+import { registerGraphStore } from "./graph-store" // work-graph persistence (.hramble/graph)
 import { startBrowserBridge } from "./browser-bridge" // agent ↔ visible browser pane
 import { registerOllama } from "./ollama" // local models (free tier)
 import { registerStore } from "./store" // avatar store — proxy to the shared Worker
@@ -331,6 +332,7 @@ if (!gotLock) {
 		registerStore()
 		registerOllama()
 		registerConnectors()
+		registerGraphStore()
 		initAutomations().catch(console.error)
 		startMdnsScanner().catch((err) => log.warn("mDNS scanner failed to start", err))
 		createWindow()

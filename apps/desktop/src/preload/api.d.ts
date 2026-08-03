@@ -41,6 +41,42 @@ export interface UpdateState {
 // Git types
 // ============================================================
 
+export type GraphNodeKind =
+	| "command"
+	| "decide"
+	| "option"
+	| "plan"
+	| "implement"
+	| "verify"
+	| "repair"
+	| "integrate"
+	| "done"
+
+export type GraphNodeStatus = "queued" | "working" | "done" | "failed" | "repair" | "rejected"
+
+export interface GraphNode {
+	id: string
+	parent?: string
+	refs?: string[]
+	kind: GraphNodeKind
+	title: string
+	status: GraphNodeStatus
+	ts: number
+	files?: string[]
+	commit?: string
+	summary?: string
+}
+
+export type GraphEvent = Partial<GraphNode> & { id: string }
+
+export interface GraphSessionSummary {
+	session: string
+	title: string
+	ts: number
+	nodeCount: number
+	status: GraphNodeStatus
+}
+
 export interface GitBranchInfo {
 	current: string
 	detached: boolean
@@ -409,6 +445,7 @@ export interface HrambleAPI {
 	/** The host platform: "darwin", "win32", or "linux". */
 	platform: NodeJS.Platform
 	getAppInfo: () => Promise<AppInfo>
+	getHomeDir: () => Promise<string>
 
 	/** Subscribe to chrome tier notification (fired once on load). */
 	onChromeTier: (callback: (tier: WindowChromeTier) => void) => () => void
@@ -477,6 +514,13 @@ export interface HrambleAPI {
 		applyToLocal: (worktreeDir: string, localDir: string) => Promise<GitApplyResult>
 		applyDiffText: (localDir: string, diffText: string) => Promise<GitApplyResult>
 		getRemoteUrl: (directory: string, remote?: string) => Promise<string | null>
+	}
+
+	// Work-graph store (.hramble/graph) — the persistent record behind the Graph view.
+	graph: {
+		record: (directory: string, sessionId: string, event: GraphEvent) => Promise<{ ok: boolean }>
+		session: (directory: string, sessionId: string) => Promise<GraphNode[]>
+		sessions: (directory: string) => Promise<GraphSessionSummary[]>
 	}
 
 	// Window preferences (opaque windows / transparency)
