@@ -66,6 +66,15 @@ export const themeAtom = atomWithStorage<string>("hramble:theme", "default")
 export const colorSchemeAtom = atomWithStorage<ColorScheme>("hramble:colorScheme", "light")
 
 /**
+ * Whether the companion (avatar) box is collapsed into a compact bar. On by
+ * default it's expanded (shows the live VRM avatar); collapsing shrinks the
+ * docked box for a cleaner coding view. Collapsing only hides the VISUAL box —
+ * the companion component stays mounted, so its narration/notify behavior
+ * (e.g. speaking when a Hyperloop run finishes) still fires while collapsed.
+ */
+export const companionCollapsedAtom = atomWithStorage<boolean>("hramble:companionCollapsed", false)
+
+/**
  * Whether the user prefers opaque (non-transparent) windows.
  * When true, the renderer uses solid backgrounds instead of semi-transparent.
  */

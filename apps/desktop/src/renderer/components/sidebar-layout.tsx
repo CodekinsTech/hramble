@@ -13,7 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
-import { CodeIcon, HomeIcon, InfinityIcon, PanelLeftIcon, SearchIcon } from "lucide-react"
+import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, PanelLeftIcon, RssIcon, SearchIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
@@ -197,6 +197,57 @@ function WindowControls() {
 				</TooltipTrigger>
 				<TooltipContent>Search (&#8984;K)</TooltipContent>
 			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/templates" })}
+						/>
+					}
+				>
+					<LayoutGridIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Templates — pick what you're building</TooltipContent>
+			</Tooltip>
+		</div>
+	)
+}
+
+/**
+ * Top-right window control — mirrors WindowControls (top-left) but anchored
+ * to the opposite corner. Currently just the Community entry point.
+ */
+function TopRightControls() {
+	const navigate = useNavigate()
+
+	return (
+		<div
+			className="absolute z-50 flex items-center gap-0.5"
+			style={{
+				top: 8,
+				right: 12,
+				// @ts-expect-error -- vendor-prefixed CSS property
+				WebkitAppRegion: "no-drag",
+			}}
+		>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/community" })}
+						/>
+					}
+				>
+					<RssIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Community — share what you built</TooltipContent>
+			</Tooltip>
 		</div>
 	)
 }
@@ -371,6 +422,7 @@ export function SidebarLayout() {
 				{/* Rendered last so it paints on top of the sidebar and app bar,
 				    whose transition properties create stacking contexts. */}
 				<WindowControls />
+				<TopRightControls />
 			</SidebarProvider>
 			<AddProjectDialog
 				open={addProjectOpen}

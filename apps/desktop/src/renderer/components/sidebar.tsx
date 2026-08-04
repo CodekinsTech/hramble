@@ -222,7 +222,16 @@ export function AppSidebarContent({
 						<SidebarMenuItem>
 							<SidebarMenuButton
 								tooltip="New Session"
-								onClick={() => navigate({ to: "/" })}
+								onClick={() => {
+									// Hyperloop's run persists across navigation on purpose (so
+									// leaving and coming back restores it) — but "New Session" is
+									// an explicit ask for a blank slate, so clear it here. Never
+									// clear a run that's still actively working, to avoid losing
+									// an in-flight job just because the user clicked New Session
+									// while looking at the Code tab.
+									if (activeRun && !activeRun.running) setActiveRun(null)
+									navigate({ to: "/" })
+								}}
 								className="text-muted-foreground"
 							>
 								<PlusIcon className="size-4" />

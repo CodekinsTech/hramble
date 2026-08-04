@@ -39,6 +39,7 @@
   ],
   "plugin": [
     "{{HARNESS_DIR}}/plugin/hramble-memory.js",
+    "{{HARNESS_DIR}}/plugin/hramble-skills.js",
     "{{HARNESS_DIR}}/plugin/hramble-repomap.js",
     "{{HARNESS_DIR}}/plugin/hramble-browser.js",
     "{{HARNESS_DIR}}/plugin/hramble-safety.js",

@@ -18,6 +18,13 @@ export type WorkspaceMode = "code" | "hyperloop"
 
 export const workspaceModeAtom = atomWithStorage<WorkspaceMode>("hramble:workspaceMode", "code")
 
+/**
+ * A goal handed off from the Templates page into Hyperloop's own goal input
+ * (which is local component state, not the normal chat draft). NewChat reads
+ * this once on mount when landing in Hyperloop mode, then clears it.
+ */
+export const pendingHyperGoalAtom = atom<string | null>(null)
+
 /** Session ids that were started in Hyperloop mode (persisted). */
 export const hyperloopSessionIdsAtom = atomWithStorage<string[]>("hramble:hyperloopSessions", [])
 
@@ -43,6 +50,18 @@ export interface HyperStep {
 	preview?: string
 }
 
+/**
+ * How many steps fit in one Hyperloop "loop" (a batch of parallel agents). The
+ * AI decides how many steps a goal actually needs — small goals use fewer than
+ * one loop (the rest of that loop's slots render empty), bigger goals span
+ * multiple loops of this size ("twin loop" etc.).
+ */
+export const HYPER_LOOP_SIZE = 7
+
+/** Hard ceiling on total steps for now — beyond this, growing further needs
+ *  more design (see HyperloopRun.sizingNote warning at 3+ loops). */
+export const HYPER_MAX_STEPS = HYPER_LOOP_SIZE * 3
+
 /** The active Hyperloop run — persists across navigation so "View" → back works. */
 export interface HyperloopRun {
 	/** Stable id for this run — used as the work-graph session key (.hramble/graph). */
@@ -51,6 +70,11 @@ export interface HyperloopRun {
 	steps: HyperStep[]
 	running: boolean
 	directory?: string
+	/** The AI's one-line sizing decision, e.g. "Medium task — 9 steps across 2 loops." */
+	sizingNote?: string
+	/** Only meaningful when the plan spans more than one loop; unset until the
+	 *  user picks how multi-loop plans should run. */
+	runMode?: "simultaneous" | "sequential"
 }
 
 export const hyperloopRunAtom = atomWithStorage<HyperloopRun | null>("hramble:hyperloopRun", null)

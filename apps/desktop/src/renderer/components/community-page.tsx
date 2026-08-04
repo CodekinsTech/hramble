@@ -1,0 +1,525 @@
+/**
+ * Community — share what you built (thumbnail, GitHub repo, demo) and let
+ * other builders reach out about it. UI-first build: "login" and posts are
+ * local-only for now (see atoms/community.ts) — Supabase auth + Cloudflare
+ * media storage get wired in once this UI is settled, without changing the
+ * components below (they only read/write the atoms).
+ */
+import { useAtomValue, useSetAtom } from "jotai"
+import {
+	DownloadIcon,
+	GithubIcon,
+	HeartIcon,
+	ImagePlusIcon,
+	LogOutIcon,
+	MessageCircleIcon,
+	RssIcon,
+	SearchIcon,
+	SparklesIcon,
+	XIcon,
+} from "lucide-react"
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "sonner"
+import {
+	type CommunityPost,
+	type CommunityUser,
+	communityPostsAtom,
+	communityUserAtom,
+	toggleCommunityLikeAtom,
+} from "../atoms/community"
+import { browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
+import { formatRelativeTime } from "../hooks/use-agents"
+
+function LoginGate() {
+	const setUser = useSetAtom(communityUserAtom)
+	const [name, setName] = useState("")
+	const [email, setEmail] = useState("")
+
+	const submit = () => {
+		if (!email.trim()) return
+		setUser({ email: email.trim(), name: name.trim() || email.split("@")[0] })
+	}
+
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+			<RssIcon className="size-8 text-muted-foreground" />
+			<div>
+				<h1 className="font-semibold text-foreground text-xl">Community</h1>
+				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
+					Share what you built — a thumbnail, your GitHub repo, a demo — and message other builders about
+					their work.
+				</p>
+			</div>
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					submit()
+				}}
+				className="flex w-full max-w-xs flex-col gap-2"
+			>
+				<input
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					placeholder="Your name"
+					className="h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+				/>
+				<input
+					type="email"
+					required
+					value={email}
+					onChange={(e) => setEmail(e.target.value)}
+					placeholder="you@gmail.com"
+					className="h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+				/>
+				<button
+					type="submit"
+					disabled={!email.trim()}
+					className="mt-1 h-9 rounded-md bg-primary font-medium text-primary-foreground text-sm disabled:opacity-50"
+				>
+					Continue with Gmail
+				</button>
+			</form>
+			<p className="text-[11px] text-muted-foreground/60">
+				Placeholder sign-in for now — real Google login arrives with the backend.
+			</p>
+		</div>
+	)
+}
+
+function Composer({ user }: { user: CommunityUser }) {
+	const setPosts = useSetAtom(communityPostsAtom)
+	const [postType, setPostType] = useState<"build" | "skill">("build")
+
+	// "Share a build" fields
+	const [caption, setCaption] = useState("")
+	const [repoUrl, setRepoUrl] = useState("")
+	const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null)
+	const fileInputRef = useRef<HTMLInputElement>(null)
+
+	// "Share a skill" fields — same shape as the agent's own create_skill tool
+	const [skillName, setSkillName] = useState("")
+	const [skillDescription, setSkillDescription] = useState("")
+	const [skillInstructions, setSkillInstructions] = useState("")
+
+	const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+		const reader = new FileReader()
+		reader.onload = () => setThumbnailDataUrl(reader.result as string)
+		reader.readAsDataURL(file)
+		e.target.value = ""
+	}
+
+	const canPostBuild = caption.trim() || thumbnailDataUrl
+	const canPostSkill = skillName.trim() && skillDescription.trim() && skillInstructions.trim()
+
+	const post = () => {
+		if (postType === "build") {
+			if (!canPostBuild) return
+			const newPost: CommunityPost = {
+				id: crypto.randomUUID(),
+				author: user,
+				type: "build",
+				caption: caption.trim(),
+				thumbnailDataUrl,
+				repoUrl: repoUrl.trim() || null,
+				createdAt: Date.now(),
+				likedByMe: false,
+				likeCount: 0,
+			}
+			setPosts((prev) => [newPost, ...prev])
+			setCaption("")
+			setRepoUrl("")
+			setThumbnailDataUrl(null)
+		} else {
+			if (!canPostSkill) return
+			const newPost: CommunityPost = {
+				id: crypto.randomUUID(),
+				author: user,
+				type: "skill",
+				caption: "",
+				thumbnailDataUrl: null,
+				repoUrl: null,
+				createdAt: Date.now(),
+				likedByMe: false,
+				likeCount: 0,
+				skill: {
+					name: skillName.trim(),
+					description: skillDescription.trim(),
+					instructions: skillInstructions.trim(),
+				},
+			}
+			setPosts((prev) => [newPost, ...prev])
+			setSkillName("")
+			setSkillDescription("")
+			setSkillInstructions("")
+		}
+	}
+
+	return (
+		<div className="rounded-xl border border-border bg-card p-3">
+			<div className="mb-2 flex gap-1 rounded-lg bg-muted/40 p-1">
+				<button
+					type="button"
+					onClick={() => setPostType("build")}
+					className={`flex-1 rounded-md py-1 font-medium text-xs ${postType === "build" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+				>
+					Share a build
+				</button>
+				<button
+					type="button"
+					onClick={() => setPostType("skill")}
+					className={`flex-1 rounded-md py-1 font-medium text-xs ${postType === "skill" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+				>
+					Share a skill
+				</button>
+			</div>
+
+			{postType === "build" ? (
+				<>
+					<textarea
+						value={caption}
+						onChange={(e) => setCaption(e.target.value)}
+						placeholder="What did you build?"
+						rows={2}
+						className="w-full resize-none bg-transparent text-foreground text-sm outline-none placeholder:text-muted-foreground"
+					/>
+					{thumbnailDataUrl && (
+						<div className="relative mt-2">
+							{/* biome-ignore lint: local preview of a user-picked file, not a remote asset */}
+							<img src={thumbnailDataUrl} alt="" className="max-h-64 w-full rounded-lg object-cover" />
+							<button
+								type="button"
+								onClick={() => setThumbnailDataUrl(null)}
+								className="absolute top-2 right-2 rounded-full bg-black/60 p-1 text-white"
+							>
+								<XIcon className="size-3.5" />
+							</button>
+						</div>
+					)}
+					<div className="mt-2 flex items-center gap-2 border-border border-t pt-2">
+						<button
+							type="button"
+							onClick={() => fileInputRef.current?.click()}
+							title="Add an image or video"
+							className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+						>
+							<ImagePlusIcon className="size-4" />
+						</button>
+						<input
+							value={repoUrl}
+							onChange={(e) => setRepoUrl(e.target.value)}
+							placeholder="GitHub repo link (optional)"
+							className="h-7 flex-1 rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-ring"
+						/>
+						<button
+							type="button"
+							onClick={post}
+							disabled={!canPostBuild}
+							className="rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs disabled:opacity-50"
+						>
+							Post
+						</button>
+					</div>
+					<input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={onFileChange} />
+				</>
+			) : (
+				<div className="flex flex-col gap-2">
+					<input
+						value={skillName}
+						onChange={(e) => setSkillName(e.target.value)}
+						placeholder="Skill name, e.g. 'changelog-writer'"
+						className="h-8 rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+					/>
+					<input
+						value={skillDescription}
+						onChange={(e) => setSkillDescription(e.target.value)}
+						placeholder="One line: what it does and when to use it"
+						className="h-8 rounded-md border border-border bg-background px-2.5 text-sm outline-none focus:ring-1 focus:ring-ring"
+					/>
+					<textarea
+						value={skillInstructions}
+						onChange={(e) => setSkillInstructions(e.target.value)}
+						placeholder="The step-by-step instructions"
+						rows={3}
+						className="w-full resize-none rounded-md border border-border bg-background p-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
+					/>
+					<button
+						type="button"
+						onClick={post}
+						disabled={!canPostSkill}
+						className="self-end rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs disabled:opacity-50"
+					>
+						Post skill
+					</button>
+				</div>
+			)}
+		</div>
+	)
+}
+
+function repoNameFromUrl(url: string): string {
+	try {
+		return new URL(url).pathname.replace(/^\//, "")
+	} catch {
+		return url
+	}
+}
+
+function SkillInstallButton({ skill }: { skill: NonNullable<CommunityPost["skill"]> }) {
+	const [installing, setInstalling] = useState(false)
+
+	const install = async () => {
+		setInstalling(true)
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const bridge = (window as any).hramble
+			const result = await bridge.installCommunitySkill(skill)
+			if (result.ok) {
+				toast.success(`Installed "${result.slug}"`, { description: "Available to the agent right away." })
+			} else {
+				toast.error(result.error || "Failed to install")
+			}
+		} finally {
+			setInstalling(false)
+		}
+	}
+
+	return (
+		<button
+			type="button"
+			onClick={install}
+			disabled={installing}
+			className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 font-medium text-primary-foreground text-xs disabled:opacity-50"
+		>
+			<DownloadIcon className="size-3.5" /> {installing ? "Installing…" : "Install"}
+		</button>
+	)
+}
+
+function PostCard({ post }: { post: CommunityPost }) {
+	const toggleLike = useSetAtom(toggleCommunityLikeAtom)
+	const setBrowserUrl = useSetAtom(browserUrlAtom)
+	const setBrowserOpen = useSetAtom(browserPanelOpenAtom)
+
+	const openRepo = () => {
+		if (!post.repoUrl) return
+		setBrowserUrl(post.repoUrl)
+		setBrowserOpen(true)
+	}
+
+	if (post.type === "skill" && post.skill) {
+		return (
+			<div className="rounded-xl border border-border bg-card p-3">
+				<div className="flex items-center gap-2">
+					<div className="flex size-7 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-xs">
+						{post.author.name.charAt(0).toUpperCase()}
+					</div>
+					<span className="font-medium text-foreground text-sm">{post.author.name}</span>
+					<span className="text-muted-foreground text-xs">· {formatRelativeTime(post.createdAt)}</span>
+				</div>
+				<div className="mt-2 rounded-lg border border-border bg-muted/30 p-2.5">
+					<div className="flex items-center gap-1.5">
+						<SparklesIcon className="size-3.5 shrink-0 text-primary" />
+						<code className="font-medium text-foreground text-sm">{post.skill.name}</code>
+					</div>
+					<p className="mt-1 text-muted-foreground text-xs">{post.skill.description}</p>
+				</div>
+				<div className="mt-2 flex items-center gap-3 border-border border-t pt-2">
+					<button
+						type="button"
+						onClick={() => toggleLike(post.id)}
+						className={`flex items-center gap-1.5 text-xs ${post.likedByMe ? "text-red-500" : "text-muted-foreground hover:text-foreground"}`}
+					>
+						<HeartIcon className={`size-4 ${post.likedByMe ? "fill-current" : ""}`} /> {post.likeCount}
+					</button>
+					<SkillInstallButton skill={post.skill} />
+				</div>
+			</div>
+		)
+	}
+
+	return (
+		<div className="rounded-xl border border-border bg-card p-3">
+			<div className="flex items-center gap-2">
+				<div className="flex size-7 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary text-xs">
+					{post.author.name.charAt(0).toUpperCase()}
+				</div>
+				<span className="font-medium text-foreground text-sm">{post.author.name}</span>
+				<span className="text-muted-foreground text-xs">· {formatRelativeTime(post.createdAt)}</span>
+			</div>
+			{post.caption && <p className="mt-2 whitespace-pre-wrap text-foreground text-sm">{post.caption}</p>}
+			{post.thumbnailDataUrl && (
+				// biome-ignore lint: locally-stored data URL, not a remote asset
+				<img src={post.thumbnailDataUrl} alt="" className="mt-2 max-h-96 w-full rounded-lg object-cover" />
+			)}
+			{post.repoUrl && (
+				<button
+					type="button"
+					onClick={openRepo}
+					className="mt-2 flex w-fit items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-muted-foreground text-xs hover:text-foreground"
+				>
+					<GithubIcon className="size-3.5" /> {repoNameFromUrl(post.repoUrl)}
+				</button>
+			)}
+			<div className="mt-2 flex items-center gap-4 border-border border-t pt-2">
+				<button
+					type="button"
+					onClick={() => toggleLike(post.id)}
+					className={`flex items-center gap-1.5 text-xs ${post.likedByMe ? "text-red-500" : "text-muted-foreground hover:text-foreground"}`}
+				>
+					<HeartIcon className={`size-4 ${post.likedByMe ? "fill-current" : ""}`} /> {post.likeCount}
+				</button>
+				<button
+					type="button"
+					onClick={() => toast.info("Messaging isn't wired up yet", { description: "Comes with the backend." })}
+					title="Message about this repo or query"
+					className="flex items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground"
+				>
+					<MessageCircleIcon className="size-4" /> Message
+				</button>
+			</div>
+		</div>
+	)
+}
+
+interface BrowsableSkill {
+	slug: string
+	name: string
+	description: string
+}
+
+// A small curated palette (not a random hue wheel) so cards read as varied
+// but still cohesive with the rest of the app. Assignment is deterministic —
+// hashed from the skill's slug — so a given skill is always the same color,
+// not re-shuffled every render.
+const SKILL_PALETTE = [
+	{ icon: "text-sky-500", chip: "bg-sky-500/10", border: "hover:border-sky-500/30" },
+	{ icon: "text-violet-500", chip: "bg-violet-500/10", border: "hover:border-violet-500/30" },
+	{ icon: "text-emerald-500", chip: "bg-emerald-500/10", border: "hover:border-emerald-500/30" },
+	{ icon: "text-amber-500", chip: "bg-amber-500/10", border: "hover:border-amber-500/30" },
+	{ icon: "text-rose-500", chip: "bg-rose-500/10", border: "hover:border-rose-500/30" },
+	{ icon: "text-cyan-500", chip: "bg-cyan-500/10", border: "hover:border-cyan-500/30" },
+	{ icon: "text-indigo-500", chip: "bg-indigo-500/10", border: "hover:border-indigo-500/30" },
+	{ icon: "text-orange-500", chip: "bg-orange-500/10", border: "hover:border-orange-500/30" },
+]
+
+function paletteFor(slug: string) {
+	let hash = 0
+	for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0
+	return SKILL_PALETTE[hash % SKILL_PALETTE.length]
+}
+
+function SkillsBrowser() {
+	const [skills, setSkills] = useState<BrowsableSkill[] | null>(null)
+	const [query, setQuery] = useState("")
+
+	useEffect(() => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const bridge = (window as any).hramble
+		bridge.listInstalledSkills().then(setSkills)
+	}, [])
+
+	const filtered = useMemo(() => {
+		if (!skills) return []
+		const q = query.trim().toLowerCase()
+		if (!q) return skills
+		return skills.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
+	}, [skills, query])
+
+	return (
+		<div>
+			<div className="mb-3 text-center">
+				<p className="text-muted-foreground text-xs">
+					{skills === null ? "Loading…" : `${skills.length} skills available to the agent`}
+				</p>
+			</div>
+			<div className="relative mb-3">
+				<SearchIcon className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
+				<input
+					value={query}
+					onChange={(e) => setQuery(e.target.value)}
+					placeholder="Search skills…"
+					className="h-9 w-full rounded-lg border border-border bg-background pr-3 pl-8 text-sm outline-none focus:ring-1 focus:ring-ring"
+				/>
+			</div>
+			{skills !== null && filtered.length === 0 && (
+				<p className="py-8 text-center text-muted-foreground text-sm">No skills match "{query}"</p>
+			)}
+			<div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+				{filtered.map((s) => {
+					const palette = paletteFor(s.slug)
+					return (
+						<div
+							key={s.slug}
+							className={`rounded-xl border border-border bg-card p-3 transition-colors ${palette.border}`}
+						>
+							<div className="flex items-center gap-2.5">
+								<div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${palette.chip}`}>
+									<SparklesIcon className={`size-4 ${palette.icon}`} />
+								</div>
+								<span className="truncate font-semibold text-foreground text-sm">{s.name}</span>
+							</div>
+							<p className="mt-2 line-clamp-2 text-muted-foreground text-xs leading-relaxed">{s.description}</p>
+						</div>
+					)
+				})}
+			</div>
+		</div>
+	)
+}
+
+export function CommunityPage() {
+	const user = useAtomValue(communityUserAtom)
+	const setUser = useSetAtom(communityUserAtom)
+	const posts = useAtomValue(communityPostsAtom)
+	const [tab, setTab] = useState<"feed" | "skills">("feed")
+
+	if (!user) return <LoginGate />
+
+	return (
+		<div className="flex h-full flex-col overflow-y-auto">
+			<div className="mx-auto w-full max-w-lg flex-1 px-4 py-6">
+				<div className="mb-4 flex items-center justify-between">
+					<h1 className="font-semibold text-foreground text-lg">Community</h1>
+					<button
+						type="button"
+						onClick={() => setUser(null)}
+						title="Sign out"
+						className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
+					>
+						<LogOutIcon className="size-3.5" /> {user.name}
+					</button>
+				</div>
+				<div className="mb-4 flex gap-1 rounded-lg bg-muted/40 p-1">
+					<button
+						type="button"
+						onClick={() => setTab("feed")}
+						className={`flex-1 rounded-md py-1.5 font-medium text-sm ${tab === "feed" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+					>
+						Feed
+					</button>
+					<button
+						type="button"
+						onClick={() => setTab("skills")}
+						className={`flex-1 rounded-md py-1.5 font-medium text-sm ${tab === "skills" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+					>
+						Skills
+					</button>
+				</div>
+				{tab === "feed" ? (
+					<>
+						<Composer user={user} />
+						<div className="mt-4 flex flex-col gap-3">
+							{posts.map((post) => (
+								<PostCard key={post.id} post={post} />
+							))}
+						</div>
+					</>
+				) : (
+					<SkillsBrowser />
+				)}
+			</div>
+		</div>
+	)
+}

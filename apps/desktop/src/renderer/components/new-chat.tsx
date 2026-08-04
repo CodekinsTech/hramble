@@ -32,10 +32,13 @@ import {
 	NetworkIcon,
 	PencilIcon,
 	PlayIcon,
+	PlusIcon,
 	RotateCwIcon,
+	Share2Icon,
 	XIcon,
 } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { CodebaseGraph } from "./codebase-graph"
 import { projectModelsAtom, setProjectModelAtom } from "../atoms/preferences"
 import {
 	removeSessionAtom,
@@ -47,7 +50,16 @@ import {
 import { appStore } from "../atoms/store"
 import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
 import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
-import { type HyperStep, hyperloopRunAtom, markHyperloopSession, upsertHyperloopRun, workspaceModeAtom } from "../atoms/workspace"
+import {
+	HYPER_LOOP_SIZE,
+	HYPER_MAX_STEPS,
+	type HyperStep,
+	hyperloopRunAtom,
+	markHyperloopSession,
+	pendingHyperGoalAtom,
+	upsertHyperloopRun,
+	workspaceModeAtom,
+} from "../atoms/workspace"
 import { type GraphNodeStatus, graphViewAtom, recordGraph } from "../atoms/graph"
 import { useAgents, useProjectList } from "../hooks/use-agents"
 import { NEW_CHAT_DRAFT_KEY, useDraftActions, useDraftSnapshot } from "../hooks/use-draft"
@@ -74,6 +86,7 @@ import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
 import { HrambleWordmark } from "./hramble-wordmark"
 import { HrambleLogo } from "./hramble-logo"
 import { GraphView } from "./graph-view"
+import { HyperloopSpinner } from "./hyperloop-spinner"
 
 // ============================================================
 // Worktree mode toggle
@@ -249,14 +262,51 @@ export function NewChat() {
 	const [hyperOpen, setHyperOpen] = useState(() => hyperRunForDir !== null)
 	const [hyperGoal, setHyperGoal] = useState(() => hyperRunForDir?.goal ?? "")
 	const [hyperDecomposing, setHyperDecomposing] = useState(false)
+	// Pick up a goal handed off from the Templates page (e.g. the "Browser Game"
+	// card) — Hyperloop's own goal box is local state, not the shared draft, so
+	// it needs this one-time atom handoff instead of the usual draft mechanism.
+	const [pendingHyperGoal, setPendingHyperGoal] = useAtom(pendingHyperGoalAtom)
+	useEffect(() => {
+		if (pendingHyperGoal && !hyperRunForDir) {
+			setHyperGoal(pendingHyperGoal)
+			setHyperOpen(true)
+			setPendingHyperGoal(null)
+		}
+		// Only meant to run once per handoff — deliberately not depending on hyperRunForDir.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pendingHyperGoal])
 	// When true, the step column collapses into a compact on-page recap of what
 	// each agent built (short paragraphs), so the user can see the result and
 	// ask for small edits without the tall step column in the way.
 	const [hyperCollapsed, setHyperCollapsed] = useState(false)
 	// Index of the step currently being edited inline (null = none).
 	const [editingStep, setEditingStep] = useState<number | null>(null)
+	// Interactive codebase graph overlay — separate from the Hyperloop work-graph
+	// view (that one's the agent's process; this one's the code's structure).
+	const [showCodebaseGraph, setShowCodebaseGraph] = useState(false)
+	// "Run one at a time" — user picked manual pacing instead of "Launch all"
+	// (which fires every step in parallel). In this mode nothing auto-chains:
+	// each step only starts when the user clicks its own Run button.
+	const [manualQueueMode, setManualQueueMode] = useState(false)
+	// Session IDs the user manually Stopped — checked by runStepUntilVerified so
+	// a deliberate stop is never mistaken for a mechanical failure and auto-retried.
+	const manuallyStoppedRef = useRef<Set<string>>(new Set())
 	// Which recap paragraph is expanded to show its full details inline (null = none).
 	const [expandedRecap, setExpandedRecap] = useState<number | null>(null)
+	// hyperRun is deliberately persisted across navigation (see above), but this
+	// component itself isn't remounted just by navigating to "/" while already
+	// there — so when something clears the run (e.g. sidebar's "New Session"),
+	// the local UI-only state below needs an explicit reset to actually show a
+	// blank slate instead of quietly keeping the old panel open/expanded.
+	useEffect(() => {
+		if (hyperRun) return
+		setHyperOpen(false)
+		setHyperGoal("")
+		setHyperCollapsed(false)
+		setEditingStep(null)
+		setManualQueueMode(false)
+		setExpandedRecap(null)
+	}, [hyperRun])
 	// List ⇄ Graph view toggle for the Hyperloop panel (the graph is a VIEW, not a mode).
 	const [graphView, setGraphView] = useAtom(graphViewAtom)
 	// Mirror the Hyperloop run into the work-graph store (.hramble/graph) so the
@@ -629,6 +679,7 @@ export function NewChat() {
 		setHyperCollapsed(false)
 		setHyperDecomposing(true)
 		setHyperSteps([])
+		setManualQueueMode(false)
 		try {
 			const created = await client.session.create({ title: "Hyperloop plan", directory: selectedDirectory })
 			const scratchId = created.data?.id
@@ -644,7 +695,7 @@ export function NewChat() {
 				parts: [
 					{
 						type: "text",
-						text: `Break this goal into exactly 7 concrete implementation steps that can be worked on in PARALLEL by separate agents (each step touches different files/areas). Make each step a precise, self-contained instruction — include file names and what to do. At the end of each line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nReply ONLY as a numbered list (1., 2., …), one step per line. No preamble, no sub-bullets.\n\nExample line: 1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${hyperGoal}`,
+						text: `First, in ONE short sentence, judge whether this goal is a small, medium, or large task and say roughly how many implementation steps it needs — for example "This is a medium task — I'll use 9 steps across 2 loops of 7." A loop holds ${HYPER_LOOP_SIZE} steps; use as many loops as the task genuinely needs, up to ${HYPER_MAX_STEPS} steps total. Do NOT pad or force a specific count — use exactly as many steps as the task needs.\n\nThen on a new line, list the steps as a numbered list (1., 2., …), one step per line. Make each step a precise, self-contained instruction that can be worked on in PARALLEL by separate agents (each step touches different files/areas) — include file names and what to do. At the end of each step line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nNo preamble besides that one sizing sentence, no sub-bullets.\n\nExample:\nThis is a small task — I'll use 4 steps.\n1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${hyperGoal}`,
 					},
 				],
 				model: effectiveModel
@@ -673,8 +724,16 @@ export function NewChat() {
 			const text = (lastAssistant?.parts ?? [])
 				.map((p) => (p.type === "text" ? p.text ?? "" : ""))
 				.join("\n")
-			const parsed = text
-				.split("\n")
+			const lines = text.split("\n")
+			const firstNumberedIdx = lines.findIndex((l) => /^\s*\d+[.)]\s+/.test(l))
+			// Everything before the first numbered line is the AI's sizing sentence
+			// ("This is a medium task — I'll use 9 steps across 2 loops.").
+			const sizingNote = (firstNumberedIdx > 0 ? lines.slice(0, firstNumberedIdx) : [])
+				.join(" ")
+				.replace(/\s+/g, " ")
+				.trim()
+				.slice(0, 240)
+			const parsed = lines
 				.filter((l) => /^\s*\d+[.)]\s+/.test(l))
 				.map((l) => {
 					const raw = l.replace(/^\s*\d+[.)]\s*/, "").trim()
@@ -685,9 +744,16 @@ export function NewChat() {
 					}
 				})
 				.filter((s) => s.text.length > 0)
-				.slice(0, 7)
+				.slice(0, HYPER_MAX_STEPS)
 			if (!hyperDecomposeAbort.current && parsed.length > 0) {
-				setHyperRun({ id: crypto.randomUUID(), goal: hyperGoal, steps: parsed.map((s) => ({ ...s, status: "idle" as const })), running: false, directory: selectedDirectory })
+				setHyperRun({
+					id: crypto.randomUUID(),
+					goal: hyperGoal,
+					steps: parsed.map((s) => ({ ...s, status: "idle" as const })),
+					running: false,
+					directory: selectedDirectory,
+					sizingNote: sizingNote || undefined,
+				})
 			}
 			await client.session.delete({ sessionID: scratchId, directory: selectedDirectory }).catch(() => {})
 		} finally {
@@ -796,7 +862,9 @@ export function NewChat() {
 		// then disappears — instead of spinning the full timeout.
 		let seenBusy = false
 		for (let t = 0; t < 600; t++) {
+			if (manuallyStoppedRef.current.has(sid)) break
 			await new Promise((r) => setTimeout(r, 1000))
+			if (manuallyStoppedRef.current.has(sid)) break
 			const status = await client.session.status({ directory: dir }).catch(() => null)
 			const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
 			if (st?.type === "busy") {
@@ -805,6 +873,15 @@ export function NewChat() {
 			}
 			if (seenBusy) break
 			if (t >= 12) break
+		}
+
+		// A step the user deliberately Stopped is not a mechanical failure — skip
+		// verify/repair entirely so it never gets silently auto-retried behind
+		// their back. It stays exactly as the Stop button left it (status "failed",
+		// Edit + Run still available) until they choose to re-run it.
+		if (manuallyStoppedRef.current.has(sid)) {
+			manuallyStoppedRef.current.delete(sid)
+			return
 		}
 
 		const verdict = await verifyStepMessages(client, sid, dir)
@@ -834,6 +911,17 @@ export function NewChat() {
 	// "Launch all" only makes sense before anything has started — once any step is
 	// running/done/failed, re-launching would redo the whole run. So gate on it.
 	const hyperNotLaunched = hyperSteps.length > 0 && hyperSteps.every((s) => s.status === "idle")
+	// How many loops of HYPER_LOOP_SIZE this plan spans ("twin loop" = 2, etc.) —
+	// a small plan uses fewer than one loop's worth of slots; the rest render empty.
+	const hyperLoopCount = Math.max(1, Math.ceil(hyperSteps.length / HYPER_LOOP_SIZE))
+	// Multi-loop plans need the user to pick simultaneous vs sequential before
+	// Launch is available — see the picker rendered in the panel below.
+	const hyperNeedsRunModeChoice = hyperLoopCount > 1 && !hyperRun?.runMode
+	const setHyperRunMode = (mode: "simultaneous" | "sequential") =>
+		setHyperRun((prev) => (prev ? { ...prev, runMode: mode } : prev))
+	// In "run one at a time" mode, nothing auto-chains — so once a step settles,
+	// highlight the next idle one's Run button instead of guessing what's next.
+	const nextManualStepIndex = manualQueueMode ? hyperSteps.findIndex((s) => s.status === "idle") : -1
 
 	// Collapse the tall step column into a compact on-page recap. Lazily fills in
 	// summaries for any completed step that doesn't have one yet (e.g. an older run).
@@ -866,6 +954,18 @@ export function NewChat() {
 		}
 	}
 
+	// Expand one "unused slot" into a real, editable step — lets the user add
+	// forgotten work to an already-running or already-finished plan without
+	// re-planning everything. The new step runs independently via the existing
+	// per-step "Run this step" button (same as re-running any other step); it
+	// never re-triggers the original "Launch all" batch.
+	const addHyperStep = () => {
+		if (hyperSteps.length >= HYPER_MAX_STEPS) return
+		const newIndex = hyperSteps.length
+		setHyperSteps((prev) => [...prev, { text: "", status: "idle" as const }])
+		setEditingStep(newIndex)
+	}
+
 	// Run (or re-run) a SINGLE step in its own fresh session — used by the per-step
 	// "Run"/"Retry" buttons so the user can tweak one step without re-running all 7.
 	const runSingleStep = async (i: number) => {
@@ -882,14 +982,25 @@ export function NewChat() {
 			if (!sid) throw new Error("no id")
 			markHyperloopSession(sid)
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, sessionId: sid } : s)))
-			await runStepUntilVerified(client, dir, i, sid, step.text, 0)
+			// Running this step alone (a re-run, or a step added after the original
+			// plan) means it wasn't decomposed alongside the others. Instead of just
+			// telling it to "go check files", hand it the REAL summaries of what the
+			// other steps already built — actual grounding, not a hope it explores well.
+			const doneContext = hyperSteps
+				.filter((s, j) => j !== i && s.status === "done" && s.preview)
+				.map((s, j) => `- Step ${j + 1} (already done): ${s.text} — ${s.preview?.slice(0, 300)}`)
+				.join("\n")
+			const prompt = doneContext
+				? `Other steps already completed in this project:\n${doneContext}\n\nBuild on that existing work — don't recreate it. Your task:\n${step.text}`
+				: step.text
+			await runStepUntilVerified(client, dir, i, sid, prompt, 0)
 		} catch {
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 		}
 	}
 
 	const hyperLaunchAll = async () => {
-		if (!hyperSteps.length || badFolder) return
+		if (!hyperSteps.length || badFolder || hyperNeedsRunModeChoice) return
 		setHyperCollapsed(false)
 		const client = getProjectClient(selectedDirectory)
 		if (!client) return
@@ -928,8 +1039,21 @@ export function NewChat() {
 			}
 		}
 
-		// Run all 7 in parallel — promptAsync is non-blocking so no rate-limit pile-up
-		await Promise.all(hyperSteps.map((_, i) => runOne(i)))
+		if (hyperLoopCount > 1 && hyperRun?.runMode === "sequential") {
+			// One loop at a time: parallel WITHIN a loop, sequential BETWEEN loops —
+			// the user's choice for big plans, matching "sequential passes beat
+			// parallel fan-out" for reducing cross-step conflicts.
+			for (let loop = 0; loop < hyperLoopCount; loop++) {
+				const start = loop * HYPER_LOOP_SIZE
+				const end = Math.min(start + HYPER_LOOP_SIZE, hyperSteps.length)
+				const indices = Array.from({ length: end - start }, (_, k) => start + k)
+				await Promise.all(indices.map((i) => runOne(i)))
+			}
+		} else {
+			// Single loop, or multi-loop running simultaneously — all at once.
+			// promptAsync is non-blocking so this doesn't pile up rate limits.
+			await Promise.all(hyperSteps.map((_, i) => runOne(i)))
+		}
 		setHyperRunning(false)
 	}
 
@@ -1051,7 +1175,9 @@ export function NewChat() {
 
 	const handleLaunch = useCallback(
 		async (promptText: string, files?: FileAttachment[]) => {
-			if (!selectedDirectory || !promptText) return
+			// badFolder also catches "/" and a bare home-folder pick — !selectedDirectory
+			// alone let a session start with directory "/" (nowhere real to write files).
+			if (badFolder || !promptText) return
 			setLaunching(true)
 			setError(null)
 			try {
@@ -1069,7 +1195,7 @@ export function NewChat() {
 				setLaunching(false)
 			}
 		},
-		[selectedDirectory, worktreeMode, launchLocal, launchWorktree],
+		[badFolder, worktreeMode, launchLocal, launchWorktree],
 	)
 
 	const hasToolbar = providers
@@ -1131,11 +1257,16 @@ export function NewChat() {
 
 	return (
 		<div className="relative flex h-full flex-col">
+			{showCodebaseGraph && !badFolder && (
+				<div className="absolute inset-0 z-50 bg-background">
+					<CodebaseGraph directory={selectedDirectory} onClose={() => setShowCodebaseGraph(false)} />
+				</div>
+			)}
 			{/* Hero area — vertically centered */}
 			<div className="flex flex-1 flex-col items-center justify-center px-0 sm:px-6">
 				<div className="w-full max-w-4xl space-y-8">
-					{/* Brand logo — hidden once the Hyperloop panel is open */}
-					{!hyperPanelOpen && (
+					{/* Brand logo — hidden on the Hyperloop page entirely (the "Hyperloop" title already carries the brand look there) */}
+					{!hyperloop && (
 						<div className="flex justify-center">
 							<HrambleLogo />
 						</div>
@@ -1143,19 +1274,32 @@ export function NewChat() {
 
 					{/* "Build what's next" + project name */}
 					<div className="text-center">
-						<h1 className="text-2xl font-semibold text-foreground">
-							{hyperloop ? "Hyperloop" : "Build what's next"}
+						<h1
+							className={hyperloop ? "font-semibold" : "text-2xl font-semibold text-foreground"}
+							style={
+								hyperloop
+									? {
+											fontFamily: "'Syne Variable', sans-serif",
+											fontSize: "40px",
+											letterSpacing: "1px",
+											color: "#12c24f",
+											animation: "hramble-hue 10s ease-in-out infinite",
+										}
+									: undefined
+							}
+						>
+							{hyperloop ? <strong>Hyperloop</strong> : "Build what's next"}
 						</h1>
 						{hyperloop && (
 							<p className="mx-auto mt-2 max-w-md text-amber-600 text-sm dark:text-amber-400">
-								Autonomous mode — give one task and it works round after round until it's done.
-								Press Escape any time to stop.
+								Autonomous mode — 7 agents, one <InfinityIcon className="-mt-0.5 inline size-3.5" /> loop, building,
+								verifying, repairing — until it's done. Press Escape any time to stop.
 							</p>
 						)}
 					</div>
 
-					{/* Suggestion cards — hidden when Hyperloop panel is open */}
-					{!hyperPanelOpen && <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+					{/* Suggestion cards — Code mode only, never shown on the Hyperloop page */}
+					{!hyperloop && <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
 						{SUGGESTIONS.map((suggestion) => {
 							const Icon = suggestion.icon
 							return (
@@ -1204,8 +1348,14 @@ export function NewChat() {
 								<div className="mb-2 flex max-h-[50vh] flex-col overflow-hidden rounded-xl border border-primary/30 bg-muted/30 p-3">
 									<div className="mb-2 flex items-center justify-between">
 										<span className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
-											<InfinityIcon className="size-3.5 text-primary" />
-											{hyperCollapsed ? "Hyperloop — what was built" : "Hyperloop — 7 parallel agents"}
+											<HyperloopSpinner className="h-3.5 w-auto text-primary" />
+											{hyperCollapsed
+												? "Hyperloop — what was built"
+												: hyperSteps.length === 0
+													? "Hyperloop — parallel agents"
+													: hyperLoopCount > 1
+														? `Hyperloop — ${hyperLoopCount} loops (${hyperSteps.length}/${hyperLoopCount * HYPER_LOOP_SIZE} steps)`
+														: `Hyperloop — ${hyperSteps.length} step${hyperSteps.length === 1 ? "" : "s"}`}
 											{hyperRunning && (
 												<span className="text-primary">
 													· {hyperSteps.filter((s) => s.status === "done").length}/{hyperSteps.length} done
@@ -1226,7 +1376,7 @@ export function NewChat() {
 											{hyperSteps.length > 0 && !hyperRunning && (
 												<button
 													type="button"
-													title="Start a brand-new 7 steps"
+													title="Start a brand-new plan"
 													onClick={() => {
 														setHyperRun(null)
 														setHyperCollapsed(false)
@@ -1258,7 +1408,39 @@ export function NewChat() {
 											</button>
 										</div>
 									</div>
-									{allStepsSettled &&
+									{hyperRun?.sizingNote && !hyperCollapsed && (
+										<p className="mb-2 text-[11px] text-muted-foreground italic">{hyperRun.sizingNote}</p>
+									)}
+									{hyperNeedsRunModeChoice && (
+										<div className="mb-2 flex flex-col gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-2">
+											<p className="text-[11px] text-foreground/90">
+												This plan spans {hyperLoopCount} loops ({hyperSteps.length} steps) — run both loops now, or one loop at a time?
+											</p>
+											<div className="flex gap-1.5">
+												<button
+													type="button"
+													onClick={() => setHyperRunMode("simultaneous")}
+													className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground"
+												>
+													Run both loops now
+												</button>
+												<button
+													type="button"
+													onClick={() => setHyperRunMode("sequential")}
+													className="rounded-md border border-border px-2.5 py-1 text-[11px] text-foreground hover:bg-muted"
+												>
+													One loop at a time
+												</button>
+											</div>
+										</div>
+									)}
+									{hyperLoopCount >= 3 && !hyperCollapsed && (
+										<p className="mb-2 rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+											Large plan — {hyperSteps.length} steps across {hyperLoopCount} loops. Running this much at once raises the
+											risk of conflicting edits or inconsistent results — review carefully, or prefer "one loop at a time."
+										</p>
+									)}
+																		{allStepsSettled &&
 										(() => {
 											const failedCount = hyperSteps.filter((s) => s.status === "failed").length
 											if (failedCount === 0) return null
@@ -1289,7 +1471,7 @@ export function NewChat() {
 											<div className="flex gap-2">
 												<input
 													className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-													placeholder="Describe your goal — AI will split it into 7 parallel tasks…"
+													placeholder="Describe your goal — AI will split it into as many parallel steps as it needs…"
 													value={hyperGoal}
 													onChange={(e) => setHyperGoal(e.target.value)}
 													onKeyDown={(e) => { if (e.key === "Enter") hyperDecompose() }}
@@ -1312,7 +1494,7 @@ export function NewChat() {
 												disabled={!hyperDecomposing && (!hyperGoal.trim() || badFolder)}
 												className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
 											>
-												{hyperDecomposing ? <InfinityIcon className="size-3.5 animate-spin" /> : "Decompose"}
+												{hyperDecomposing ? <HyperloopSpinner className="h-3.5 w-auto" /> : "Decompose"}
 											</button>
 											</div>
 										</div>
@@ -1372,7 +1554,19 @@ export function NewChat() {
 									{hyperSteps.length > 0 && !hyperCollapsed && !graphView && (
 										<div className="flex min-h-0 flex-1 flex-col gap-1.5">
 											<div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-1">
-											{hyperSteps.map((step, i) => {
+													{Array.from({ length: hyperLoopCount }, (_, loop) => loop).map((loop) => {
+														const start = loop * HYPER_LOOP_SIZE
+														const chunk = hyperSteps.slice(start, start + HYPER_LOOP_SIZE)
+														const emptyCount = HYPER_LOOP_SIZE - chunk.length
+														return (
+														<div key={loop} className="flex flex-col gap-1.5">
+															{hyperLoopCount > 1 && (
+																<p className="mt-1 px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+																	Loop {loop + 1} · steps {start + 1}–{start + HYPER_LOOP_SIZE}
+																</p>
+															)}
+															{chunk.map((step, k) => {
+																const i = start + k
 													const isEditing = editingStep === i
 													const isRunning = step.status === "running"
 													const isRepairing = step.status === "repairing"
@@ -1395,7 +1589,7 @@ export function NewChat() {
 																	{step.timeEstimate && <span className="text-[10px] text-muted-foreground">{step.timeEstimate}</span>}
 																</span>
 															)}
-															{isRunning && <InfinityIcon className="size-3.5 shrink-0 animate-spin text-primary" />}
+															{isRunning && <HyperloopSpinner className="h-3.5 w-auto shrink-0 text-primary" />}
 															{isRepairing && <RotateCwIcon className="size-3.5 shrink-0 animate-spin text-amber-500" />}
 															{!isBusy && step.status === "done" && <CheckIcon className="size-3.5 shrink-0 text-green-500" />}
 															{!isBusy && step.status === "failed" && <XIcon className="size-3.5 shrink-0 text-red-500" />}
@@ -1410,7 +1604,13 @@ export function NewChat() {
 																<button type="button" onClick={() => setEditingStep(i)} className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"><PencilIcon className="size-3" /> Edit</button>
 															)}
 															{!isBusy && (
-																<button type="button" onClick={() => runSingleStep(i)} className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-primary hover:bg-primary/10"><PlayIcon className="size-3" /> {step.status === "done" || step.status === "failed" ? "Re-run" : "Run"} this step</button>
+																<button
+																	type="button"
+																	onClick={() => runSingleStep(i)}
+																	className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-primary hover:bg-primary/10 ${i === nextManualStepIndex ? "animate-pulse bg-primary/10 ring-1 ring-primary" : ""}`}
+																>
+																	<PlayIcon className="size-3" /> {step.status === "done" || step.status === "failed" ? "Re-run" : "Run"} this step
+																</button>
 															)}
 															{isEditing && (
 																<button type="button" onClick={() => setEditingStep(null)} className="rounded px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground">Done</button>
@@ -1419,6 +1619,7 @@ export function NewChat() {
 																<button type="button" onClick={async () => {
 																	const c2 = getProjectClient(hyperRun?.directory ?? selectedDirectory)
 																	if (c2 && step.sessionId) {
+																		manuallyStoppedRef.current.add(step.sessionId)
 																		await c2.session.abort({ sessionID: step.sessionId }).catch(() => {})
 																		setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 																	}
@@ -1427,7 +1628,23 @@ export function NewChat() {
 														</div>
 													</div>
 													)
-											})}
+															})}
+															{emptyCount > 0 && loop === hyperLoopCount - 1 && (
+																<button
+																	type="button"
+																	onClick={addHyperStep}
+																	title="Add a step — e.g. something you forgot to mention"
+																	className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-border/40 px-3 py-1 text-[10px] text-muted-foreground/40 transition-colors hover:border-primary/40 hover:text-primary"
+																>
+																	<PlusIcon className="size-3 shrink-0" />
+																	{emptyCount === 1
+																		? `Slot ${start + chunk.length + 1} unused — add a step`
+																		: `Slots ${start + chunk.length + 1}–${start + HYPER_LOOP_SIZE} unused — add a step`}
+																</button>
+															)}
+														</div>
+														)
+													})}
 											</div>
 											<div className="mt-1 flex items-center gap-2">
 												{hyperNotLaunched && badFolder && (
@@ -1440,13 +1657,27 @@ export function NewChat() {
 														Select a project folder to launch
 													</button>
 												)}
-												{hyperNotLaunched && !badFolder && (
+												{hyperNotLaunched && !badFolder && !hyperNeedsRunModeChoice && (
 													<button
 														type="button"
 														onClick={hyperLaunchAll}
 														className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
 													>
-														Launch all {hyperSteps.length}
+														Run all steps automatically
+														{hyperLoopCount > 1 ? ` (${hyperRun?.runMode === "sequential" ? "one loop at a time" : "both loops now"})` : ""}
+													</button>
+												)}
+												{hyperNotLaunched && !badFolder && !hyperNeedsRunModeChoice && (
+													<button
+														type="button"
+														onClick={() => {
+															setManualQueueMode(true)
+															runSingleStep(0)
+														}}
+														title="Starts just the first step. Add more whenever you think of them — nothing runs until you click its Run button."
+														className="rounded-lg border border-border px-3 py-1.5 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
+													>
+														Run one at a time
 													</button>
 												)}
 												{hyperRunning && (
@@ -1467,6 +1698,16 @@ export function NewChat() {
 									)}
 								</div>
 							)}
+						{badFolder && !hyperPanelOpen && (
+							<button
+								type="button"
+								onClick={chooseFolder}
+								className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-2 text-amber-600 text-xs hover:bg-amber-500/20 dark:text-amber-400"
+							>
+								<FolderIcon className="size-3.5 shrink-0" />
+								Select a project folder before starting — otherwise there's nowhere real to save the work
+							</button>
+						)}
 						<PromptInput
 							className="rounded-xl"
 							accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
@@ -1487,7 +1728,7 @@ export function NewChat() {
 							<PromptInputTextarea
 								placeholder="What should this session work on?"
 								autoFocus
-								disabled={launching || !selectedDirectory || projects.length === 0}
+								disabled={launching || badFolder || projects.length === 0}
 								className="min-h-[80px]"
 								onKeyDown={handleTextareaKeyDown}
 							/>
@@ -1498,11 +1739,19 @@ export function NewChat() {
 									<PromptInputTools>
 										{hyperloop && (
 										<PromptInputButton
-											title="Hyperloop — AI splits your goal into 7 parallel tasks"
+											title="Hyperloop — AI splits your goal into as many parallel steps as it needs"
 											onClick={() => setHyperOpen((v) => !v)}
 											className={hyperOpen || hyperSteps.length > 0 ? "text-primary" : ""}
 										>
 											<InfinityIcon className="size-4" />
+										</PromptInputButton>
+										)}
+										{!badFolder && (
+										<PromptInputButton
+											title="Codebase graph — how this project's symbols reference each other"
+											onClick={() => setShowCodebaseGraph(true)}
+										>
+											<Share2Icon className="size-4" />
 										</PromptInputButton>
 										)}
 										<PromptToolbar

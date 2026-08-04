@@ -9,6 +9,7 @@ import { AutomationDetail } from "./components/automations/automation-detail"
 import { AutomationRunDetail } from "./components/automations/automation-run-detail"
 import { AutomationsPage } from "./components/automations/automations-page"
 import { InboxEmptyState } from "./components/automations/inbox-empty-state"
+import { CommunityPage } from "./components/community-page"
 import { ErrorPage } from "./components/error-page"
 import { HomeChat } from "./components/home-chat"
 import { NewChat } from "./components/new-chat"
@@ -27,6 +28,7 @@ import { SetupSettings } from "./components/settings/setup-settings"
 import { StoreSettings } from "./components/settings/store-settings"
 import { WorktreeSettings } from "./components/settings/worktree-settings"
 import { SidebarLayout } from "./components/sidebar-layout"
+import { TemplatesPage } from "./components/templates-page"
 
 // ============================================================
 // Route tree
@@ -54,6 +56,18 @@ const homeRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "home",
 	component: HomeChat,
+})
+
+const templatesRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "templates",
+	component: TemplatesPage,
+})
+
+const communityRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "community",
+	component: CommunityPage,
 })
 
 const projectRoute = createRoute({
@@ -180,6 +194,8 @@ const routeTree = rootRoute.addChildren([
 	sidebarLayout.addChildren([
 		indexRoute,
 		homeRoute,
+		templatesRoute,
+		communityRoute,
 		projectRoute.addChildren([projectIndexRoute, sessionRoute]),
 		automationsRoute.addChildren([
 			automationsIndexRoute,

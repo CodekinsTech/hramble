@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { useAtomValue } from "jotai"
+import { useAtom, useAtomValue } from "jotai"
 import { AVATARS, type AvatarKey, VrmStage } from "./vrm-stage"
 import { speak, warmupTTS } from "../tts/supertonic"
 import { anyBusyAtom } from "../atoms/sessions"
+import { companionCollapsedAtom } from "../atoms/preferences"
 import { type SttHandle, injectIntoChatInput, startVosk, warmupVosk } from "../stt/vosk"
 
 const DONE_PHRASES = [
@@ -27,6 +28,16 @@ const DockIcon = () => (
 		<path d="M10 21H3v-7" />
 	</svg>
 )
+const ChevronUpIcon = () => (
+	<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+		<path d="m18 15-6-6-6 6" />
+	</svg>
+)
+const ChevronDownIcon = () => (
+	<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+		<path d="m6 9 6 6 6-6" />
+	</svg>
+)
 
 /**
  * Hramble avatar companion — a live VRM avatar (Flora / Libo) in a box near
@@ -34,6 +45,7 @@ const DockIcon = () => (
  */
 export function HrambleAvatar() {
 	const [floating, setFloating] = useState(false)
+	const [collapsed, setCollapsed] = useAtom(companionCollapsedAtom)
 	const [pos, setPos] = useState({ x: 320, y: 120 })
 	const [avatar, setAvatar] = useState<AvatarKey>("flora")
 	const [speaking, setSpeaking] = useState(false)
@@ -208,6 +220,20 @@ export function HrambleAvatar() {
 					{speaking ? "…" : muted ? "🔇" : "🔊"}
 				</button>
 			</div>
+			{docked && (
+				<button
+					type="button"
+					className="hramble-av-btn hramble-av-btn-collapse"
+					title="Collapse to a compact bar"
+					onPointerDown={(e) => e.stopPropagation()}
+					onClick={(e) => {
+						e.stopPropagation()
+						setCollapsed(true)
+					}}
+				>
+					<ChevronUpIcon />
+				</button>
+			)}
 			<button
 				type="button"
 				className="hramble-av-btn"
@@ -222,6 +248,24 @@ export function HrambleAvatar() {
 			</button>
 		</div>
 	)
+
+	if (!floating && collapsed) {
+		// Compact mode — the visual box is hidden, but this component (and its
+		// busy→idle narration effect above) stays mounted, so Hyperloop finishing
+		// while collapsed still speaks up instead of going silent.
+		return (
+			<button
+				type="button"
+				className="hramble-av-collapsed"
+				title="Show companion"
+				onClick={() => setCollapsed(false)}
+			>
+				<span className={`hramble-av-collapsed-dot${speaking ? " speaking" : ""}`} />
+				<span>Hramble</span>
+				<ChevronDownIcon />
+			</button>
+		)
+	}
 
 	if (!floating) {
 		return <div className="hramble-av-dock">{body(() => setFloating(true), true)}</div>

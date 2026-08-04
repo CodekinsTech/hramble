@@ -3,6 +3,8 @@
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "@fontsource/ibm-plex-mono/600.css";
+/* Syne — Hyperloop title */
+@import "@fontsource-variable/syne";
 
 @import "@hramble/ui/styles/globals.css";
 
@@ -99,6 +101,26 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 .hramble-av-btn:hover { background: #f2f5fa; color: #12c24f; }
+.hramble-av-btn-collapse { left: -7px; right: auto; }
+
+/* Collapsed companion — a compact pill replacing the full dock box. The
+   HrambleAvatar component stays mounted while this shows, so narration
+   (e.g. "all done" when Hyperloop finishes) still fires while collapsed. */
+.hramble-av-collapsed {
+  display: flex; align-items: center; gap: 6px;
+  margin: 2px 8px 8px; padding: 6px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.55);
+  font-family: "Quadrangle", sans-serif; font-size: 12px; letter-spacing: 0.5px;
+  color: #5b6470; cursor: pointer; width: calc(100% - 16px);
+}
+.hramble-av-collapsed:hover { background: rgba(255,255,255,0.6); color: #12c24f; }
+.hramble-av-collapsed-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: #b7c0cc; flex-shrink: 0;
+}
+.hramble-av-collapsed-dot.speaking { background: #12c24f; animation: hramble-mic-pulse 1s ease-in-out infinite; }
 
 /* Avatar box cursor hints: zoom+pan in box, grab in float */
 .hramble-av-dock .hramble-vrm-stage { cursor: ns-resize; }

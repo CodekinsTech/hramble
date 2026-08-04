@@ -16,7 +16,10 @@ import {
 } from "./automation"
 import type { CreateAutomationInput, UpdateAutomationInput } from "./automation/types"
 import { installCli, isCliInstalled, uninstallCli } from "./cli-install"
+import { installCommunitySkill, type InstallCommunitySkillInput, listInstalledSkills } from "./community-skills"
+import { buildRepoGraph } from "./repo-graph"
 import { deleteCredential, getCredential, storeCredential } from "./credential-store"
+import { saveDesignReference, type SaveDesignReferenceInput } from "./design-reference"
 import {
 	applyChangesToLocal,
 	applyDiffTextToLocal,
@@ -361,6 +364,35 @@ export function registerIpcHandlers(): void {
 			if (result.canceled || result.filePaths.length === 0) return null
 			return result.filePaths[0]
 		}),
+	)
+
+	// --- Design reference save (from the browser pane's Inspect Design tool) ---
+
+	ipcMain.handle(
+		"browser:save-design-reference",
+		withLogging(
+			"browser:save-design-reference",
+			async (_, input: SaveDesignReferenceInput) => await saveDesignReference(input),
+		),
+	)
+
+	// --- Community skill install (writes to the same place create_skill does) ---
+
+	ipcMain.handle(
+		"community:install-skill",
+		withLogging(
+			"community:install-skill",
+			async (_, input: InstallCommunitySkillInput) => await installCommunitySkill(input),
+		),
+	)
+
+	ipcMain.handle("community:list-skills", withLogging("community:list-skills", async () => await listInstalledSkills()))
+
+	// --- Codebase graph (interactive view, separate from the agent's repo_map tool) ---
+
+	ipcMain.handle(
+		"repo:graph",
+		withLogging("repo:graph", async (_, directory: string) => await buildRepoGraph(directory)),
 	)
 
 	// --- Fetch proxy (bypasses Chromium connection limits) ---

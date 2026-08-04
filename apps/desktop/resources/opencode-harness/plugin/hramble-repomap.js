@@ -2,12 +2,23 @@
 //
 // Registers a `repo_map` tool that scans the project and returns a compact
 // map: each source file with its top-level symbols (functions, classes,
-// exports, types). Same idea as aider's repo map / Claude's codebase sense —
-// the model gets the shape of the codebase without reading every file.
+// exports, types), PLUS which symbols reference which others across files —
+// a lightweight relationship graph, not just a flat list. Same idea as
+// aider's repo map / Claude's codebase sense, extended with the useful half
+// of tools like graphify (github.com/Graphify-Labs/graphify): real
+// relationships + a disk cache so repeat calls don't re-read unchanged files.
 //
-// Language-agnostic and dependency-free: symbols are pulled with lightweight
-// per-language regexes, so it never needs tree-sitter or a build step. Output
-// is capped to a token budget so it stays cheap to feed to a model.
+// Deliberately does NOT do what graphify's multimodal side does (Claude
+// vision over docs/PDFs/images) — that needs an Anthropic key and costs real
+// money on every call, which would break for anyone not using Claude. This
+// stays fully local and free: relationships are found by matching known
+// symbol names against each file's identifier tokens, not a real type-aware
+// AST (no tree-sitter — that would mean bundling per-language WASM grammars
+// inside a plugin, real complexity for marginal gain over this heuristic).
+//
+// This is meant to be QUERIED, not looked at — it's for the agent, not a
+// human staring at a picture. Pass `symbol` to get one thing's relationships
+// instead of the whole map.
 
 import { tool } from "@opencode-ai/plugin"
 import { z } from "zod"
@@ -30,7 +41,9 @@ const CODE_EXT = new Set([
 
 const MAX_FILE_BYTES = 250_000 // don't read huge/generated files
 const MAX_SYMBOLS_PER_FILE = 40
+const MAX_TOKENS_PER_FILE = 600 // cap what we cache per file so the cache stays small
 const MAX_OUTPUT_CHARS = 14_000 // keep the map affordable to feed to a model
+const CACHE_VERSION = 1
 
 // Per-language symbol patterns. Each returns "kind name" strings.
 function extractSymbols(ext, text) {
@@ -85,6 +98,20 @@ function extractSymbols(ext, text) {
 	return out.slice(0, MAX_SYMBOLS_PER_FILE)
 }
 
+// Every identifier-looking word in the file — used to detect which OTHER
+// files' symbols this file references. Not a real parser (doesn't know if a
+// match is a call, a comment, or a coincidence), but cheap and dependency-free,
+// and good enough for "does this file mention that symbol at all."
+function extractTokens(text) {
+	const seen = new Set()
+	const re = /\b[A-Za-z_][A-Za-z0-9_]*\b/g
+	let m
+	while ((m = re.exec(text)) && seen.size < MAX_TOKENS_PER_FILE) {
+		seen.add(m[0])
+	}
+	return [...seen]
+}
+
 function walk(root, dir, files) {
 	let entries
 	try {
@@ -109,45 +136,164 @@ function walk(root, dir, files) {
 	}
 }
 
+function cachePath(directory) {
+	return path.join(directory, ".hramble", "repo-graph-cache.json")
+}
+
+function loadCache(directory) {
+	try {
+		const raw = fs.readFileSync(cachePath(directory), "utf8")
+		const data = JSON.parse(raw)
+		if (data.version !== CACHE_VERSION) return {}
+		return data.files || {}
+	} catch {
+		return {}
+	}
+}
+
+function saveCache(directory, files) {
+	try {
+		fs.mkdirSync(path.join(directory, ".hramble"), { recursive: true })
+		fs.writeFileSync(cachePath(directory), JSON.stringify({ version: CACHE_VERSION, files }), "utf8")
+	} catch {
+		// Best-effort — a failed cache write shouldn't break the tool.
+	}
+}
+
+// Walks the project, extracting (or reusing cached) symbols + tokens per
+// file, then cross-references every symbol against every other file's token
+// set to build a lightweight "who references whom" graph. Unchanged files
+// (same mtime as last run) skip re-reading and re-parsing entirely.
+function buildGraph(directory, base) {
+	const files = []
+	walk(directory, base, files)
+	files.sort()
+
+	const cache = loadCache(directory)
+	const nextCache = {}
+	const perFile = [] // { rel, symbols: [{kind,name}], tokens: Set }
+
+	for (const f of files) {
+		let st
+		try {
+			st = fs.statSync(f)
+		} catch {
+			continue
+		}
+		if (st.size > MAX_FILE_BYTES) continue
+		const rel = path.relative(directory, f)
+		const cached = cache[rel]
+
+		let symbolLines, tokens
+		if (cached && cached.mtimeMs === st.mtimeMs) {
+			symbolLines = cached.symbols
+			tokens = cached.tokens
+		} else {
+			let text
+			try {
+				text = fs.readFileSync(f, "utf8")
+			} catch {
+				continue
+			}
+			symbolLines = extractSymbols(path.extname(f).toLowerCase(), text)
+			tokens = extractTokens(text)
+		}
+		nextCache[rel] = { mtimeMs: st.mtimeMs, symbols: symbolLines, tokens }
+		perFile.push({
+			rel,
+			symbols: symbolLines.map((s) => {
+				const sp = s.indexOf(" ")
+				return { kind: s.slice(0, sp), name: s.slice(sp + 1) }
+			}),
+			tokenSet: new Set(tokens),
+		})
+	}
+
+	saveCache(directory, nextCache)
+
+	// symbolIndex: name -> defining file. References: for each file, which
+	// OTHER files' symbols show up in its token set.
+	const symbolIndex = new Map()
+	for (const pf of perFile) {
+		for (const s of pf.symbols) {
+			if (!symbolIndex.has(s.name)) symbolIndex.set(s.name, pf.rel)
+		}
+	}
+
+	const referenceCount = new Map() // symbol name -> how many OTHER files mention it
+	const referencesByFile = new Map() // rel -> Set of symbol names it references (defined elsewhere)
+	for (const pf of perFile) {
+		const refs = new Set()
+		for (const [name, definingFile] of symbolIndex) {
+			if (definingFile === pf.rel) continue
+			if (pf.tokenSet.has(name)) {
+				refs.add(name)
+				referenceCount.set(name, (referenceCount.get(name) || 0) + 1)
+			}
+		}
+		referencesByFile.set(pf.rel, refs)
+	}
+
+	return { perFile, symbolIndex, referenceCount, referencesByFile }
+}
+
 export default async ({ directory }) => {
 	return {
 		tool: {
 			repo_map: tool({
 				description:
-					"Get a compact map of the codebase: source files with their top-level symbols (functions, classes, exports, types). Call this at the start of a task to understand the project's structure before reading individual files. Language-agnostic (TS/JS, Python, Go, Rust, Java, and more).",
+					"Get a compact map of the codebase: source files with their top-level symbols (functions, classes, exports, types) AND which symbols are referenced across files — a lightweight relationship graph, not just a flat list. Call this at the start of a task to understand the project's structure before reading individual files. Pass `symbol` to look up one specific thing's relationships instead of the whole map (cheaper, more precise). Language-agnostic (TS/JS, Python, Go, Rust, Java, and more). Cached — repeat calls only re-scan files that changed since last time.",
 				args: {
 					path: z
 						.string()
 						.optional()
 						.describe("Subdirectory to map, relative to the project root. Omit to map the whole project."),
+					symbol: z
+						.string()
+						.optional()
+						.describe(
+							"Look up one symbol by exact name instead of the whole map — returns where it's defined and every file that references it.",
+						),
 				},
 				execute: async (args) => {
 					const base = args.path ? path.join(directory, args.path) : directory
 					if (!base.startsWith(directory)) return "Path is outside the project."
-					const files = []
-					walk(directory, base, files)
-					if (!files.length) return "No source files found."
+					const graph = buildGraph(directory, base)
+					if (!graph.perFile.length) return "No source files found."
 
-					// Group by directory for a readable tree, sorted.
-					files.sort()
+					if (args.symbol) {
+						const definedIn = graph.symbolIndex.get(args.symbol)
+						if (!definedIn) return `"${args.symbol}" isn't a known top-level symbol in this project.`
+						const referencedIn = [...graph.referencesByFile.entries()]
+							.filter(([, refs]) => refs.has(args.symbol))
+							.map(([rel]) => rel)
+						return (
+							`${args.symbol}\n  defined in: ${definedIn}\n` +
+							(referencedIn.length
+								? `  referenced in (${referencedIn.length}):\n${referencedIn.map((r) => `    ${r}`).join("\n")}`
+								: "  referenced in: nowhere else found")
+						)
+					}
+
+					// "God nodes" — the few most cross-referenced symbols, same idea as
+					// graphify's GRAPH_REPORT.md, cheap to compute since we already have counts.
+					const topRefs = [...graph.referenceCount.entries()]
+						.sort((a, b) => b[1] - a[1])
+						.slice(0, 6)
+						.filter(([, count]) => count > 1)
+					const topSection = topRefs.length
+						? `Most-referenced symbols:\n${topRefs.map(([name, count]) => `  ${name} — used in ${count} other file${count === 1 ? "" : "s"}`).join("\n")}\n\n`
+						: ""
+
 					const parts = []
-					let chars = 0
+					let chars = topSection.length
 					let shown = 0
 					let truncated = false
-					for (const f of files) {
-						let text
-						try {
-							const st = fs.statSync(f)
-							if (st.size > MAX_FILE_BYTES) continue
-							text = fs.readFileSync(f, "utf8")
-						} catch {
-							continue
-						}
-						const rel = path.relative(directory, f)
-						const syms = extractSymbols(path.extname(f).toLowerCase(), text)
-						const block = syms.length
-							? `${rel}\n${syms.map((s) => `  ${s}`).join("\n")}\n`
-							: `${rel}\n`
+					for (const pf of graph.perFile) {
+						const symLines = pf.symbols.map((s) => `${s.kind} ${s.name}`)
+						const block = symLines.length
+							? `${pf.rel}\n${symLines.map((s) => `  ${s}`).join("\n")}\n`
+							: `${pf.rel}\n`
 						if (chars + block.length > MAX_OUTPUT_CHARS) {
 							truncated = true
 							break
@@ -157,8 +303,10 @@ export default async ({ directory }) => {
 						shown++
 					}
 					let header = `Repo map — ${shown} file${shown === 1 ? "" : "s"}`
-					if (truncated) header += ` (truncated to fit; ${files.length} total — narrow with the "path" arg)`
-					return `${header}\n\n${parts.join("")}`
+					if (truncated) {
+						header += ` (truncated to fit; ${graph.perFile.length} total — narrow with the "path" arg)`
+					}
+					return `${header}\n\n${topSection}${parts.join("")}`
 				},
 			}),
 		},

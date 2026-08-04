@@ -59,6 +59,38 @@ contextBridge.exposeInMainWorld("hramble", {
 	sendBrowserResult: (id: string, result: unknown) =>
 		ipcRenderer.send("browser:result", { id, result }),
 
+	/** Saves an "Inspect Design" snapshot into the project's design-reference/ folder. */
+	saveDesignReference: (input: {
+		directory: string
+		name: string
+		manifest: string
+		tokensCss: string
+		assets: Array<{ name: string; base64: string }>
+	}): Promise<{ ok: boolean; savedPath?: string; error?: string }> =>
+		ipcRenderer.invoke("browser:save-design-reference", input),
+
+	/** Installs a skill shared on the Community page into the user's local skills folder. */
+	installCommunitySkill: (input: {
+		name: string
+		description: string
+		instructions: string
+	}): Promise<{ ok: boolean; slug?: string; error?: string }> =>
+		ipcRenderer.invoke("community:install-skill", input),
+
+	/** Lists every skill currently installed (bundled + community-installed). */
+	listInstalledSkills: (): Promise<Array<{ slug: string; name: string; description: string }>> =>
+		ipcRenderer.invoke("community:list-skills"),
+
+	/** Builds the interactive codebase graph's node/edge data for a project directory. */
+	getRepoGraph: (
+		directory: string,
+	): Promise<{
+		nodes: Array<{ id: string; name: string; kind: string; file: string; cluster: string; refCount: number }>
+		edges: Array<{ source: string; target: string }>
+		fileCount: number
+		truncated: boolean
+	}> => ipcRenderer.invoke("repo:graph", directory),
+
 	/** Stops the managed OpenCode server. */
 	stopOpenCode: () => ipcRenderer.invoke("opencode:stop"),
 

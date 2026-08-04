@@ -17,7 +17,7 @@ const PORT_FILE = path.join(homedir(), ".config", "opencode", ".hramble-browser-
 // These are gated behind the session's permission policy so the agent asks
 // before driving the browser — like Claude asking before it controls Chrome.
 // Read-only actions (read/screenshot/scroll/hover/wait) never prompt.
-const ACTING = new Set(["open", "click", "type", "select", "back", "forward"])
+const ACTING = new Set(["open", "click", "type", "select", "back", "forward", "extract_design"])
 
 function getPort() {
 	try {
@@ -32,7 +32,7 @@ export default async () => ({
 	tool: {
 		browser: tool({
 			description:
-				"Control the Hramble in-app browser that the user can see. Actions: 'open' (navigate to a URL), 'read' (get the page's URL/title/visible text), 'click' (by CSS selector or visible text), 'type' (into a field by selector, optionally submit), 'screenshot' (capture a PNG), 'scroll' (scroll the page, or a selector into view), 'wait' (wait for a selector to appear, or a number of seconds), 'select' (choose an option in a <select> by value), 'hover' (hover an element to reveal menus/tooltips), 'back'/'forward' (navigate history). Read the page first to find selectors/text before acting.",
+				"Control the Hramble in-app browser that the user can see. Actions: 'open' (navigate to a URL), 'read' (get the page's URL/title/visible text), 'click' (by CSS selector or visible text), 'type' (into a field by selector, optionally submit), 'screenshot' (capture a PNG), 'scroll' (scroll the page, or a selector into view), 'wait' (wait for a selector to appear, or a number of seconds), 'select' (choose an option in a <select> by value), 'hover' (hover an element to reveal menus/tooltips), 'back'/'forward' (navigate history), 'extract_design' (get the page's dominant colors, fonts with roles/weights, and image/SVG assets — use this for 'what colors/fonts does this site use' or 'build something styled like this'), 'inspect_element' (get one element's full computed style — color, font, spacing, border — by selector or visible text). Read the page first to find selectors/text before acting.",
 			args: {
 				action: z
 					.enum([
@@ -47,19 +47,23 @@ export default async () => ({
 						"hover",
 						"back",
 						"forward",
+						"extract_design",
+						"inspect_element",
 					])
 					.describe("What to do in the visible browser"),
-				url: z.string().optional().describe("URL to open (for action 'open')"),
+				url: z.string().optional().describe("URL to open (for action 'open', or to navigate before 'extract_design')"),
 				selector: z
 					.string()
 					.optional()
 					.describe(
-						"CSS selector of the target element (for click/type/select/hover, and scroll/wait when targeting an element)",
+						"CSS selector of the target element (for click/type/select/hover/inspect_element, and scroll/wait when targeting an element)",
 					),
 				text: z
 					.string()
 					.optional()
-					.describe("For 'click': visible text to match. For 'type': the text to enter."),
+					.describe(
+						"For 'click'/'inspect_element': visible text to match. For 'type': the text to enter.",
+					),
 				submit: z
 					.boolean()
 					.optional()
