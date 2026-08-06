@@ -128,6 +128,12 @@ export interface GitApplyResult {
 	error?: string
 }
 
+export interface GitMergeResult {
+	success: boolean
+	conflictedFiles: string[]
+	error?: string
+}
+
 // ============================================================
 // Open-in-targets types
 // ============================================================
@@ -514,6 +520,7 @@ export interface HrambleAPI {
 		applyToLocal: (worktreeDir: string, localDir: string) => Promise<GitApplyResult>
 		applyDiffText: (localDir: string, diffText: string) => Promise<GitApplyResult>
 		getRemoteUrl: (directory: string, remote?: string) => Promise<string | null>
+		mergeBranch: (directory: string, branchName: string) => Promise<GitMergeResult>
 	}
 
 	// Work-graph store (.hramble/graph) — the persistent record behind the Graph view.
@@ -555,8 +562,22 @@ export interface HrambleAPI {
 	/** Subscribe to system accent color changes. Returns an unsubscribe function. */
 	onAccentColorChanged: (callback: (color: string) => void) => () => void
 
+	/** Opens a URL in the system's default browser (e.g. real Chrome), not Hramble's embedded browser pane. */
+	openExternal: (url: string) => Promise<void>
+	/** Reveals the bundled "Hramble Console Bridge" Chrome extension source in Finder/Explorer, for a manual "Load unpacked" install. */
+	revealChromeExtension: () => Promise<void>
+
+	/** Subscribe to the Mac going to sleep. */
+	onPowerSuspend: (callback: () => void) => () => void
+	/** Subscribe to the Mac waking up from sleep. */
+	onPowerResume: (callback: () => void) => () => void
+
 	// Directory picker
 	pickDirectory: () => Promise<string | null>
+	/** Opens a native file picker for an HTML/SVG page. Returns the selected path, or null if cancelled. */
+	pickHtmlFile: () => Promise<string | null>
+	/** Serves a local file's directory over localhost and returns the resulting URL (not file://). */
+	servePreviewFile: (filePath: string) => Promise<string>
 
 	// Fetch proxy (bypasses Chromium connection limits)
 	fetch: (req: {

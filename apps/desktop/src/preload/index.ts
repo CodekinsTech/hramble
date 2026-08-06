@@ -78,7 +78,7 @@ contextBridge.exposeInMainWorld("hramble", {
 		ipcRenderer.invoke("community:install-skill", input),
 
 	/** Lists every skill currently installed (bundled + community-installed). */
-	listInstalledSkills: (): Promise<Array<{ slug: string; name: string; description: string }>> =>
+	listInstalledSkills: (): Promise<Array<{ slug: string; name: string; description: string; instructions: string }>> =>
 		ipcRenderer.invoke("community:list-skills"),
 
 	/** Builds the interactive codebase graph's node/edge data for a project directory. */
@@ -181,6 +181,8 @@ contextBridge.exposeInMainWorld("hramble", {
 			ipcRenderer.invoke("git:apply-diff-text", localDir, diffText),
 		getRemoteUrl: (directory: string, remote?: string) =>
 			ipcRenderer.invoke("git:remote-url", directory, remote),
+		mergeBranch: (directory: string, branchName: string) =>
+			ipcRenderer.invoke("git:merge-branch", directory, branchName),
 	},
 
 	// --- Work-graph store (.hramble/graph) ---
@@ -241,10 +243,40 @@ contextBridge.exposeInMainWorld("hramble", {
 		}
 	},
 
+	/** Opens a URL in the system's default browser (e.g. real Chrome), not Hramble's embedded browser pane. */
+	openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+
+	/** Reveals the bundled "Hramble Console Bridge" Chrome extension source in Finder/Explorer, for a manual "Load unpacked" install. */
+	revealChromeExtension: (): Promise<void> => ipcRenderer.invoke("shell:reveal-chrome-extension"),
+
+	/** Subscribe to the Mac going to sleep. */
+	onPowerSuspend: (callback: () => void) => {
+		const listener = () => callback()
+		ipcRenderer.on("power:suspend", listener)
+		return () => {
+			ipcRenderer.removeListener("power:suspend", listener)
+		}
+	},
+
+	/** Subscribe to the Mac waking up from sleep. */
+	onPowerResume: (callback: () => void) => {
+		const listener = () => callback()
+		ipcRenderer.on("power:resume", listener)
+		return () => {
+			ipcRenderer.removeListener("power:resume", listener)
+		}
+	},
+
 	// --- Directory picker ---
 
 	/** Opens a native folder picker dialog. Returns the selected path, or null if cancelled. */
 	pickDirectory: () => ipcRenderer.invoke("dialog:open-directory"),
+
+	/** Opens a native file picker for an HTML/SVG page. Returns the selected path, or null if cancelled. */
+	pickHtmlFile: (): Promise<string | null> => ipcRenderer.invoke("dialog:open-html-file"),
+
+	/** Serves a local file's directory over localhost and returns the resulting URL (not file://). */
+	servePreviewFile: (filePath: string): Promise<string> => ipcRenderer.invoke("preview:serve-file", filePath),
 
 	// --- Fetch proxy (bypasses Chromium connection limits) ---
 
@@ -430,5 +462,22 @@ contextBridge.exposeInMainWorld("hramble", {
 		/** Spend gems to buy an avatar (records ownership when avatarId is set). */
 		deduct: (p: { email: string; amount: number; avatarId: string; userToken?: string }) =>
 			ipcRenderer.invoke("store:deduct", p),
+	},
+
+	// --- Community feed (separate Supabase project from the avatar store) ---
+	community: {
+		/** Public config for the renderer: enabled, supabaseUrl, supabaseAnonKey, apiBase. */
+		config: () => ipcRenderer.invoke("community:config"),
+		/** Opens the Google sign-in window. Result arrives via onSession, not the return value. */
+		login: () => ipcRenderer.invoke("community:login"),
+		logout: () => ipcRenderer.invoke("community:logout"),
+		/** The persisted session from a previous launch, if any. */
+		getSession: () => ipcRenderer.invoke("community:get-session"),
+		/** Fires whenever sign-in completes, fails, or sign-out happens (payload is null on sign-out/failure). */
+		onSession: (callback: (session: unknown) => void) => {
+			const listener = (_event: unknown, session: unknown) => callback(session)
+			ipcRenderer.on("community:session", listener)
+			return () => ipcRenderer.removeListener("community:session", listener)
+		},
 	},
 })

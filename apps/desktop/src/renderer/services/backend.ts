@@ -345,6 +345,36 @@ export async function fetchOpenInTargets(): Promise<OpenInTargetsResult> {
 	throw new Error("Open-in targets are only available in Electron mode")
 }
 
+/** Opens a URL in the system's default browser (real Chrome, etc.), not Hramble's embedded browser pane. */
+export async function openExternal(url: string): Promise<void> {
+	if (isElectron) {
+		return window.hramble.openExternal(url)
+	}
+}
+
+/** Reveals the bundled "Hramble Console Bridge" Chrome extension source in Finder/Explorer. */
+export async function revealChromeExtension(): Promise<void> {
+	if (isElectron) {
+		return window.hramble.revealChromeExtension()
+	}
+}
+
+/** Opens a native file picker for an HTML/SVG page. Returns the selected path, or null if cancelled/unavailable. */
+export async function pickHtmlFile(): Promise<string | null> {
+	if (isElectron) {
+		return window.hramble.pickHtmlFile()
+	}
+	return null
+}
+
+/** Serves a local file's directory over localhost (not file://) and returns the resulting URL. */
+export async function servePreviewFile(filePath: string): Promise<string | null> {
+	if (isElectron) {
+		return window.hramble.servePreviewFile(filePath)
+	}
+	return null
+}
+
 /**
  * Opens a directory in the specified target application.
  * Optionally persists the target as the user's preferred choice.

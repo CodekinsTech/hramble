@@ -404,6 +404,47 @@ export async function applyChangesToLocal(
 	}
 }
 
+export interface GitMergeResult {
+	success: boolean
+	/** Files with conflict markers, if the merge stopped on a conflict. */
+	conflictedFiles: string[]
+	error?: string
+}
+
+/**
+ * Merges a branch into the current branch of `directory` (Team Spaces'
+ * "Combine" button — each team member's finished piece merges into the
+ * project's active branch this way). Unlike applyChangesToLocal/
+ * applyDiffTextToLocal (a one-way diff+apply of uncommitted changes), this
+ * is a real `git merge`: it preserves history and lets git's own 3-way
+ * merge resolve non-overlapping changes.
+ *
+ * On conflict, the merge is aborted immediately so the working tree is
+ * never left half-merged — the caller gets back exactly which files
+ * conflicted, to surface to the user (or hand to the AI agent) before
+ * retrying.
+ */
+export async function mergeBranch(directory: string, branchName: string): Promise<GitMergeResult> {
+	const git = getGit(directory)
+	try {
+		await git.merge([branchName, "--no-ff", "-m", `Combine: merge ${branchName}`])
+		return { success: true, conflictedFiles: [] }
+	} catch (err) {
+		const status = await git.status().catch(() => null)
+		const conflictedFiles = status?.conflicted ?? []
+		try {
+			await git.merge(["--abort"])
+		} catch {
+			// Nothing to abort (the failure wasn't a conflicted merge in progress).
+		}
+		return {
+			success: false,
+			conflictedFiles,
+			error: err instanceof Error ? err.message : "Merge failed",
+		}
+	}
+}
+
 /**
  * Gets the remote URL for a repository (defaults to "origin").
  * Returns null if no remote is configured.

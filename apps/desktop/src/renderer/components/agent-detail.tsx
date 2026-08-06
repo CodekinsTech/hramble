@@ -14,6 +14,7 @@ import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
 import {
 	ArrowLeftIcon,
+	ArrowUpRightIcon,
 	CheckIcon,
 	ChevronDownIcon,
 	CopyIcon,
@@ -23,6 +24,7 @@ import {
 	GlobeIcon,
 	GitForkIcon,
 	PencilIcon,
+	RadioTowerIcon,
 	TerminalIcon,
 	XIcon,
 } from "lucide-react"
@@ -37,9 +39,17 @@ import type {
 	VcsData,
 } from "../hooks/use-opencode-data"
 import { useServerConnection } from "../hooks/use-server"
+import { useSessionShare } from "../hooks/use-session-share"
 import type { ChatTurn } from "../hooks/use-session-chat"
 import type { Agent, FileAttachment, QuestionAnswer } from "../lib/types"
-import { fetchOpenInTargets, isElectron, openInTarget } from "../services/backend"
+import {
+	fetchOpenInTargets,
+	isElectron,
+	openExternal,
+	openInTarget,
+	pickHtmlFile,
+	servePreviewFile,
+} from "../services/backend"
 import { messagesFamily } from "../atoms/messages"
 import { useSetAppBarContent } from "./app-bar-context"
 import { ChatView } from "./chat"
@@ -47,7 +57,7 @@ import { HrambleWordmark } from "./hramble-wordmark"
 import { ReviewPanel } from "./review/review-panel"
 import { fileExplorerOpenAtom } from "../atoms/file-explorer"
 import { FileExplorer } from "./file-explorer"
-import { browserPanelOpenAtom } from "../atoms/browser"
+import { browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
 import { SessionMetricsBar } from "./session-metrics-bar"
 import { WorktreeActions } from "./worktree-actions"
 
@@ -551,6 +561,12 @@ function SessionAppBarContent({
 					</TooltipContent>
 				</Tooltip>
 
+				{/* Open the browser pane's current URL in the system's real browser */}
+				<OpenInChromeButton />
+
+				{/* Live Share — watch this session from a browser, no install */}
+				<ShareButton directory={agent.directory} sessionId={agent.sessionId} />
+
 				{/* Session metrics bar */}
 				<div className="hidden min-w-0 shrink lg:block">
 					<SessionMetricsBar sessionId={agent.sessionId} />
@@ -607,6 +623,136 @@ function TargetIcon({ iconDataUrl, className }: { iconDataUrl?: string; classNam
 			src={iconDataUrl}
 			className={cn("shrink-0 object-contain", className)}
 		/>
+	)
+}
+
+/**
+ * Opens the browser pane's current page in the system's real default browser
+ * (e.g. actual Chrome) instead of Hramble's embedded, more limited pane —
+ * same idea as the external-link button in Claude's own UI.
+ */
+/** The browser pane's untouched default — nothing real is being previewed yet. */
+const BROWSER_PANE_PLACEHOLDER = "https://www.google.com"
+
+function OpenInChromeButton() {
+	const url = useAtomValue(browserUrlAtom)
+	const [busy, setBusy] = useState(false)
+
+	const handleClick = async () => {
+		// Already showing something real (whatever the agent previewed, or a page
+		// the user navigated to) — just mirror it into the real browser.
+		if (url !== BROWSER_PANE_PLACEHOLDER) {
+			openExternal(url)
+			return
+		}
+		// Nothing's being previewed — let the user pick a page and serve it over
+		// localhost (not file://, which breaks relative paths/fetch/modules),
+		// same server the agent's own preview tool uses.
+		setBusy(true)
+		try {
+			const filePath = await pickHtmlFile()
+			if (!filePath) return
+			const servedUrl = await servePreviewFile(filePath)
+			if (servedUrl) openExternal(servedUrl)
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	return (
+		<Tooltip>
+			<TooltipTrigger
+				render={
+					<button
+						type="button"
+						onClick={handleClick}
+						disabled={busy}
+						className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+					/>
+				}
+			>
+				<ArrowUpRightIcon className="size-3.5" />
+			</TooltipTrigger>
+			<TooltipContent>
+				{url !== BROWSER_PANE_PLACEHOLDER ? "Open in your browser" : "Preview a page in your browser"}
+			</TooltipContent>
+		</Tooltip>
+	)
+}
+
+/**
+ * Live Share toggle — starts/stops relaying this session to anyone with the
+ * link (see hooks/use-session-share.ts). No account needed on the viewer's
+ * side; they can watch and send messages back into the session.
+ */
+function ShareButton({ directory, sessionId }: { directory: string; sessionId: string }) {
+	const { shareUrl, isSharing, start, stop } = useSessionShare(directory, sessionId)
+	const [copied, setCopied] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+
+	const handleOpenChange = (open: boolean) => {
+		if (open && !isSharing) {
+			const result = start()
+			setError(result.ok ? null : result.error)
+		}
+	}
+
+	const copyLink = () => {
+		if (!shareUrl) return
+		navigator.clipboard.writeText(shareUrl)
+		setCopied(true)
+		setTimeout(() => setCopied(false), 1500)
+	}
+
+	return (
+		<Popover onOpenChange={handleOpenChange}>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<PopoverTrigger
+							render={
+								<button
+									type="button"
+									className={cn(
+										"flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+										isSharing
+											? "bg-muted text-foreground"
+											: "text-muted-foreground hover:bg-muted hover:text-foreground",
+									)}
+								/>
+							}
+						/>
+					}
+				>
+					<RadioTowerIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>{isSharing ? "Live Share is on" : "Share this session — watch + help live"}</TooltipContent>
+			</Tooltip>
+			<PopoverContent align="end" className="w-80">
+				{error ? (
+					<p className="text-red-500 text-sm">{error}</p>
+				) : (
+					<div className="flex flex-col gap-3">
+						<div>
+							<p className="font-medium text-sm">Live Share</p>
+							<p className="text-muted-foreground text-xs">
+								Anyone with this link can watch this session live and send messages into it — no account
+								needed.
+							</p>
+						</div>
+						<div className="flex items-center gap-2">
+							<Input readOnly value={shareUrl ?? ""} className="text-xs" onFocus={(e) => e.target.select()} />
+							<Button size="sm" variant="outline" onClick={copyLink}>
+								{copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+							</Button>
+						</div>
+						<Button size="sm" variant="ghost" onClick={stop} className="self-start text-muted-foreground">
+							Stop sharing
+						</Button>
+					</div>
+				)}
+			</PopoverContent>
+		</Popover>
 	)
 }
 

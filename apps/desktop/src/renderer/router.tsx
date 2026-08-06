@@ -17,6 +17,7 @@ import { NotFoundPage } from "./components/not-found-page"
 import { RootLayout } from "./components/root-layout"
 import { SessionRoute } from "./components/session-route"
 import { AboutSettings } from "./components/settings/about-settings"
+import { AccountSettings } from "./components/settings/account-settings"
 import { GeneralSettings } from "./components/settings/general-settings"
 import { NotificationSettings } from "./components/settings/notification-settings"
 import { PermissionSettings } from "./components/settings/permission-settings"
@@ -28,6 +29,7 @@ import { SetupSettings } from "./components/settings/setup-settings"
 import { StoreSettings } from "./components/settings/store-settings"
 import { WorktreeSettings } from "./components/settings/worktree-settings"
 import { SidebarLayout } from "./components/sidebar-layout"
+import { TeamPage } from "./components/team-page"
 import { TemplatesPage } from "./components/templates-page"
 
 // ============================================================
@@ -70,6 +72,12 @@ const communityRoute = createRoute({
 	component: CommunityPage,
 })
 
+const teamRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "team",
+	component: TeamPage,
+})
+
 const projectRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "project/$projectSlug",
@@ -105,6 +113,12 @@ const settingsGeneralRoute = createRoute({
 	getParentRoute: () => settingsRoute,
 	path: "general",
 	component: GeneralSettings,
+})
+
+const settingsAccountRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: "account",
+	component: AccountSettings,
 })
 
 const settingsServersRoute = createRoute({
@@ -196,6 +210,7 @@ const routeTree = rootRoute.addChildren([
 		homeRoute,
 		templatesRoute,
 		communityRoute,
+		teamRoute,
 		projectRoute.addChildren([projectIndexRoute, sessionRoute]),
 		automationsRoute.addChildren([
 			automationsIndexRoute,
@@ -204,6 +219,7 @@ const routeTree = rootRoute.addChildren([
 		settingsRoute.addChildren([
 			settingsIndexRoute,
 			settingsGeneralRoute,
+			settingsAccountRoute,
 			settingsServersRoute,
 			settingsNotificationsRoute,
 			settingsProvidersRoute,

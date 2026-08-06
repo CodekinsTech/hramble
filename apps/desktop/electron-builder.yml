@@ -27,6 +27,14 @@ extraResources:
     to: opencode-harness
     filter:
       - "**/*"
+  # "Hramble Console Bridge" Chrome extension — lets the agent read a user's
+  # real Chrome console (not just the in-app preview pane). Unpacked source
+  # only for now; revealed via Settings → Chrome Console Access for manual
+  # "Load unpacked" install until it's published to the Chrome Web Store.
+  - from: resources/chrome-extension
+    to: chrome-extension
+    filter:
+      - "**/*"
   # Tray icon assets — must be at the root of process.resourcesPath
   # so tray.ts can find them via path.join(process.resourcesPath, "iconTemplate.png")
   - from: resources/iconTemplate.png

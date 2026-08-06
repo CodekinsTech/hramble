@@ -1,0 +1,153 @@
+/* Fonts — same family stack as apps/desktop/src/renderer/index.css. */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/syne";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+/* Quadrangle — brand wordmark font (Larabie freeware, commercial OK). Wordmark only, never body copy. */
+@font-face {
+	font-family: "Quadrangle";
+	src: url("./assets/Quadrangle.ttf") format("truetype");
+	font-weight: normal;
+	font-style: normal;
+	font-display: swap;
+}
+
+/*
+ * Color tokens — copied verbatim from packages/ui/src/styles/globals.css
+ * (the "Cortex" theme desktop uses). Light is the default, matching
+ * desktop's own default; dark is opt-in via [data-theme="dark"].
+ */
+:root {
+	color-scheme: light;
+
+	--radius: 0.75rem;
+
+	--background: #ffffff;
+	--foreground: #0d0d0d;
+	--card: #ffffff;
+	--card-foreground: #0d0d0d;
+	--popover: #fcfcfc;
+	--popover-foreground: #0d0d0d;
+	--secondary: #f9f9f9;
+	--muted: #f9f9f9;
+	--muted-foreground: #414141;
+	--accent: #ededed;
+	--accent-foreground: #0d0d0d;
+	--destructive: #fa423e;
+	--border: #ededed;
+	--input: #ededed;
+
+	/* Hramble Blue (accent ring) + brand green (wordmark / primary actions) */
+	--hramble-blue: #05bdf5;
+	--brand-green: #12c24f;
+
+	/* Glass surfaces — light mode: white-tinted, per index.css .hramble-av-dock/.hramble-av-float */
+	--glass-bg: rgba(255, 255, 255, 0.62);
+	--glass-bg-soft: rgba(255, 255, 255, 0.42);
+	--glass-border: rgba(255, 255, 255, 0.6);
+	--glass-shadow: 0 16px 40px rgba(20, 40, 80, 0.22);
+	--shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme="dark"] {
+	color-scheme: dark;
+	--background: #181818;
+	--foreground: #ffffff;
+	--card: #212121;
+	--card-foreground: #ffffff;
+	--popover: #282828;
+	--popover-foreground: #ffffff;
+	--secondary: #212121;
+	--muted: #282828;
+	--muted-foreground: #afafaf;
+	--accent: #282828;
+	--accent-foreground: #ffffff;
+	--destructive: #fa423e;
+	--border: #2e2e2e;
+	--input: #2e2e2e;
+
+	--glass-bg: rgba(24, 24, 24, 0.62);
+	--glass-bg-soft: rgba(24, 24, 24, 0.45);
+	--glass-border: rgba(255, 255, 255, 0.08);
+	--glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		color-scheme: dark;
+		--background: #181818;
+		--foreground: #ffffff;
+		--card: #212121;
+		--card-foreground: #ffffff;
+		--popover: #282828;
+		--popover-foreground: #ffffff;
+		--secondary: #212121;
+		--muted: #282828;
+		--muted-foreground: #afafaf;
+		--accent: #282828;
+		--accent-foreground: #ffffff;
+		--destructive: #fa423e;
+		--border: #2e2e2e;
+		--input: #2e2e2e;
+
+		--glass-bg: rgba(24, 24, 24, 0.62);
+		--glass-bg-soft: rgba(24, 24, 24, 0.45);
+		--glass-border: rgba(255, 255, 255, 0.08);
+		--glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+body {
+	font-family: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	background: var(--background);
+	color: var(--foreground);
+	-webkit-tap-highlight-color: transparent;
+	transition: background-color 0.2s ease, color 0.2s ease;
+}
+button,
+input {
+	font-family: inherit;
+}
+
+/* ---- Shared glass surface classes (same recipe as desktop's .hramble-av-dock/.hramble-av-float) ---- */
+.glass-panel {
+	background: var(--glass-bg);
+	backdrop-filter: blur(16px) saturate(150%);
+	-webkit-backdrop-filter: blur(16px) saturate(150%);
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--glass-shadow);
+	border-radius: 20px;
+}
+.glass-panel-soft {
+	background: var(--glass-bg-soft);
+	backdrop-filter: blur(10px) saturate(140%);
+	-webkit-backdrop-filter: blur(10px) saturate(140%);
+	border: 1px solid var(--glass-border);
+	border-radius: 16px;
+}
+
+.brand-wordmark {
+	font-family: "Quadrangle", sans-serif;
+	color: var(--brand-green);
+	letter-spacing: 1px;
+}
+
+.heading {
+	font-family: "Syne Variable", sans-serif;
+	font-weight: 700;
+}
+
+.mono {
+	font-family: "IBM Plex Mono", ui-monospace, monospace;
+}

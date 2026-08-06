@@ -48,3 +48,10 @@ AGENTS.local.md
 # Local working directory
 .local/
 apps/desktop/native/window-bounds/build/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
+
+# repo-map UI cache — regenerable, machine-local (see repo-graph.ts).
+.hramble/*.json
+apps/mobile/tsconfig.tsbuildinfo

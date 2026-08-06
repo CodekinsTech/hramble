@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, Menu, session, shell } from "electron"
 import { initAutomations, shutdownAutomations } from "./automation"
 import { migrateLegacyStorage } from "./automation/paths"
+import { registerCommunityAuth } from "./community-auth"
+import { initCommunitySessionStore } from "./community-session-store"
 import { initCredentialStore } from "./credential-store"
 import { installHarness } from "./harness-installer"
 import { getOpaqueWindowsPref, registerIpcHandlers } from "./ipc-handlers"
@@ -15,7 +17,9 @@ import { stopServer } from "./opencode-manager"
 import { initSettingsStore } from "./settings-store"
 import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
 import { registerConnectors } from "./connectors" // MCP connectors management
+import { startExtensionBridge } from "./extension-bridge" // Chrome extension console relay
 import { registerGraphStore } from "./graph-store" // work-graph persistence (.hramble/graph)
+import { registerSleepMonitor } from "./sleep-monitor"
 import { startBrowserBridge } from "./browser-bridge" // agent ↔ visible browser pane
 import { registerOllama } from "./ollama" // local models (free tier)
 import { registerStore } from "./store" // avatar store — proxy to the shared Worker
@@ -321,8 +325,29 @@ if (!gotLock) {
 		)
 		log.info("Registered PNA header injection for 127.0.0.1 requests")
 
+		// Google actively blocks sign-in flows whose User-Agent identifies as an
+		// embedded browser (the "disallowed_useragent" block) — Electron's default
+		// UA includes "Electron/x.x.x", which trips this, so the community login
+		// window (community-auth.ts) lands on a bare google.com instead of the
+		// real sign-in screen. Stripping "Electron/..." out is the same fix
+		// AvatarBox's own Electron app already relies on for Google-backed flows.
+		const strippedUA = session.defaultSession.getUserAgent().replace(/\s*Electron\/\S+/g, "")
+		session.defaultSession.setUserAgent(strippedUA)
+		// Some redirects during the OAuth hop don't inherit session.setUserAgent()
+		// (Electron issue #40374) — patch the header directly for Google's domains
+		// as a safety net, same pattern AvatarBox uses for YouTube embeds.
+		session.defaultSession.webRequest.onBeforeSendHeaders(
+			{ urls: ["*://accounts.google.com/*", "*://*.google.com/*"] },
+			(details, callback) => {
+				details.requestHeaders["User-Agent"] = strippedUA
+				callback({ requestHeaders: details.requestHeaders })
+			},
+		)
+
 		initSettingsStore()
 		initCredentialStore()
+		initCommunitySessionStore()
+		registerCommunityAuth()
 		registerIpcHandlers()
 		registerPerch({
 			preloadPath: path.join(__dirname, "../preload/index.cjs"),
@@ -333,6 +358,8 @@ if (!gotLock) {
 		registerOllama()
 		registerConnectors()
 		registerGraphStore()
+		registerSleepMonitor()
+		startExtensionBridge()
 		initAutomations().catch(console.error)
 		startMdnsScanner().catch((err) => log.warn("mDNS scanner failed to start", err))
 		createWindow()

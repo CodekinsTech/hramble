@@ -25,6 +25,8 @@ export interface InstalledSkill {
 	slug: string
 	name: string
 	description: string
+	/** The skill's full body (everything after the frontmatter) — what the agent actually reads. */
+	instructions: string
 }
 
 const SKILLS_DIR = path.join(os.homedir(), ".config", "opencode", "skills")
@@ -71,7 +73,10 @@ export async function listInstalledSkills(): Promise<InstalledSkill[]> {
 				const content = await readFile(path.join(SKILLS_DIR, entry.name, "SKILL.md"), "utf8")
 				const name = unquote((content.match(/^name:\s*(.*)$/m) || [])[1]?.trim() || entry.name)
 				const description = unquote((content.match(/^description:\s*(.*)$/m) || [])[1]?.trim() || "")
-				skills.push({ slug: entry.name, name, description })
+				// Body = everything after the closing frontmatter "---" line.
+				const frontmatterEnd = content.indexOf("\n---", content.indexOf("---") + 3)
+				const instructions = frontmatterEnd >= 0 ? content.slice(frontmatterEnd + 4).trim() : content.trim()
+				skills.push({ slug: entry.name, name, description, instructions })
 			} catch {
 				// No SKILL.md in this folder — not a skill, skip it.
 			}

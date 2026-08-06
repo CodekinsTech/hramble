@@ -27,6 +27,7 @@ import {
 	ListOrderedIcon,
 	Loader2Icon,
 	MonitorIcon,
+	MoonIcon,
 	PlayIcon,
 	PlusIcon,
 	Redo2Icon,
@@ -46,6 +47,7 @@ import {
 } from "react"
 import { messagesFamily, removeMessageAtom } from "../../atoms/messages"
 import { projectModelsAtom, setProjectModelAtom } from "../../atoms/preferences"
+import { interruptedWorkAtom, resolveInterruptedItemAtom } from "../../atoms/sleep-recovery"
 import type { SessionSetupPhase } from "../../atoms/sessions"
 import { sessionFamily } from "../../atoms/sessions"
 import {
@@ -964,6 +966,13 @@ function ChatInputSection({
 	// so the parent session's UI can respond on behalf of any descendant.
 	const effectivePermission = useAtomValue(effectivePermissionFamily(agent.sessionId))
 	const effectiveQuestion = useAtomValue(effectiveQuestionFamily(agent.sessionId))
+
+	// Sleep/wake recovery — surfaced only on the specific session that got interrupted.
+	const interruptedWork = useAtomValue(interruptedWorkAtom)
+	const resolveInterruptedItem = useSetAtom(resolveInterruptedItemAtom)
+	const interruptedItem = interruptedWork.find(
+		(item) => item.kind === "session" && item.sessionId === agent.sessionId,
+	)
 
 	// Diff comments integration
 	const diffComments = useAtomValue(diffCommentsFamily(agent.sessionId))
@@ -1895,6 +1904,29 @@ function ChatInputSection({
 									Redo
 								</button>
 							)}
+						</div>
+					)}
+
+					{/* Sleep/wake recovery — Mac went to sleep mid-run, this session got interrupted */}
+					{interruptedItem && (
+						<div className="mb-2 flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+							<MoonIcon className="size-3.5 shrink-0" />
+							<span className="flex-1">Your Mac went to sleep and this task was interrupted — continue from here?</span>
+							<button
+								type="button"
+								onClick={() => resolveInterruptedItem(interruptedItem.id)}
+								className="flex items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-[11px] text-foreground transition-colors hover:bg-muted"
+							>
+								<CheckIcon className="size-3" />
+								Yes, continue
+							</button>
+							<button
+								type="button"
+								onClick={() => resolveInterruptedItem(interruptedItem.id)}
+								className="rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:text-foreground"
+							>
+								Dismiss
+							</button>
 						</div>
 					)}
 

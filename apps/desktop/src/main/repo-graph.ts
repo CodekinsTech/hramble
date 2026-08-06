@@ -1,4 +1,4 @@
-import { type Dirent, readdirSync, readFileSync, statSync } from "node:fs"
+import { type Dirent, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 // Builds the same file/symbol/reference data as the agent's own repo_map
@@ -7,8 +7,9 @@ import path from "node:path"
 // separate, simpler implementation on purpose — this runs in Electron's main
 // process, a different runtime than the plugin (which loads inside the
 // separately-installed `opencode` binary), so there's no easy shared import
-// between the two. No caching here — the UI re-scans on open, which is fine
-// for a view opened occasionally rather than every agent turn.
+// between the two. Caches per-file symbols/tokens by mtime in its own cache
+// file (not the agent tool's — the two extractSymbols implementations have
+// diverged, so sharing one cache file risks reusing wrongly-shaped data).
 
 const SKIP_DIRS = new Set([
 	"node_modules", ".git", "dist", "build", "out", ".next", ".turbo",
@@ -79,6 +80,38 @@ function extractTokens(text: string): Set<string> {
 	return seen
 }
 
+const CACHE_VERSION = 1
+
+interface CacheEntry {
+	mtimeMs: number
+	symbols: Array<{ kind: string; name: string }>
+	tokens: string[]
+}
+
+function cachePath(directory: string): string {
+	return path.join(directory, ".hramble", "repo-graph-ui-cache.json")
+}
+
+function loadCache(directory: string): Record<string, CacheEntry> {
+	try {
+		const raw = readFileSync(cachePath(directory), "utf8")
+		const data = JSON.parse(raw)
+		if (data.version !== CACHE_VERSION) return {}
+		return data.files || {}
+	} catch {
+		return {}
+	}
+}
+
+function saveCache(directory: string, files: Record<string, CacheEntry>): void {
+	try {
+		mkdirSync(path.join(directory, ".hramble"), { recursive: true })
+		writeFileSync(cachePath(directory), JSON.stringify({ version: CACHE_VERSION, files }), "utf8")
+	} catch {
+		// Best-effort — a failed cache write shouldn't break the graph view.
+	}
+}
+
 function walk(dir: string, files: string[]): void {
 	let entries: Dirent[]
 	try {
@@ -127,6 +160,9 @@ export async function buildRepoGraph(directory: string): Promise<RepoGraphData> 
 
 	const perFile: Array<{ rel: string; cluster: string; symbols: Array<{ kind: string; name: string }>; tokens: Set<string> }> = []
 
+	const cache = loadCache(directory)
+	const nextCache: Record<string, CacheEntry> = {}
+
 	for (const f of files) {
 		let st: ReturnType<typeof statSync>
 		try {
@@ -135,21 +171,30 @@ export async function buildRepoGraph(directory: string): Promise<RepoGraphData> 
 			continue
 		}
 		if (st.size > MAX_FILE_BYTES) continue
-		let text: string
-		try {
-			text = readFileSync(f, "utf8")
-		} catch {
-			continue
-		}
 		const rel = path.relative(directory, f)
 		const cluster = rel.split(path.sep)[0] || rel
-		perFile.push({
-			rel,
-			cluster,
-			symbols: extractSymbols(path.extname(f).toLowerCase(), text),
-			tokens: extractTokens(text),
-		})
+		const cached = cache[rel]
+
+		let symbols: Array<{ kind: string; name: string }>
+		let tokens: string[]
+		if (cached && cached.mtimeMs === st.mtimeMs) {
+			symbols = cached.symbols
+			tokens = cached.tokens
+		} else {
+			let text: string
+			try {
+				text = readFileSync(f, "utf8")
+			} catch {
+				continue
+			}
+			symbols = extractSymbols(path.extname(f).toLowerCase(), text)
+			tokens = [...extractTokens(text)]
+		}
+		nextCache[rel] = { mtimeMs: st.mtimeMs, symbols, tokens }
+		perFile.push({ rel, cluster, symbols, tokens: new Set(tokens) })
 	}
+
+	saveCache(directory, nextCache)
 
 	// symbolIndex: name -> node id (first definition wins if the same name appears twice)
 	const symbolIndex = new Map<string, string>()

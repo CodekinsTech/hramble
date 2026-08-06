@@ -1,0 +1,31 @@
+name = "hramble-session-relay"
+main = "src/index.ts"
+compatibility_date = "2026-06-08"
+compatibility_flags = ["nodejs_compat"]
+
+# Same account as the community-api Worker (supportcodekins@gmail.com).
+account_id = "3ba311d301a2bff9aa2db08a3ba50388"
+
+[durable_objects]
+bindings = [
+	{ name = "SESSION_ROOM", class_name = "SessionRoom" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionRoom"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[vars]
+# Public URL + anon key — same pair used by community-api, safe to commit.
+# Used to verify the host's Supabase access token before letting them open a
+# room (viewers need no account — the unguessable room token is the access
+# control for them, same model as a Google Docs "anyone with the link" share).
+SUPABASE_URL = "https://sojiexeracwwhxhsgvys.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvamlleGVyYWN3d2h4aHNndnlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NjAxMjUsImV4cCI6MjEwMTQzNjEyNX0.dlhPBdFdLSpyaPJfbyxZBdMlu5eduWNQ36Bt6RMoBho"
+
+[observability]
+enabled = true

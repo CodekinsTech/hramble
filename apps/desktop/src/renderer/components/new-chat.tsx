@@ -20,15 +20,13 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	CheckIcon,
 	ChevronDownIcon,
-	CodeIcon,
-	FileTextIcon,
 	FolderIcon,
 	FolderPlusIcon,
 	GitForkIcon,
-	GitPullRequestIcon,
 	InfinityIcon,
 	ListIcon,
 	MonitorIcon,
+	MoonIcon,
 	NetworkIcon,
 	PencilIcon,
 	PlayIcon,
@@ -50,6 +48,7 @@ import {
 import { appStore } from "../atoms/store"
 import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
 import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
+import { interruptedWorkAtom, resolveInterruptedItemAtom } from "../atoms/sleep-recovery"
 import {
 	HYPER_LOOP_SIZE,
 	HYPER_MAX_STEPS,
@@ -200,21 +199,6 @@ function MentionTrigger({
 	return null
 }
 
-const SUGGESTIONS = [
-	{
-		icon: CodeIcon,
-		text: "Build a new feature based on the existing patterns in this repo.",
-	},
-	{
-		icon: FileTextIcon,
-		text: "Summarize the architecture and key design decisions.",
-	},
-	{
-		icon: GitPullRequestIcon,
-		text: "Review recent changes and suggest improvements.",
-	},
-]
-
 /**
  * Syncs PromptInputProvider text to persisted drafts (debounced).
  * Must be rendered inside a <PromptInputProvider>.
@@ -259,6 +243,13 @@ export function NewChat() {
 	const [hyperRun, setHyperRun] = useAtom(hyperloopRunAtom)
 	// Always show the persisted run regardless of directory — directory is used for launching only
 	const hyperRunForDir = hyperRun
+
+	// Sleep/wake recovery — surfaced only when the currently-open run is the one that got interrupted.
+	const interruptedWork = useAtomValue(interruptedWorkAtom)
+	const resolveInterruptedItem = useSetAtom(resolveInterruptedItemAtom)
+	const interruptedHyperloopItem = interruptedWork.find(
+		(item) => item.kind === "hyperloop" && hyperRun && item.id === (hyperRun.id ?? hyperRun.goal),
+	)
 	const [hyperOpen, setHyperOpen] = useState(() => hyperRunForDir !== null)
 	const [hyperGoal, setHyperGoal] = useState(() => hyperRunForDir?.goal ?? "")
 	const [hyperDecomposing, setHyperDecomposing] = useState(false)
@@ -299,14 +290,29 @@ export function NewChat() {
 	// the local UI-only state below needs an explicit reset to actually show a
 	// blank slate instead of quietly keeping the old panel open/expanded.
 	useEffect(() => {
-		if (hyperRun) return
-		setHyperOpen(false)
-		setHyperGoal("")
+		if (!hyperRun) {
+			setHyperOpen(false)
+			setHyperGoal("")
+			setHyperCollapsed(false)
+			setEditingStep(null)
+			setManualQueueMode(false)
+			setExpandedRecap(null)
+			return
+		}
+		// Switching to a genuinely different run (e.g. clicking a different
+		// Hyperloop session in the sidebar) must also drop leftover view state
+		// from whichever run was open before — otherwise an already-collapsed
+		// recap, an expanded paragraph index, or an editing-step index from the
+		// OLD run silently carries over and can point at nothing meaningful in
+		// the new one (this was why closing a freshly-opened run sometimes just
+		// hid the panel instead of showing its recap).
+		setHyperOpen(true)
 		setHyperCollapsed(false)
 		setEditingStep(null)
-		setManualQueueMode(false)
 		setExpandedRecap(null)
-	}, [hyperRun])
+		setManualQueueMode(false)
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [hyperRun?.id])
 	// List ⇄ Graph view toggle for the Hyperloop panel (the graph is a VIEW, not a mode).
 	const [graphView, setGraphView] = useAtom(graphViewAtom)
 	// Mirror the Hyperloop run into the work-graph store (.hramble/graph) so the
@@ -905,9 +911,15 @@ export function NewChat() {
 		)
 	}
 
-	// Whether every step has finished (done or failed) — enables the recap collapse.
+	// Whether every REAL step has finished (done or failed) — enables the recap
+	// collapse. An empty, never-filled-in idle slot (from clicking "add a step"
+	// without typing anything into it) isn't a pending task — it must not block
+	// the recap forever, so it's excluded here.
 	const allStepsSettled =
-		hyperSteps.length > 0 && hyperSteps.every((s) => s.status === "done" || s.status === "failed")
+		hyperSteps.length > 0 &&
+		hyperSteps
+			.filter((s) => s.text.trim() || s.status !== "idle")
+			.every((s) => s.status === "done" || s.status === "failed")
 	// "Launch all" only makes sense before anything has started — once any step is
 	// running/done/failed, re-launching would redo the whole run. So gate on it.
 	const hyperNotLaunched = hyperSteps.length > 0 && hyperSteps.every((s) => s.status === "idle")
@@ -927,14 +939,30 @@ export function NewChat() {
 	// summaries for any completed step that doesn't have one yet (e.g. an older run).
 	const collapseToRecap = async () => {
 		setHyperCollapsed(true)
-		const dir = hyperRun?.directory || selectedDirectory
-		const client = getProjectClient(dir)
-		if (!client) return
-		if (!hyperSteps.some((s) => s.sessionId && !s.preview)) return
-		const summaries = await Promise.all(
-			hyperSteps.map((s) => (s.preview || !s.sessionId ? Promise.resolve(s.preview ?? "") : fetchStepSummary(client, s.sessionId, dir))),
-		)
-		setHyperSteps((prev) => prev.map((s, j) => ({ ...s, preview: summaries[j] || s.preview })))
+		// Graph view is a separate, persisted display toggle — if it was ever
+		// turned on (even for a different run), it would win over the recap
+		// below (`hyperCollapsed && !graphView`), leaving the user staring at a
+		// graph for a run that may not resolve a valid session, instead of the
+		// summary they just asked to see.
+		setGraphView(false)
+		// Everything below is best-effort background enrichment — the recap
+		// itself is already showing (hyperCollapsed is true) and falls back to
+		// each step's plain `text` when there's no `preview` yet, so a failure
+		// here must never be allowed to look like the recap itself failed.
+		try {
+			const dir = hyperRun?.directory || selectedDirectory
+			const client = getProjectClient(dir)
+			if (!client) return
+			if (!hyperSteps.some((s) => s.sessionId && !s.preview)) return
+			const summaries = await Promise.all(
+				hyperSteps.map((s) =>
+					s.preview || !s.sessionId ? Promise.resolve(s.preview ?? "") : fetchStepSummary(client, s.sessionId, dir),
+				),
+			)
+			setHyperSteps((prev) => prev.map((s, j) => ({ ...s, preview: summaries[j] || s.preview })))
+		} catch (err) {
+			console.error("[hyperloop] recap summary fetch failed (non-fatal, recap still shows plain step text)", err)
+		}
 	}
 
 	// Toggle a recap paragraph open/closed. When opening, if we only have a short
@@ -1262,68 +1290,61 @@ export function NewChat() {
 					<CodebaseGraph directory={selectedDirectory} onClose={() => setShowCodebaseGraph(false)} />
 				</div>
 			)}
-			{/* Hero area — vertically centered */}
-			<div className="flex flex-1 flex-col items-center justify-center px-0 sm:px-6">
-				<div className="w-full max-w-4xl space-y-8">
-					{/* Brand logo — hidden on the Hyperloop page entirely (the "Hyperloop" title already carries the brand look there) */}
-					{!hyperloop && (
-						<div className="flex justify-center">
-							<HrambleLogo />
-						</div>
-					)}
-
-					{/* "Build what's next" + project name */}
-					<div className="text-center">
-						<h1
-							className={hyperloop ? "font-semibold" : "text-2xl font-semibold text-foreground"}
-							style={
-								hyperloop
-									? {
-											fontFamily: "'Syne Variable', sans-serif",
-											fontSize: "40px",
-											letterSpacing: "1px",
-											color: "#12c24f",
-											animation: "hramble-hue 10s ease-in-out infinite",
-										}
-									: undefined
-							}
-						>
-							{hyperloop ? <strong>Hyperloop</strong> : "Build what's next"}
-						</h1>
-						{hyperloop && (
-							<p className="mx-auto mt-2 max-w-md text-amber-600 text-sm dark:text-amber-400">
-								Autonomous mode — 7 agents, one <InfinityIcon className="-mt-0.5 inline size-3.5" /> loop, building,
-								verifying, repairing — until it's done. Press Escape any time to stop.
-							</p>
+			{/* Hero area — vertically centered. Once the Hyperloop panel is actually
+			    open and doing work, this hero is just dead weight above it (same
+			    principle as Code mode: once you're in an active session there's no
+			    lingering "Build what's next" title) — hide it and let the step
+			    panel below take the freed space instead. */}
+			{!hyperPanelOpen && (
+				<div className="flex flex-1 flex-col items-center justify-center px-0 sm:px-6">
+					<div className="w-full max-w-4xl space-y-8">
+						{/* Brand logo — hidden on the Hyperloop page entirely (the "Hyperloop" title already carries the brand look there) */}
+						{!hyperloop && (
+							<div className="flex justify-center">
+								<HrambleLogo />
+							</div>
 						)}
+
+						{/* "Build what's next" + project name */}
+						<div className="text-center">
+							<h1
+								className={hyperloop ? "font-semibold" : "text-2xl font-semibold text-foreground"}
+								style={
+									hyperloop
+										? {
+												fontFamily: "'Syne Variable', sans-serif",
+												fontSize: "40px",
+												letterSpacing: "1px",
+												color: "#12c24f",
+												animation: "hramble-hue 10s ease-in-out infinite",
+											}
+										: undefined
+								}
+							>
+								{hyperloop ? <strong>Hyperloop</strong> : "Build what's next"}
+							</h1>
+							{hyperloop && (
+								<p className="mx-auto mt-2 max-w-md text-amber-600 text-sm dark:text-amber-400">
+									Autonomous mode — 7 agents, one <InfinityIcon className="-mt-0.5 inline size-3.5" /> loop, building,
+									verifying, repairing — until it's done. Press Escape any time to stop.
+								</p>
+							)}
+						</div>
 					</div>
-
-					{/* Suggestion cards — Code mode only, never shown on the Hyperloop page */}
-					{!hyperloop && <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-						{SUGGESTIONS.map((suggestion) => {
-							const Icon = suggestion.icon
-							return (
-								<button
-									key={suggestion.text}
-									type="button"
-									onClick={() => handleLaunch(suggestion.text)}
-									disabled={launching || !selectedDirectory}
-									className="group/card flex flex-col gap-3 rounded-xl border border-border/50 bg-background/40 backdrop-blur-sm p-4 text-left transition-colors hover:border-muted-foreground/30 hover:bg-background/60 disabled:opacity-50"
-								>
-									<Icon className="size-5 text-muted-foreground transition-colors group-hover/card:text-foreground" />
-									<p className="text-sm leading-snug text-muted-foreground transition-colors group-hover/card:text-foreground">
-										{suggestion.text}
-									</p>
-								</button>
-							)
-						})}
-					</div>}
 				</div>
-			</div>
+			)}
 
-			{/* Bottom-pinned input section */}
-			<div className="shrink-0 px-0 pb-0 pt-0 sm:px-6 sm:pb-5 sm:pt-3">
-				<div className="mx-auto w-full max-w-4xl">
+			{/* Bottom-pinned input section — becomes the flex-growing element itself
+			    once the hero above is hidden, so the step panel gets to use the
+			    space the hero used to occupy instead of staying capped at 50vh. */}
+			<div
+				className={
+					hyperPanelOpen
+						? "flex min-h-0 flex-1 flex-col px-0 pb-0 pt-0 sm:px-6 sm:pb-5 sm:pt-3"
+						: "shrink-0 px-0 pb-0 pt-0 sm:px-6 sm:pb-5 sm:pt-3"
+				}
+			>
+				<div className={hyperPanelOpen ? "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col" : "mx-auto w-full max-w-4xl"}>
 					{/* Input card */}
 					<PromptInputProvider key={NEW_CHAT_DRAFT_KEY} initialInput={draft}>
 						<DraftSync setDraft={setDraft} />
@@ -1334,7 +1355,7 @@ export function NewChat() {
 								setMentionQuery(query)
 							}}
 						/>
-						<div className="relative">
+						<div className={hyperPanelOpen ? "relative flex min-h-0 flex-1 flex-col" : "relative"}>
 							<MentionPopover
 								ref={mentionPopoverRef}
 								query={mentionQuery}
@@ -1345,7 +1366,7 @@ export function NewChat() {
 								onClose={() => setMentionOpen(false)}
 							/>
 							{hyperPanelOpen && (
-								<div className="mb-2 flex max-h-[50vh] flex-col overflow-hidden rounded-xl border border-primary/30 bg-muted/30 p-3">
+								<div className="mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/30 bg-muted/30 p-3">
 									<div className="mb-2 flex items-center justify-between">
 										<span className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
 											<HyperloopSpinner className="h-3.5 w-auto text-primary" />
@@ -1390,16 +1411,23 @@ export function NewChat() {
 											<button
 												type="button"
 												title={
-													allStepsSettled && !hyperCollapsed
-														? "Collapse into a recap of what was built"
-														: "Close"
+													!allStepsSettled
+														? "Close"
+														: hyperCollapsed
+															? "Back to the full step list"
+															: "Collapse into a recap of what was built"
 												}
 												onClick={() => {
-													if (allStepsSettled && !hyperCollapsed) {
-														collapseToRecap()
-													} else {
+													if (!allStepsSettled) {
+														// Nothing finished yet — nothing to recap, just hide the panel.
 														setHyperOpen(false)
+													} else if (hyperCollapsed) {
+														// Second click on a finished run's recap used to vanish the whole
+														// panel with no way back — go to the full step list instead, so
+														// closing never destroys the one place the recap lives.
 														setHyperCollapsed(false)
+													} else {
+														collapseToRecap()
 													}
 												}}
 												className="rounded p-0.5 text-muted-foreground hover:text-foreground"
@@ -1511,7 +1539,10 @@ export function NewChat() {
 												step to edit just that one.
 											</p>
 											<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-											{hyperSteps.map((step, i) => (
+											{hyperSteps.map((step, i) => {
+												// An empty, never-filled-in "add a step" slot — nothing to recap.
+												if (!step.text.trim() && step.status === "idle") return null
+												return (
 												<div key={i} className="rounded-xl border border-border bg-muted/20 px-4 py-3.5">
 													<div className="flex items-start gap-3">
 														<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs text-muted-foreground">
@@ -1544,7 +1575,8 @@ export function NewChat() {
 														) : null}
 													</div>
 												</div>
-											))}
+												)
+											})}
 											</div>
 											<button type="button" onClick={() => setHyperCollapsed(false)} className="self-start rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
 												Edit steps
@@ -1708,6 +1740,27 @@ export function NewChat() {
 								Select a project folder before starting — otherwise there's nowhere real to save the work
 							</button>
 						)}
+						{interruptedHyperloopItem && (
+							<div className="mb-2 flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+								<MoonIcon className="size-3.5 shrink-0" />
+								<span className="flex-1">Your Mac went to sleep and this Hyperloop run was interrupted — continue from here?</span>
+								<button
+									type="button"
+									onClick={() => resolveInterruptedItem(interruptedHyperloopItem.id)}
+									className="flex items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-[11px] text-foreground transition-colors hover:bg-muted"
+								>
+									<CheckIcon className="size-3" />
+									Yes, continue
+								</button>
+								<button
+									type="button"
+									onClick={() => resolveInterruptedItem(interruptedHyperloopItem.id)}
+									className="rounded-md px-2 py-1 text-[11px] font-medium transition-colors hover:text-foreground"
+								>
+									Dismiss
+								</button>
+							</div>
+						)}
 						<PromptInput
 							className="rounded-xl"
 							accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
@@ -1729,7 +1782,6 @@ export function NewChat() {
 								placeholder="What should this session work on?"
 								autoFocus
 								disabled={launching || badFolder || projects.length === 0}
-								className="min-h-[80px]"
 								onKeyDown={handleTextareaKeyDown}
 							/>
 

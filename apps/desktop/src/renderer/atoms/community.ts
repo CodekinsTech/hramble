@@ -1,12 +1,22 @@
 /**
- * Community — local-only state for the UI-first build. There is no backend
- * yet (Supabase auth + Cloudflare media storage come later, once the UI is
- * settled), so "login" here is just a locally-remembered email and posts are
- * a locally-persisted list — both structured so swapping in the real backend
- * later only touches how these atoms get populated, not the UI that reads them.
+ * Community — the real backend (Supabase + the community-api Worker, see
+ * renderer/lib/community-client.ts) is now wired up, but it self-disables
+ * until a Supabase project is actually configured (community-config.ts on
+ * the main process side) — until then, `communityBackendEnabledAtom` stays
+ * false and everything below behaves exactly like the original local-only
+ * mock: "login" is a locally-remembered email, posts are a locally-persisted
+ * list. This means the UI keeps working today and flips over to the real
+ * backend automatically the moment real Supabase credentials exist.
  */
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
+import { fetchCommunityPosts, toggleCommunityLikeRemote } from "../lib/community-client"
+
+/** Set once at CommunityPage mount after checking the main process's config. */
+export const communityBackendEnabledAtom = atom(false)
+
+/** The current Supabase access token, needed for the image-upload Worker call. Null when signed out or backend disabled. */
+export const communityAccessTokenAtom = atom<string | null>(null)
 
 export interface CommunityUser {
 	email: string
@@ -19,7 +29,7 @@ export interface CommunityPost {
 	/** "build" = the original share-what-you-made post. "skill" = a reusable skill others can install. */
 	type: "build" | "skill"
 	caption: string
-	/** Data URL for now (local file read) — becomes a Cloudflare-hosted URL later. */
+	/** A data: URL (mock/local path) or a real https: R2-hosted URL (real backend path) — both work directly as an <img src>. */
 	thumbnailDataUrl: string | null
 	repoUrl: string | null
 	createdAt: number
@@ -80,8 +90,8 @@ const SEED_POSTS: CommunityPost[] = [
 
 export const communityPostsAtom = atomWithStorage<CommunityPost[]>("hramble:communityPosts", SEED_POSTS)
 
-/** Toggle the current user's like on a post — optimistic, local-only for now. */
-export const toggleCommunityLikeAtom = atom(null, (_get, set, postId: string) => {
+/** Toggle the current user's like on a post — optimistic locally, plus the real RPC when the backend is enabled. */
+export const toggleCommunityLikeAtom = atom(null, (get, set, postId: string) => {
 	set(communityPostsAtom, (prev) =>
 		prev.map((p) =>
 			p.id === postId
@@ -89,4 +99,12 @@ export const toggleCommunityLikeAtom = atom(null, (_get, set, postId: string) =>
 				: p,
 		),
 	)
+	if (get(communityBackendEnabledAtom)) toggleCommunityLikeRemote(postId)
+})
+
+/** Replaces the local feed with the real one from Supabase. No-op (returns early) when the backend is disabled. */
+export const refreshCommunityPostsAtom = atom(null, async (get, set) => {
+	if (!get(communityBackendEnabledAtom)) return
+	const posts = await fetchCommunityPosts()
+	set(communityPostsAtom, posts)
 })

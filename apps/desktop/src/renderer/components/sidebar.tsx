@@ -406,19 +406,57 @@ const SessionItem = memo(function SessionItem({
 	const statusColor = STATUS_COLOR[agent.status]
 	const isWorktree = !!agent.worktreePath
 	const lastActive = useLiveLastActive(agent)
+	// A session can end up here (e.g. leaked past the Code/Hyperloop list filter,
+	// or opened via search/fork) even though it's Hyperloop-tagged — in that case
+	// clicking it must restore the Hyperloop view, not the plain chat page, or the
+	// user lands on SessionView with no Hyperloop panel at all.
+	const hyperloopSessions = useAtomValue(hyperloopSessionSetAtom)
+	const hyperloopRuns = useAtomValue(hyperloopRunsAtom)
+	const setActiveRun = useSetAtom(hyperloopRunAtom)
+	const setWorkspaceMode = useSetAtom(workspaceModeAtom)
 
 	const [isEditing, setIsEditing] = useState(false)
 	const [editValue, setEditValue] = useState(agent.name)
 	const inputRef = useRef<HTMLInputElement>(null)
 
 	const onSelect = useCallback(() => {
+		// Same "is this a Hyperloop session" check the sidebar's own list filter
+		// uses (hyperloopSessionSetAtom OR the "Hyperloop ..." name pattern for
+		// older runs whose steps predate tagging) — matching only the tag Set
+		// here missed exactly those older/legacy sessions.
+		const isHyperTagged = hyperloopSessions.has(agent.id) || /^Hyperloop(\s|:|$)/i.test(agent.name)
+		if (isHyperTagged) {
+			// Prefer an exact match on which run this session was a step of; if
+			// that fails (e.g. this is the plan/parent session rather than one of
+			// the 7 step sessions), fall back to the most recent run for the same
+			// project directory rather than silently restoring nothing.
+			const run =
+				hyperloopRuns.find((r) => r.steps.some((s) => s.sessionId === agent.id)) ||
+				hyperloopRuns.find((r) => r.directory === agent.projectDirectory)
+			startTransition(() => {
+				if (run) setActiveRun(run)
+				setWorkspaceMode("hyperloop")
+				navigate({ to: "/" })
+			})
+			return
+		}
 		startTransition(() => {
 			navigate({
 				to: "/project/$projectSlug/session/$sessionId",
 				params: { projectSlug: agent.projectSlug, sessionId: agent.id },
 			})
 		})
-	}, [navigate, agent.projectSlug, agent.id])
+	}, [
+		navigate,
+		agent.projectSlug,
+		agent.id,
+		agent.name,
+		agent.projectDirectory,
+		hyperloopSessions,
+		hyperloopRuns,
+		setActiveRun,
+		setWorkspaceMode,
+	])
 
 	const startEditing = useCallback(() => {
 		setEditValue(agent.name)

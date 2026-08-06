@@ -1,0 +1,24 @@
+name = "hramble-community-api"
+main = "src/index.js"
+compatibility_date = "2026-06-08"
+compatibility_flags = ["nodejs_compat"]
+
+# New 2nd Cloudflare account (added 2026-08-04) — kept separate from
+# AvatarBox's infra (account 41b09dfee597b3c2b473b331e0d4be70), per decision
+# to keep Hramble and AvatarBox's data/accounts apart.
+account_id = "3ba311d301a2bff9aa2db08a3ba50388"
+
+# No custom domain yet — deploys to the default
+# https://hramble-community-api.<subdomain>.workers.dev
+# Add a `routes` block here later if a custom domain is wanted.
+
+[[r2_buckets]]
+binding = "COMMUNITY_IMAGES"
+bucket_name = "hramble-community"
+
+[vars]
+# Public URL + anon key — safe to commit, same pattern AvatarBox uses for
+# SUPABASE_PUBLISHABLE_KEY. RLS (supabase/migrations/0001_community_schema.sql)
+# is the actual security boundary.
+SUPABASE_URL = "https://sojiexeracwwhxhsgvys.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvamlleGVyYWN3d2h4aHNndnlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NjAxMjUsImV4cCI6MjEwMTQzNjEyNX0.dlhPBdFdLSpyaPJfbyxZBdMlu5eduWNQ36Bt6RMoBho"

@@ -5,6 +5,7 @@
  * media storage get wired in once this UI is settled, without changing the
  * components below (they only read/write the atoms).
  */
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@hramble/ui/components/dialog"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
 	DownloadIcon,
@@ -13,7 +14,6 @@ import {
 	ImagePlusIcon,
 	LogOutIcon,
 	MessageCircleIcon,
-	RssIcon,
 	SearchIcon,
 	SparklesIcon,
 	XIcon,
@@ -21,17 +21,43 @@ import {
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
+	communityAccessTokenAtom,
+	communityBackendEnabledAtom,
 	type CommunityPost,
-	type CommunityUser,
 	communityPostsAtom,
+	type CommunityUser,
 	communityUserAtom,
 	toggleCommunityLikeAtom,
 } from "../atoms/community"
 import { browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
 import { formatRelativeTime } from "../hooks/use-agents"
+import { createCommunityPost, uploadCommunityImage } from "../lib/community-client"
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const bridge = () => (window as any).hramble
+
+/** Flat chip mascot — the wired-jack theme for this page, simplified for UI use (no rainbow hair). */
+function ChipMascotIcon({ className }: { className?: string }) {
+	return (
+		<svg viewBox="0 0 96 110" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+			<title>Chip mascot</title>
+			<rect x="0" y="30" width="14" height="7" rx="2" fill="currentColor" />
+			<rect x="0" y="52" width="14" height="7" rx="2" fill="currentColor" />
+			<rect x="82" y="30" width="14" height="7" rx="2" fill="currentColor" />
+			<rect x="82" y="52" width="14" height="7" rx="2" fill="currentColor" />
+			<rect x="34" y="96" width="8" height="12" rx="2" fill="currentColor" />
+			<rect x="54" y="96" width="8" height="12" rx="2" fill="currentColor" />
+			<rect x="10" y="6" width="76" height="94" rx="16" fill="currentColor" />
+			<circle cx="32" cy="40" r="7" fill="var(--background)" />
+			<circle cx="64" cy="40" r="7" fill="var(--background)" />
+			<rect x="32" y="66" width="32" height="5" rx="2.5" fill="var(--background)" />
+		</svg>
+	)
+}
 
 function LoginGate() {
 	const setUser = useSetAtom(communityUserAtom)
+	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const [name, setName] = useState("")
 	const [email, setEmail] = useState("")
 
@@ -42,7 +68,7 @@ function LoginGate() {
 
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-			<RssIcon className="size-8 text-muted-foreground" />
+			<ChipMascotIcon className="size-16 text-ring" />
 			<div>
 				<h1 className="font-semibold text-foreground text-xl">Community</h1>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
@@ -50,44 +76,59 @@ function LoginGate() {
 					their work.
 				</p>
 			</div>
-			<form
-				onSubmit={(e) => {
-					e.preventDefault()
-					submit()
-				}}
-				className="flex w-full max-w-xs flex-col gap-2"
-			>
-				<input
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					placeholder="Your name"
-					className="h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
-				/>
-				<input
-					type="email"
-					required
-					value={email}
-					onChange={(e) => setEmail(e.target.value)}
-					placeholder="you@gmail.com"
-					className="h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
-				/>
+			{backendEnabled ? (
 				<button
-					type="submit"
-					disabled={!email.trim()}
-					className="mt-1 h-9 rounded-md bg-primary font-medium text-primary-foreground text-sm disabled:opacity-50"
+					type="button"
+					onClick={() => bridge().community.login()}
+					className="h-9 w-full max-w-xs rounded-md bg-primary font-medium text-primary-foreground text-sm"
 				>
-					Continue with Gmail
+					Continue with Google
 				</button>
-			</form>
-			<p className="text-[11px] text-muted-foreground/60">
-				Placeholder sign-in for now — real Google login arrives with the backend.
-			</p>
+			) : (
+				<>
+					<form
+						onSubmit={(e) => {
+							e.preventDefault()
+							submit()
+						}}
+						className="flex w-full max-w-xs flex-col gap-2"
+					>
+						<input
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="Your name"
+							className="h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+						/>
+						<input
+							type="email"
+							required
+							value={email}
+							onChange={(e) => setEmail(e.target.value)}
+							placeholder="you@gmail.com"
+							className="h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+						/>
+						<button
+							type="submit"
+							disabled={!email.trim()}
+							className="mt-1 h-9 rounded-md bg-primary font-medium text-primary-foreground text-sm disabled:opacity-50"
+						>
+							Continue with Gmail
+						</button>
+					</form>
+					<p className="text-[11px] text-muted-foreground/60">
+						Placeholder sign-in for now — real Google login arrives with the backend.
+					</p>
+				</>
+			)}
 		</div>
 	)
 }
 
 function Composer({ user }: { user: CommunityUser }) {
 	const setPosts = useSetAtom(communityPostsAtom)
+	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
+	const accessToken = useAtomValue(communityAccessTokenAtom)
+	const [posting, setPosting] = useState(false)
 	const [postType, setPostType] = useState<"build" | "skill">("build")
 
 	// "Share a build" fields
@@ -113,46 +154,84 @@ function Composer({ user }: { user: CommunityUser }) {
 	const canPostBuild = caption.trim() || thumbnailDataUrl
 	const canPostSkill = skillName.trim() && skillDescription.trim() && skillInstructions.trim()
 
-	const post = () => {
+	const post = async () => {
 		if (postType === "build") {
 			if (!canPostBuild) return
-			const newPost: CommunityPost = {
-				id: crypto.randomUUID(),
-				author: user,
-				type: "build",
-				caption: caption.trim(),
-				thumbnailDataUrl,
-				repoUrl: repoUrl.trim() || null,
-				createdAt: Date.now(),
-				likedByMe: false,
-				likeCount: 0,
+			setPosting(true)
+			try {
+				let img = thumbnailDataUrl
+				if (backendEnabled && thumbnailDataUrl && accessToken) {
+					img = (await uploadCommunityImage(thumbnailDataUrl, accessToken)) || thumbnailDataUrl
+				}
+				if (backendEnabled) {
+					const created = await createCommunityPost({
+						author: user,
+						type: "build",
+						caption: caption.trim(),
+						img,
+						repoUrl: repoUrl.trim() || null,
+					})
+					if (created) setPosts((prev) => [created, ...prev])
+				} else {
+					const newPost: CommunityPost = {
+						id: crypto.randomUUID(),
+						author: user,
+						type: "build",
+						caption: caption.trim(),
+						thumbnailDataUrl: img,
+						repoUrl: repoUrl.trim() || null,
+						createdAt: Date.now(),
+						likedByMe: false,
+						likeCount: 0,
+					}
+					setPosts((prev) => [newPost, ...prev])
+				}
+				setCaption("")
+				setRepoUrl("")
+				setThumbnailDataUrl(null)
+			} finally {
+				setPosting(false)
 			}
-			setPosts((prev) => [newPost, ...prev])
-			setCaption("")
-			setRepoUrl("")
-			setThumbnailDataUrl(null)
 		} else {
 			if (!canPostSkill) return
-			const newPost: CommunityPost = {
-				id: crypto.randomUUID(),
-				author: user,
-				type: "skill",
-				caption: "",
-				thumbnailDataUrl: null,
-				repoUrl: null,
-				createdAt: Date.now(),
-				likedByMe: false,
-				likeCount: 0,
-				skill: {
+			setPosting(true)
+			try {
+				const skill = {
 					name: skillName.trim(),
 					description: skillDescription.trim(),
 					instructions: skillInstructions.trim(),
-				},
+				}
+				if (backendEnabled) {
+					const created = await createCommunityPost({
+						author: user,
+						type: "skill",
+						caption: "",
+						img: null,
+						repoUrl: null,
+						skill,
+					})
+					if (created) setPosts((prev) => [created, ...prev])
+				} else {
+					const newPost: CommunityPost = {
+						id: crypto.randomUUID(),
+						author: user,
+						type: "skill",
+						caption: "",
+						thumbnailDataUrl: null,
+						repoUrl: null,
+						createdAt: Date.now(),
+						likedByMe: false,
+						likeCount: 0,
+						skill,
+					}
+					setPosts((prev) => [newPost, ...prev])
+				}
+				setSkillName("")
+				setSkillDescription("")
+				setSkillInstructions("")
+			} finally {
+				setPosting(false)
 			}
-			setPosts((prev) => [newPost, ...prev])
-			setSkillName("")
-			setSkillDescription("")
-			setSkillInstructions("")
 		}
 	}
 
@@ -215,10 +294,10 @@ function Composer({ user }: { user: CommunityUser }) {
 						<button
 							type="button"
 							onClick={post}
-							disabled={!canPostBuild}
+							disabled={!canPostBuild || posting}
 							className="rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs disabled:opacity-50"
 						>
-							Post
+							{posting ? "Posting…" : "Post"}
 						</button>
 					</div>
 					<input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={onFileChange} />
@@ -247,10 +326,10 @@ function Composer({ user }: { user: CommunityUser }) {
 					<button
 						type="button"
 						onClick={post}
-						disabled={!canPostSkill}
+						disabled={!canPostSkill || posting}
 						className="self-end rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs disabled:opacity-50"
 					>
-						Post skill
+						{posting ? "Posting…" : "Post skill"}
 					</button>
 				</div>
 			)}
@@ -387,6 +466,7 @@ interface BrowsableSkill {
 	slug: string
 	name: string
 	description: string
+	instructions: string
 }
 
 // A small curated palette (not a random hue wheel) so cards read as varied
@@ -413,6 +493,7 @@ function paletteFor(slug: string) {
 function SkillsBrowser() {
 	const [skills, setSkills] = useState<BrowsableSkill[] | null>(null)
 	const [query, setQuery] = useState("")
+	const [selected, setSelected] = useState<BrowsableSkill | null>(null)
 
 	useEffect(() => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -428,54 +509,76 @@ function SkillsBrowser() {
 	}, [skills, query])
 
 	return (
-		<div>
-			<div className="mb-3 text-center">
-				<p className="text-muted-foreground text-xs">
-					{skills === null ? "Loading…" : `${skills.length} skills available to the agent`}
-				</p>
-			</div>
-			<div className="relative mb-3">
-				<SearchIcon className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
-				<input
-					value={query}
-					onChange={(e) => setQuery(e.target.value)}
-					placeholder="Search skills…"
-					className="h-9 w-full rounded-lg border border-border bg-background pr-3 pl-8 text-sm outline-none focus:ring-1 focus:ring-ring"
-				/>
-			</div>
-			{skills !== null && filtered.length === 0 && (
-				<p className="py-8 text-center text-muted-foreground text-sm">No skills match "{query}"</p>
-			)}
-			<div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-				{filtered.map((s) => {
-					const palette = paletteFor(s.slug)
-					return (
-						<div
-							key={s.slug}
-							className={`rounded-xl border border-border bg-card p-3 transition-colors ${palette.border}`}
-						>
-							<div className="flex items-center gap-2.5">
-								<div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${palette.chip}`}>
-									<SparklesIcon className={`size-4 ${palette.icon}`} />
+		<>
+			<div>
+				<div className="mb-3 text-center">
+					<p className="text-muted-foreground text-xs">
+						{skills === null ? "Loading…" : `${skills.length} skills available to the agent`}
+					</p>
+				</div>
+				<div className="relative mb-3">
+					<SearchIcon className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
+					<input
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						placeholder="Search skills…"
+						className="h-9 w-full rounded-lg border border-border bg-background pr-3 pl-8 text-sm outline-none focus:ring-1 focus:ring-ring"
+					/>
+				</div>
+				{skills !== null && filtered.length === 0 && (
+					<p className="py-8 text-center text-muted-foreground text-sm">No skills match "{query}"</p>
+				)}
+				<div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+					{filtered.map((s) => {
+						const palette = paletteFor(s.slug)
+						return (
+							<button
+								key={s.slug}
+								type="button"
+								onClick={() => setSelected(s)}
+								className={`rounded-xl border border-border bg-card p-3 text-left transition-colors ${palette.border}`}
+							>
+								<div className="flex items-center gap-2.5">
+									<div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${palette.chip}`}>
+										<SparklesIcon className={`size-4 ${palette.icon}`} />
+									</div>
+									<span className="truncate font-semibold text-foreground text-sm">{s.name}</span>
 								</div>
-								<span className="truncate font-semibold text-foreground text-sm">{s.name}</span>
-							</div>
-							<p className="mt-2 line-clamp-2 text-muted-foreground text-xs leading-relaxed">{s.description}</p>
-						</div>
-					)
-				})}
+								<p className="mt-2 line-clamp-2 text-muted-foreground text-xs leading-relaxed">{s.description}</p>
+							</button>
+						)
+					})}
+				</div>
 			</div>
-		</div>
+			<Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+				<DialogContent className="max-h-[80vh] overflow-y-auto">
+					<DialogHeader>
+						<DialogTitle>{selected?.name}</DialogTitle>
+						<DialogDescription>{selected?.description}</DialogDescription>
+					</DialogHeader>
+					<pre className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 font-mono text-foreground text-xs leading-relaxed">
+						{selected?.instructions}
+					</pre>
+				</DialogContent>
+			</Dialog>
+		</>
 	)
 }
 
 export function CommunityPage() {
+	// Auth session is synced app-wide from SidebarLayout — this page only reads the atoms.
 	const user = useAtomValue(communityUserAtom)
 	const setUser = useSetAtom(communityUserAtom)
+	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const posts = useAtomValue(communityPostsAtom)
 	const [tab, setTab] = useState<"feed" | "skills">("feed")
 
 	if (!user) return <LoginGate />
+
+	const signOut = () => {
+		if (backendEnabled) bridge().community.logout()
+		else setUser(null)
+	}
 
 	return (
 		<div className="flex h-full flex-col overflow-y-auto">
@@ -484,7 +587,7 @@ export function CommunityPage() {
 					<h1 className="font-semibold text-foreground text-lg">Community</h1>
 					<button
 						type="button"
-						onClick={() => setUser(null)}
+						onClick={signOut}
 						title="Sign out"
 						className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
 					>

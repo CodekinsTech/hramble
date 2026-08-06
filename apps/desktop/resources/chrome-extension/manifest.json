@@ -1,0 +1,33 @@
+{
+	"manifest_version": 3,
+	"name": "Hramble Console Bridge",
+	"version": "1.0.0",
+	"description": "Lets Hramble read this tab's console errors automatically, so you never have to open DevTools yourself.",
+	"icons": {
+		"128": "icon.png"
+	},
+	"action": {
+		"default_popup": "popup.html",
+		"default_icon": "icon.png"
+	},
+	"background": {
+		"service_worker": "background.js"
+	},
+	"content_scripts": [
+		{
+			"matches": ["http://*/*", "https://*/*"],
+			"js": ["page-hook.js"],
+			"world": "MAIN",
+			"run_at": "document_start",
+			"all_frames": false
+		},
+		{
+			"matches": ["http://*/*", "https://*/*"],
+			"js": ["content-script.js"],
+			"run_at": "document_start",
+			"all_frames": false
+		}
+	],
+	"host_permissions": ["http://127.0.0.1:47821/*"],
+	"permissions": ["tabs", "activeTab"]
+}

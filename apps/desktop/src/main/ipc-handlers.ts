@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, systemPreferences } from "electron"
+import { fileURLToPath } from "node:url"
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, shell, systemPreferences } from "electron"
 import {
 	acceptRun,
 	archiveRun,
@@ -18,6 +19,7 @@ import type { CreateAutomationInput, UpdateAutomationInput } from "./automation/
 import { installCli, isCliInstalled, uninstallCli } from "./cli-install"
 import { installCommunitySkill, type InstallCommunitySkillInput, listInstalledSkills } from "./community-skills"
 import { buildRepoGraph } from "./repo-graph"
+import { servePreviewFile } from "./static-preview-server"
 import { deleteCredential, getCredential, storeCredential } from "./credential-store"
 import { saveDesignReference, type SaveDesignReferenceInput } from "./design-reference"
 import {
@@ -31,6 +33,7 @@ import {
 	getRemoteUrl,
 	getStatus,
 	listBranches,
+	mergeBranch,
 	push,
 	stashAndCheckout,
 	stashPop,
@@ -63,6 +66,10 @@ import {
 } from "./updater"
 
 const log = createLogger("ipc")
+
+// ESM equivalent for __dirname (this file has no __dirname/__filename globals).
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 /** Read the opaque windows preference for use at window creation time. */
 export { getOpaqueWindows as getOpaqueWindowsPref } from "./settings-store"
@@ -340,6 +347,14 @@ export function registerIpcHandlers(): void {
 	)
 
 	ipcMain.handle(
+		"git:merge-branch",
+		withLogging(
+			"git:merge-branch",
+			async (_, directory: string, branchName: string) => await mergeBranch(directory, branchName),
+		),
+	)
+
+	ipcMain.handle(
 		"git:root",
 		withLogging("git:root", async (_, directory: string) => await getGitRoot(directory)),
 	)
@@ -350,6 +365,50 @@ export function registerIpcHandlers(): void {
 			"git:remote-url",
 			async (_, directory: string, remote?: string) => await getRemoteUrl(directory, remote),
 		),
+	)
+
+	// --- Open a URL in the system's default browser (not Hramble's embedded pane) ---
+
+	ipcMain.handle(
+		"shell:open-external",
+		withLogging("shell:open-external", async (_, url: string) => {
+			if (!/^https?:\/\//i.test(url)) return
+			await shell.openExternal(url)
+		}),
+	)
+
+	// --- Pick + serve a local HTML file (so "Open in your browser" works even
+	// when nothing's being previewed yet — see static-preview-server.ts) ---
+
+	ipcMain.handle(
+		"dialog:open-html-file",
+		withLogging("dialog:open-html-file", async () => {
+			const result = await dialog.showOpenDialog({
+				properties: ["openFile"],
+				title: "Choose a page to preview",
+				filters: [{ name: "Web pages", extensions: ["html", "htm", "svg"] }],
+			})
+			if (result.canceled || result.filePaths.length === 0) return null
+			return result.filePaths[0]
+		}),
+	)
+
+	ipcMain.handle(
+		"preview:serve-file",
+		withLogging("preview:serve-file", async (_, filePath: string) => await servePreviewFile(filePath)),
+	)
+
+	// --- Reveal the bundled "Hramble Console Bridge" Chrome extension source,
+	// so the user can load it unpacked (Settings → Chrome Console Access) ---
+
+	ipcMain.handle(
+		"shell:reveal-chrome-extension",
+		withLogging("shell:reveal-chrome-extension", async () => {
+			const resourcesPath = app.isPackaged
+				? process.resourcesPath
+				: path.join(__dirname, "../../resources")
+			shell.showItemInFolder(path.join(resourcesPath, "chrome-extension", "manifest.json"))
+		}),
 	)
 
 	// --- Directory picker ---

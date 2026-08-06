@@ -18,6 +18,7 @@ import {
 	SettingsIcon,
 	ShieldCheckIcon,
 	StoreIcon,
+	UserIcon,
 	WrenchIcon,
 } from "lucide-react"
 import { useEffect } from "react"
@@ -29,6 +30,7 @@ import { useSetSidebarSlot } from "../sidebar-slot-context"
 
 type SettingsTab =
 	| "general"
+	| "account"
 	| "servers"
 	| "notifications"
 	| "providers"
@@ -41,6 +43,7 @@ type SettingsTab =
 
 const tabs: { id: SettingsTab; label: string; icon: typeof SettingsIcon }[] = [
 	{ id: "general", label: "General", icon: SettingsIcon },
+	{ id: "account", label: "Account", icon: UserIcon },
 	{ id: "servers", label: "Servers", icon: ServerIcon },
 	{ id: "notifications", label: "Notifications", icon: BellIcon },
 	{ id: "providers", label: "Providers", icon: PlugIcon },

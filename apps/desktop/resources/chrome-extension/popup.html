@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			body {
+				width: 240px;
+				margin: 0;
+				padding: 14px;
+				font: 13px -apple-system, system-ui, sans-serif;
+				color: #1a1a1a;
+			}
+			h1 {
+				font-size: 13px;
+				font-weight: 600;
+				margin: 0 0 6px;
+			}
+			.row {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				margin-top: 8px;
+			}
+			.dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 50%;
+				background: #d0d0d0;
+				flex-shrink: 0;
+			}
+			.dot.on {
+				background: #22c55e;
+			}
+			.dot.off {
+				background: #ef4444;
+			}
+			p {
+				color: #666;
+				margin: 8px 0 0;
+				line-height: 1.4;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Hramble Console Bridge</h1>
+		<div class="row">
+			<span class="dot" id="dot"></span>
+			<span id="status">Checking…</span>
+		</div>
+		<p>Lets Hramble read this tab's console automatically when you're testing something you built.</p>
+		<script src="popup.js"></script>
+	</body>
+</html>

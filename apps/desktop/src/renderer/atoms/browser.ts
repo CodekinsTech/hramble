@@ -13,3 +13,6 @@ export const browserUrlAtom = atom("https://www.google.com")
  * when the user clicks the globe button. Persisted across sessions.
  */
 export const browserAutoOpenAtom = atomWithStorage<boolean>("hramble:browserAutoOpen", true)
+
+/** Browser panel width as a percentage of window width. Drag-resizable, persisted. */
+export const browserPanelWidthAtom = atomWithStorage<number>("hramble:browserPanelWidth", 45)

@@ -12,6 +12,24 @@ import path from "node:path"
 import { homedir } from "node:os"
 
 const PORT_FILE = path.join(homedir(), ".config", "opencode", ".hramble-browser-port")
+// Fixed port for the "Hramble Console Bridge" Chrome extension — unlike the
+// embedded-pane bridge above, a Chrome extension can't read a port file off
+// disk, so this one is a well-known constant instead (see
+// apps/desktop/src/main/extension-bridge.ts and apps/chrome-extension).
+const EXTENSION_BRIDGE_PORT = 47821
+
+function formatConsoleEntries(entries) {
+	if (entries.length === 0) return "No console output since the page last loaded — nothing logged."
+	const lines = entries.map((e) => {
+		const tag = e.level === "error" ? "ERROR" : e.level === "warn" ? "WARN" : String(e.level).toUpperCase()
+		const loc = e.sourceId ? ` (${e.sourceId.split("/").pop()}:${e.line ?? "?"})` : ""
+		return `[${tag}]${loc} ${e.message}`
+	})
+	const errorCount = entries.filter((e) => e.level === "error").length
+	const warnCount = entries.filter((e) => e.level === "warn").length
+	const summary = `${errorCount} error(s), ${warnCount} warning(s), ${entries.length} total message(s) since the page last loaded.`
+	return `${summary}\n\n${lines.join("\n")}`
+}
 
 // Actions that act on the outside world (navigate, change the page, submit).
 // These are gated behind the session's permission policy so the agent asks
@@ -32,7 +50,7 @@ export default async () => ({
 	tool: {
 		browser: tool({
 			description:
-				"Control the Hramble in-app browser that the user can see. Actions: 'open' (navigate to a URL), 'read' (get the page's URL/title/visible text), 'click' (by CSS selector or visible text), 'type' (into a field by selector, optionally submit), 'screenshot' (capture a PNG), 'scroll' (scroll the page, or a selector into view), 'wait' (wait for a selector to appear, or a number of seconds), 'select' (choose an option in a <select> by value), 'hover' (hover an element to reveal menus/tooltips), 'back'/'forward' (navigate history), 'extract_design' (get the page's dominant colors, fonts with roles/weights, and image/SVG assets — use this for 'what colors/fonts does this site use' or 'build something styled like this'), 'inspect_element' (get one element's full computed style — color, font, spacing, border — by selector or visible text). Read the page first to find selectors/text before acting.",
+				"Control the Hramble in-app browser that the user can see. Actions: 'open' (navigate to a URL), 'read' (get the page's URL/title/visible text), 'click' (by CSS selector or visible text), 'type' (into a field by selector, optionally submit), 'screenshot' (capture a PNG), 'scroll' (scroll the page, or a selector into view), 'wait' (wait for a selector to appear, or a number of seconds), 'select' (choose an option in a <select> by value), 'hover' (hover an element to reveal menus/tooltips), 'back'/'forward' (navigate history), 'extract_design' (get the page's dominant colors, fonts with roles/weights, and image/SVG assets — use this for 'what colors/fonts does this site use' or 'build something styled like this'), 'inspect_element' (get one element's full computed style — color, font, spacing, border — by selector or visible text), 'console' (read every console.log/warn/error the page in the in-app pane has made since it last loaded), 'chrome_console' (same thing, but for a tab in the user's REAL Chrome browser — only works if they've installed the 'Hramble Console Bridge' extension; pass `url` with a substring of the page's address to pick the right tab if more than one is open, otherwise the most recently active tab is used). The user cannot read raw console output and should never be asked to open DevTools or paste errors — when you're previewing something you built (in-pane or in real Chrome) or the user says a page is broken/not working, check the console yourself, read the errors, and fix them. Read the page first to find selectors/text before acting.",
 			args: {
 				action: z
 					.enum([
@@ -49,9 +67,16 @@ export default async () => ({
 						"forward",
 						"extract_design",
 						"inspect_element",
+						"console",
+						"chrome_console",
 					])
 					.describe("What to do in the visible browser"),
-				url: z.string().optional().describe("URL to open (for action 'open', or to navigate before 'extract_design')"),
+				url: z
+					.string()
+					.optional()
+					.describe(
+						"URL to open (for action 'open', or to navigate before 'extract_design'). For 'chrome_console', a substring to match against open Chrome tabs instead.",
+					),
 				selector: z
 					.string()
 					.optional()
@@ -73,6 +98,21 @@ export default async () => ({
 				value: z.string().optional().describe("For 'select': the option value to choose"),
 			},
 			execute: async (args, context) => {
+				if (args.action === "chrome_console") {
+					const qs = args.url ? `?url=${encodeURIComponent(args.url)}` : ""
+					let data
+					try {
+						const res = await fetch(`http://127.0.0.1:${EXTENSION_BRIDGE_PORT}/console/read${qs}`)
+						data = await res.json()
+					} catch {
+						return "Could not reach Hramble (is the desktop app running?)."
+					}
+					if (!data?.ok) {
+						return `${data?.error ?? "No connected Chrome tab found."} Make sure the "Hramble Console Bridge" extension is installed and the tab is open (Settings → Chrome Console Access).`
+					}
+					return `Tab: ${data.title ?? ""} (${data.url ?? ""})\n\n${formatConsoleEntries(data.entries ?? [])}`
+				}
+
 				const port = getPort()
 				if (!port)
 					return "The Hramble browser isn't available (is the Hramble desktop app running?)."
@@ -140,6 +180,8 @@ export default async () => ({
 					case "back":
 					case "forward":
 						return `Navigated ${args.action}. Now at: ${data.url ?? ""}`
+					case "console":
+						return formatConsoleEntries(Array.isArray(data.entries) ? data.entries : [])
 					default:
 						return JSON.stringify(data)
 				}

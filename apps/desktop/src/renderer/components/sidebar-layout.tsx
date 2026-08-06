@@ -13,13 +13,16 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
-import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, PanelLeftIcon, RssIcon, SearchIcon } from "lucide-react"
+import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, PanelLeftIcon, RssIcon, SearchIcon, UsersIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
-import { browserPanelOpenAtom } from "../atoms/browser"
+import { browserPanelOpenAtom, browserPanelWidthAtom } from "../atoms/browser"
 import { BrowserPane } from "./browser-pane"
 import { useAgents, useProjectList, useSetCommandPaletteOpen } from "../hooks/use-agents"
+import { useCommunityAuthSync } from "../hooks/use-community-auth-sync"
+import { useDispatchBridge } from "../hooks/use-dispatch-bridge"
+import { useSleepRecovery } from "../hooks/use-sleep-recovery"
 import { useAgentActions } from "../hooks/use-server"
 import type { Agent } from "../lib/types"
 import { pickDirectory } from "../services/backend"
@@ -248,6 +251,21 @@ function TopRightControls() {
 				</TooltipTrigger>
 				<TooltipContent>Community — share what you built</TooltipContent>
 			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/team" })}
+						/>
+					}
+				>
+					<UsersIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Team Spaces — work on this together</TooltipContent>
+			</Tooltip>
 		</div>
 	)
 }
@@ -259,6 +277,13 @@ function TopRightControls() {
 export function SidebarLayout() {
 	const navigate = useNavigate()
 	const { content: slotContent, footer: slotFooter } = useSidebarSlot()
+
+	// The app's Google account session (shared by Settings > Account and the
+	// Community page) — synced once here at the root so it's available
+	// everywhere, not just while the Community page happens to be mounted.
+	useCommunityAuthSync()
+	useSleepRecovery()
+	useDispatchBridge()
 
 	// ---- Sidebar-specific data ----
 	const agents = useAgents()
@@ -322,6 +347,42 @@ export function SidebarLayout() {
 	// Browser panel is mounted at the app root so the agent's `browser` tool can
 	// drive it on any route (not only inside a session view).
 	const browserPanelOpen = useAtomValue(browserPanelOpenAtom)
+	const browserPanelWidth = useAtomValue(browserPanelWidthAtom)
+	const setBrowserPanelWidth = useSetAtom(browserPanelWidthAtom)
+	const browserResizeRef = useRef<{ startX: number; startWidthVw: number } | null>(null)
+	const [browserResizing, setBrowserResizing] = useState(false)
+
+	const handleBrowserResizeStart = useCallback(
+		(e: React.MouseEvent) => {
+			e.preventDefault()
+			browserResizeRef.current = { startX: e.clientX, startWidthVw: browserPanelWidth }
+			setBrowserResizing(true)
+		},
+		[browserPanelWidth],
+	)
+
+	useEffect(() => {
+		if (!browserResizing) return
+		const onMove = (e: MouseEvent) => {
+			const drag = browserResizeRef.current
+			if (!drag) return
+			// Dragging left (negative dx) widens the panel since it's docked on the right.
+			const dxVw = ((e.clientX - drag.startX) / window.innerWidth) * 100
+			const next = Math.min(80, Math.max(20, drag.startWidthVw - dxVw))
+			setBrowserPanelWidth(next)
+		}
+		const onUp = () => {
+			browserResizeRef.current = null
+			setBrowserResizing(false)
+		}
+		window.addEventListener("mousemove", onMove)
+		window.addEventListener("mouseup", onUp)
+		return () => {
+			window.removeEventListener("mousemove", onMove)
+			window.removeEventListener("mouseup", onUp)
+		}
+	}, [browserResizing, setBrowserPanelWidth])
+
 	const [addProjectOpen, setAddProjectOpen] = useState(false)
 
 	const handleAddProject = useCallback(async () => {
@@ -409,11 +470,17 @@ export function SidebarLayout() {
 						</div>
 						{/* Browser panel — always mounted (even at 0 width) so the agent
 						    can drive it regardless of the current route. */}
+						{browserPanelOpen && (
+							<div
+								onMouseDown={handleBrowserResizeStart}
+								className="w-1 shrink-0 cursor-ew-resize border-border border-l hover:bg-ring active:bg-ring"
+							/>
+						)}
 						<div
-							className="shrink-0 overflow-hidden border-l border-border transition-[width] duration-250 ease-in-out"
-							style={{ width: browserPanelOpen ? "45vw" : 0 }}
+							className={`shrink-0 overflow-hidden ${browserResizing ? "" : "transition-[width] duration-250 ease-in-out"}`}
+							style={{ width: browserPanelOpen ? `${browserPanelWidth}vw` : 0 }}
 						>
-							<div className="h-full" style={{ width: "45vw" }}>
+							<div className="h-full" style={{ width: `${browserPanelWidth}vw` }}>
 								<BrowserPane />
 							</div>
 						</div>

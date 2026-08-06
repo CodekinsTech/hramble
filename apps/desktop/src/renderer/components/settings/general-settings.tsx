@@ -1,3 +1,5 @@
+import { Button } from "@hramble/ui/components/button"
+import { Input } from "@hramble/ui/components/input"
 import {
 	Select,
 	SelectContent,
@@ -7,13 +9,17 @@ import {
 } from "@hramble/ui/components/select"
 import { Switch } from "@hramble/ui/components/switch"
 import { useAtomValue, useSetAtom } from "jotai"
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react"
+import { CheckIcon, CopyIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react"
+import QRCode from "qrcode"
 import { useCallback, useEffect, useState } from "react"
 import { browserAutoOpenAtom } from "../../atoms/browser"
+import { communityAccessTokenAtom } from "../../atoms/community"
+import { dispatchPairTokenAtom, dispatchSessionRefAtom } from "../../atoms/dispatch"
 import { type DisplayMode, displayModeAtom, opaqueWindowsAtom } from "../../atoms/preferences"
 import { useColorScheme, useSetColorScheme } from "../../hooks/use-theme"
+import { shareUrlForRoom } from "../../lib/share-client"
 import type { ColorScheme } from "../../lib/themes"
-import { fetchOpenInTargets, setOpenInPreferred } from "../../services/backend"
+import { fetchOpenInTargets, revealChromeExtension, setOpenInPreferred } from "../../services/backend"
 import { SettingsRow } from "./settings-row"
 import { SettingsSection } from "./settings-section"
 
@@ -38,8 +44,167 @@ export function GeneralSettings() {
 
 			<SettingsSection title="Browser">
 				<BrowserAutoOpenRow />
+				<ChromeConsoleAccessRow />
+			</SettingsSection>
+
+			<SettingsSection title="Dispatch">
+				<DispatchPairingRow />
 			</SettingsSection>
 		</div>
+	)
+}
+
+function DispatchPairingRow() {
+	const accessToken = useAtomValue(communityAccessTokenAtom)
+	const pairToken = useAtomValue(dispatchPairTokenAtom)
+	const setPairToken = useSetAtom(dispatchPairTokenAtom)
+	const setSessionRef = useSetAtom(dispatchSessionRefAtom)
+	const [copied, setCopied] = useState(false)
+	const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+
+	const shareUrl = pairToken ? shareUrlForRoom(pairToken) : null
+
+	useEffect(() => {
+		if (!shareUrl) {
+			setQrDataUrl(null)
+			return
+		}
+		let cancelled = false
+		QRCode.toDataURL(shareUrl, { width: 160, margin: 1 })
+			.then((url) => {
+				if (!cancelled) setQrDataUrl(url)
+			})
+			.catch(() => {
+				if (!cancelled) setQrDataUrl(null)
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [shareUrl])
+
+	const pair = () => setPairToken(crypto.randomUUID())
+	const unpair = () => {
+		setPairToken(null)
+		setSessionRef(null)
+	}
+	const copyLink = () => {
+		if (!shareUrl) return
+		navigator.clipboard.writeText(shareUrl)
+		setCopied(true)
+		setTimeout(() => setCopied(false), 1500)
+	}
+
+	if (!accessToken) {
+		return (
+			<SettingsRow
+				label="Pair your phone"
+				description="Send tasks to Hramble from your phone and pick up right where you left off. Sign in first (Settings → Account) to pair."
+			>
+				<span className="text-muted-foreground text-xs">Sign in required</span>
+			</SettingsRow>
+		)
+	}
+
+	return (
+		<SettingsRow
+			label="Pair your phone"
+			description="Hramble will act on your desktop (files, browser) to complete tasks you send from your phone. Only pair a device you own and trust."
+		>
+			<div className="flex flex-col items-end gap-1.5">
+				{pairToken ? (
+					<>
+						{qrDataUrl && (
+							<img
+								src={qrDataUrl}
+								alt="Scan with your phone's camera to pair"
+								className="size-28 rounded-md border border-border"
+							/>
+						)}
+						<p className="max-w-[220px] text-right text-[11px] text-muted-foreground">
+							Scan with your phone's camera, or use the link below.
+						</p>
+						<div className="flex items-center gap-2">
+							<Input readOnly value={shareUrl ?? ""} className="w-56 text-xs" onFocus={(e) => e.target.select()} />
+							<Button size="sm" variant="outline" onClick={copyLink}>
+								{copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+							</Button>
+						</div>
+						<button type="button" onClick={unpair} className="text-[11px] text-muted-foreground hover:text-foreground">
+							Unpair
+						</button>
+					</>
+				) : (
+					<button
+						type="button"
+						onClick={pair}
+						className="rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:opacity-90"
+					>
+						Pair your phone
+					</button>
+				)}
+			</div>
+		</SettingsRow>
+	)
+}
+
+const EXTENSION_STATUS_URL = "http://127.0.0.1:47821/status"
+
+function ChromeConsoleAccessRow() {
+	const [connectedTabs, setConnectedTabs] = useState<number | null>(null)
+
+	useEffect(() => {
+		let cancelled = false
+		const check = () => {
+			fetch(EXTENSION_STATUS_URL)
+				.then((r) => (r.ok ? r.json() : Promise.reject()))
+				.then((data: { connectedTabs?: number }) => {
+					if (!cancelled) setConnectedTabs(data.connectedTabs ?? 0)
+				})
+				.catch(() => {
+					if (!cancelled) setConnectedTabs(0)
+				})
+		}
+		check()
+		const id = setInterval(check, 5000)
+		return () => {
+			cancelled = true
+			clearInterval(id)
+		}
+	}, [])
+
+	const connected = (connectedTabs ?? 0) > 0
+
+	return (
+		<SettingsRow
+			label="Chrome Console Access"
+			description="Lets Hramble read a real Chrome tab's console automatically — so it can find and fix errors itself instead of asking you to open DevTools. Requires installing a small Hramble extension (one-time)."
+		>
+			<div className="flex flex-col items-end gap-1.5">
+				<div className="flex items-center gap-1.5 text-xs">
+					<span
+						className={`size-1.5 rounded-full ${connected ? "bg-green-500" : "bg-muted-foreground/40"}`}
+					/>
+					<span className="text-muted-foreground">
+						{connectedTabs === null
+							? "Checking…"
+							: connected
+								? `Connected — ${connectedTabs} tab${connectedTabs === 1 ? "" : "s"}`
+								: "Not connected yet"}
+					</span>
+				</div>
+				<button
+					type="button"
+					onClick={() => revealChromeExtension()}
+					className="rounded-md border border-border px-2.5 py-1.5 font-medium text-xs hover:bg-muted"
+				>
+					Reveal extension files
+				</button>
+				<p className="max-w-[220px] text-right text-[11px] text-muted-foreground">
+					In Chrome: open <span className="font-mono">chrome://extensions</span>, turn on Developer
+					mode, then "Load unpacked" and pick the revealed folder.
+				</p>
+			</div>
+		</SettingsRow>
 	)
 }
 

@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { browserAutoOpenAtom, browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
 import { useProjectList } from "../hooks/use-agents"
+import { registerBrowserPaneContent } from "../lib/browser-pane-bridge"
 import { WEB_INSPECTOR_SCRIPT } from "../lib/web-inspector-script"
 
 // Electron's <webview> is a real embedded Chromium browser. Its JSX/DOM types
@@ -54,6 +55,19 @@ function ReportScanIcon({ className }: { className?: string }) {
 		</svg>
 	)
 }
+
+interface ConsoleEntry {
+	level: "debug" | "log" | "warn" | "error"
+	message: string
+	line?: number
+	sourceId?: string
+	at: number
+}
+
+const CONSOLE_LOG_CAP = 300
+// Electron's webview `console-message` event reports level as a number:
+// 0 = debug/verbose, 1 = info/log, 2 = warning, 3 = error.
+const CONSOLE_LEVEL_NAMES: ConsoleEntry["level"][] = ["debug", "log", "warn", "error"]
 
 interface WebviewEl extends HTMLElement {
 	loadURL(url: string): Promise<void>
@@ -176,6 +190,41 @@ export function BrowserPane() {
 	const [address, setAddress] = useState(url)
 	const [loading, setLoading] = useState(false)
 	const ref = useRef<WebviewEl | null>(null)
+	// Every console.log/warn/error the previewed page makes, captured natively
+	// from the webview — so the agent can check for JS errors itself instead of
+	// asking the user to open DevTools and read them out loud. Capped so a
+	// noisy page (or a console.log loop) can't grow this unbounded.
+	const consoleLogRef = useRef<ConsoleEntry[]>([])
+
+	// Lets Live Share / Dispatch see whatever's currently rendered here — an
+	// artifact, a preview, a page — without needing a ref into this
+	// component. See lib/browser-pane-bridge.ts for why HTML/URL/screenshot
+	// are tried in that order (HTML gets a genuinely live, interactive
+	// mirror on the remote side; a screenshot is just a flat fallback).
+	useEffect(() => {
+		registerBrowserPaneContent(async () => {
+			const wv = ref.current
+			if (!wv) return null
+			const currentUrl = wv.getURL()
+
+			if (currentUrl?.startsWith("data:text/html")) {
+				try {
+					return { kind: "html", html: decodeURIComponent(currentUrl.slice(currentUrl.indexOf(",") + 1)) }
+				} catch {
+					// Malformed encoding — fall through to a screenshot instead.
+				}
+			}
+
+			const isLocalOnly = !currentUrl || /^https?:\/\/(127\.0\.0\.1|localhost)([:/]|$)/i.test(currentUrl)
+			if (!isLocalOnly && /^https?:\/\//i.test(currentUrl)) {
+				return { kind: "url", url: currentUrl }
+			}
+
+			const image = await wv.capturePage()
+			return { kind: "screenshot", dataUrl: image.toDataURL() }
+		})
+		return () => registerBrowserPaneContent(null)
+	}, [])
 	// Dedicated "Inspect Design" button — deterministic, no agent/model involved
 	// at all, so it can never pick the wrong tool the way asking the AI can.
 	const [designLoading, setDesignLoading] = useState(false)
@@ -427,6 +476,8 @@ export function BrowserPane() {
 						wv.goForward()
 						await new Promise((r) => setTimeout(r, 300))
 						reply({ ok: true, ...(await wv.executeJavaScript("({url:location.href})")) })
+					} else if (cmd.action === "console") {
+						reply({ ok: true, entries: consoleLogRef.current })
 					} else {
 						reply({ ok: false, error: `unknown action: ${cmd.action}` })
 					}
@@ -448,16 +499,33 @@ export function BrowserPane() {
 				setAddress(e.url)
 				setUrl(e.url)
 			}
+			// A fresh page load — last page's console history no longer applies.
+			consoleLogRef.current = []
+		}
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const onConsole = (e: any) => {
+			consoleLogRef.current.push({
+				level: CONSOLE_LEVEL_NAMES[e.level as number] ?? "log",
+				message: String(e.message ?? ""),
+				line: e.line,
+				sourceId: e.sourceId,
+				at: Date.now(),
+			})
+			if (consoleLogRef.current.length > CONSOLE_LOG_CAP) {
+				consoleLogRef.current = consoleLogRef.current.slice(-CONSOLE_LOG_CAP)
+			}
 		}
 		wv.addEventListener("did-start-loading", onStart)
 		wv.addEventListener("did-stop-loading", onStop)
 		wv.addEventListener("did-navigate", onNav)
 		wv.addEventListener("did-navigate-in-page", onNav)
+		wv.addEventListener("console-message", onConsole)
 		return () => {
 			wv.removeEventListener("did-start-loading", onStart)
 			wv.removeEventListener("did-stop-loading", onStop)
 			wv.removeEventListener("did-navigate", onNav)
 			wv.removeEventListener("did-navigate-in-page", onNav)
+			wv.removeEventListener("console-message", onConsole)
 		}
 	}, [setUrl])
 
