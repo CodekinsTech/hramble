@@ -1,9 +1,10 @@
 /**
  * Compact session metrics bar for the agent-detail app bar.
  *
- * Inline: work time, cost, and error/retry alerts.
- * Popover: full token breakdown, exchanges, model distribution,
- * tool calls, and cache efficiency.
+ * Inline: cost. Popover: full breakdown — time, cost, tokens, exchanges,
+ * model distribution, tool calls, and cache efficiency. Work time used to
+ * also show inline, but that duplicated the popover's own "Time" cell, so
+ * it was dropped from the always-visible row.
  *
  * Context window usage is displayed separately in the StatusBar below
  * the chat input (see prompt-toolbar.tsx).
@@ -11,10 +12,10 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { useAtomValue } from "jotai"
-import { BarChart3Icon, CoinsIcon, TimerIcon } from "lucide-react"
-import { Fragment, memo, useEffect, useState } from "react"
+import { BarChart3Icon, CoinsIcon } from "lucide-react"
+import { Fragment, memo } from "react"
 import { type SessionMetricsValue, sessionMetricsFamily } from "../atoms/derived/session-metrics"
-import { formatTokens, formatWorkDuration } from "../lib/session-metrics"
+import { formatTokens } from "../lib/session-metrics"
 
 // ============================================================
 // Tool category display labels
@@ -54,35 +55,9 @@ export const SessionMetricsBar = memo(function SessionMetricsBar({
 
 	return (
 		<div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-			{/* Work time */}
-			<Tooltip>
-				<TooltipTrigger
-					render={
-						<span className="inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground/60" />
-					}
-				>
-					<TimerIcon className="size-3" aria-hidden="true" />
-					{metrics.activeStartMs != null ? (
-						<LiveWorkTime
-							completedMs={metrics.completedWorkTimeMs}
-							activeStartMs={metrics.activeStartMs}
-						/>
-					) : (
-						metrics.workTime
-					)}
-				</TooltipTrigger>
-				<TooltipContent side="bottom" align="end">
-					<div className="space-y-1 text-xs">
-						<p className="font-medium">Work Time</p>
-						<p className="text-background/60">Avg per exchange: {metrics.avgExchangeTime}</p>
-					</div>
-				</TooltipContent>
-			</Tooltip>
-
 			{/* Cost */}
 			{metrics.costRaw > 0 && (
 				<>
-					<Separator />
 					<Tooltip>
 						<TooltipTrigger
 							render={
@@ -248,36 +223,6 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 			<span className="tabular-nums text-foreground">{value}</span>
 		</div>
 	)
-}
-
-// ============================================================
-// Live work-time ticker -- updates every second while active
-// ============================================================
-
-/**
- * Tiny leaf component that ticks every second to show live work time.
- * Only mounts when the agent has an in-progress message, so the rest of
- * the metrics bar is not affected by the interval.
- */
-function LiveWorkTime({
-	completedMs,
-	activeStartMs,
-}: {
-	completedMs: number
-	activeStartMs: number
-}) {
-	const [display, setDisplay] = useState(() =>
-		formatWorkDuration(completedMs + (Date.now() - activeStartMs)),
-	)
-
-	useEffect(() => {
-		const tick = () => setDisplay(formatWorkDuration(completedMs + (Date.now() - activeStartMs)))
-		tick()
-		const id = setInterval(tick, 1_000)
-		return () => clearInterval(id)
-	}, [completedMs, activeStartMs])
-
-	return <>{display}</>
 }
 
 // ============================================================

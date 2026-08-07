@@ -4,6 +4,7 @@ import type { Event } from "../../lib/types"
 import { serverConnectedAtom } from "../connection"
 import { discoveryAtom } from "../discovery"
 import { removeMessageAtom, upsertMessageAtom } from "../messages"
+import { maybeAutoTitleSession } from "./auto-title-session"
 import { applyPartDeltaAtom, removePartAtom, upsertPartAtom } from "../parts"
 import {
 	addPermissionAtom,
@@ -161,6 +162,10 @@ export function processEvent(event: Event): void {
 
 		case "message.updated":
 			set(upsertMessageAtom, event.properties.info)
+			// Fire-and-forget: silently titles a session after its first
+			// completed exchange, if it still has the untouched default name.
+			// All failure handling happens inside maybeAutoTitleSession itself.
+			maybeAutoTitleSession(event.properties.info)
 			break
 
 		case "message.removed":

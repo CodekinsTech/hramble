@@ -53,6 +53,7 @@ import {
 	workspaceModeAtom,
 } from "../atoms/workspace"
 import type { Agent, AgentStatus, SidebarProject } from "../lib/types"
+import { splitDefaultSessionName } from "../lib/session-title"
 import { ServerIndicator } from "./server-indicator"
 import { HrambleAvatar } from "./hramble-avatar"
 
@@ -79,6 +80,22 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
 	completed: "text-muted-foreground",
 	failed: "text-red-500",
 	idle: "text-muted-foreground",
+}
+
+/**
+ * Claude-style session marker for the common running/idle/paused/completed
+ * states: a near-invisible ring with a small centered dot that's green while
+ * the session is actively working and grey otherwise. Waiting/failed keep
+ * their own distinct icon (Timer/Alert) since those need to stand out, not
+ * blend in like this one deliberately does.
+ */
+function StatusDot({ color }: { color: "green" | "red" | "grey" }) {
+	const dotColor = color === "green" ? "bg-green-500" : color === "red" ? "bg-red-500" : "bg-muted-foreground/30"
+	return (
+		<span className="flex size-4 shrink-0 items-center justify-center rounded-full border border-muted-foreground/10">
+			<span className={`size-1.5 rounded-full ${dotColor} ${color === "green" ? "animate-pulse" : ""}`} />
+		</span>
+	)
 }
 
 // ============================================================
@@ -115,11 +132,10 @@ function HyperloopRunItem({
 }) {
 	const done = run.steps.filter((s) => s.status === "done").length
 	const failed = run.steps.some((s) => s.status === "failed")
-	const dot = run.running ? "bg-primary animate-pulse" : failed ? "bg-red-500" : "bg-green-500"
 	return (
 		<SidebarMenuItem>
 			<SidebarMenuButton isActive={isSelected} tooltip={run.goal} onClick={onOpen}>
-				<span className={`size-2 shrink-0 rounded-full ${dot}`} />
+				<StatusDot color={run.running ? "green" : failed ? "red" : "grey"} />
 				<span className="min-w-0 flex-1 truncate text-[13px]">{run.goal || "Untitled run"}</span>
 				<span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
 					{done}/{run.steps.length}
@@ -483,7 +499,17 @@ const SessionItem = memo(function SessionItem({
 		}
 	}, [isEditing])
 
-	const tooltipLabel = showProject ? agent.project : agent.name
+	const { display: displayName, createdAtLabel } = useMemo(
+		() => splitDefaultSessionName(agent.name),
+		[agent.name],
+	)
+	const tooltipLabel = showProject
+		? createdAtLabel
+			? `${agent.project} — created ${createdAtLabel}`
+			: agent.project
+		: createdAtLabel
+			? `Created ${createdAtLabel}`
+			: agent.name
 
 	const btn = (
 		<SidebarMenuItem>
@@ -497,10 +523,10 @@ const SessionItem = memo(function SessionItem({
 					<GitForkIcon
 						className={`shrink-0 ${statusColor} ${agent.status === "running" ? "animate-pulse" : ""}`}
 					/>
+				) : agent.status === "waiting" || agent.status === "failed" ? (
+					<StatusIcon className={`shrink-0 ${statusColor}`} />
 				) : (
-					<StatusIcon
-						className={`shrink-0 ${statusColor} ${agent.status === "running" ? "animate-spin" : ""}`}
-					/>
+					<StatusDot color={agent.status === "running" ? "green" : "grey"} />
 				)}
 
 				{isEditing ? (
@@ -520,7 +546,7 @@ const SessionItem = memo(function SessionItem({
 				) : (
 					<div className="min-w-0 flex-1">
 						<span className={`block truncate leading-tight ${compact ? "text-xs" : "text-[13px]"}`}>
-							{agent.name}
+							{displayName}
 						</span>
 
 						{agent.status === "waiting" && agent.currentActivity && (

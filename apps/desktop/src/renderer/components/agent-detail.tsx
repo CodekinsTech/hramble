@@ -1,28 +1,22 @@
 import { Button } from "@hramble/ui/components/button"
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@hramble/ui/components/dropdown-menu"
 import { Input } from "@hramble/ui/components/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { cn } from "@hramble/ui/lib/utils"
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtom, useAtomValue } from "jotai"
+import { toast } from "sonner"
 import {
 	ArrowLeftIcon,
 	ArrowUpRightIcon,
 	CheckIcon,
-	ChevronDownIcon,
 	CopyIcon,
 	ExternalLinkIcon,
 	FileDiffIcon,
 	FolderTreeIcon,
 	GlobeIcon,
 	GitForkIcon,
+	MoreHorizontalIcon,
 	PencilIcon,
 	RadioTowerIcon,
 	TerminalIcon,
@@ -58,7 +52,6 @@ import { ReviewPanel } from "./review/review-panel"
 import { fileExplorerOpenAtom } from "../atoms/file-explorer"
 import { FileExplorer } from "./file-explorer"
 import { browserPanelOpenAtom, browserUrlAtom } from "../atoms/browser"
-import { SessionMetricsBar } from "./session-metrics-bar"
 import { WorktreeActions } from "./worktree-actions"
 
 
@@ -474,8 +467,11 @@ function SessionAppBarContent({
 			</div>
 
 			{/* Right-aligned items */}
+			{/* pr-[76px] reserves room for the fixed, window-corner-pinned
+			 *  TopRightControls (Team Spaces + Community icons, sidebar-layout.tsx) —
+			 *  without it, this row's own Close button ends up underneath them. */}
 			<div
-				className="flex min-w-0 shrink-0 items-center gap-2.5 overflow-hidden"
+				className="flex min-w-0 shrink-0 items-center gap-2.5 overflow-hidden pr-[76px]"
 				style={{
 					// @ts-expect-error -- vendor-prefixed CSS property
 					WebkitAppRegion: "no-drag",
@@ -561,29 +557,13 @@ function SessionAppBarContent({
 					</TooltipContent>
 				</Tooltip>
 
-				{/* Open the browser pane's current URL in the system's real browser */}
-				<OpenInChromeButton />
-
-				{/* Live Share — watch this session from a browser, no install */}
-				<ShareButton directory={agent.directory} sessionId={agent.sessionId} />
-
-				{/* Session metrics bar */}
-				<div className="hidden min-w-0 shrink lg:block">
-					<SessionMetricsBar sessionId={agent.sessionId} />
-				</div>
-
-				{/* Open in external editor */}
-				<div className="hidden md:block">
-					<OpenInButton directory={agent.worktreePath ?? agent.directory} />
-				</div>
-
-				{/* Open in terminal */}
-				<div className="hidden md:block">
-					<AttachCommand
-						sessionId={agent.sessionId}
-						directory={agent.worktreePath ?? agent.directory}
-					/>
-				</div>
+				{/* More — Live Share + open elsewhere (browser/editor/terminal), one
+				 *  overflow menu for the occasional-use actions, Claude-style. */}
+				<SessionMoreMenu
+					shareDirectory={agent.directory}
+					openDirectory={agent.worktreePath ?? agent.directory}
+					sessionId={agent.sessionId}
+				/>
 
 					{/* Close button */}
 				<button
@@ -626,176 +606,98 @@ function TargetIcon({ iconDataUrl, className }: { iconDataUrl?: string; classNam
 	)
 }
 
-/**
- * Opens the browser pane's current page in the system's real default browser
- * (e.g. actual Chrome) instead of Hramble's embedded, more limited pane —
- * same idea as the external-link button in Claude's own UI.
- */
 /** The browser pane's untouched default — nothing real is being previewed yet. */
 const BROWSER_PANE_PLACEHOLDER = "https://www.google.com"
 
-function OpenInChromeButton() {
-	const url = useAtomValue(browserUrlAtom)
-	const [busy, setBusy] = useState(false)
-
-	const handleClick = async () => {
-		// Already showing something real (whatever the agent previewed, or a page
-		// the user navigated to) — just mirror it into the real browser.
-		if (url !== BROWSER_PANE_PLACEHOLDER) {
-			openExternal(url)
-			return
-		}
-		// Nothing's being previewed — let the user pick a page and serve it over
-		// localhost (not file://, which breaks relative paths/fetch/modules),
-		// same server the agent's own preview tool uses.
-		setBusy(true)
-		try {
-			const filePath = await pickHtmlFile()
-			if (!filePath) return
-			const servedUrl = await servePreviewFile(filePath)
-			if (servedUrl) openExternal(servedUrl)
-		} finally {
-			setBusy(false)
-		}
-	}
-
+/** One row inside the "•••" panel — plain button, not DropdownMenuItem, so
+ *  clicking it never force-closes the popover (needed for Live Share's
+ *  "start then show the link" flow). */
+function MoreMenuRow({
+	icon,
+	label,
+	onClick,
+	disabled,
+	trailing,
+}: {
+	icon: React.ReactNode
+	label: React.ReactNode
+	onClick?: () => void
+	disabled?: boolean
+	trailing?: React.ReactNode
+}) {
 	return (
-		<Tooltip>
-			<TooltipTrigger
-				render={
-					<button
-						type="button"
-						onClick={handleClick}
-						disabled={busy}
-						className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-					/>
-				}
-			>
-				<ArrowUpRightIcon className="size-3.5" />
-			</TooltipTrigger>
-			<TooltipContent>
-				{url !== BROWSER_PANE_PLACEHOLDER ? "Open in your browser" : "Preview a page in your browser"}
-			</TooltipContent>
-		</Tooltip>
+		<button
+			type="button"
+			onClick={onClick}
+			disabled={disabled}
+			className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+		>
+			{icon}
+			<span className="flex-1">{label}</span>
+			{trailing}
+		</button>
 	)
 }
 
 /**
- * Live Share toggle — starts/stops relaying this session to anyone with the
- * link (see hooks/use-session-share.ts). No account needed on the viewer's
- * side; they can watch and send messages back into the session.
+ * "More" overflow menu — Live Share plus everything from the old "Open in"
+ * dropdown, merged into one panel for the session's less-frequent, occasional
+ * actions (Claude-style "•••"), so the header only shows the toggles used
+ * constantly (files/changes/browser) as direct icons.
  */
-function ShareButton({ directory, sessionId }: { directory: string; sessionId: string }) {
-	const { shareUrl, isSharing, start, stop } = useSessionShare(directory, sessionId)
-	const [copied, setCopied] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+function SessionMoreMenu({
+	shareDirectory,
+	openDirectory,
+	sessionId,
+}: {
+	shareDirectory: string
+	openDirectory: string
+	sessionId: string
+}) {
+	// --- Live Share ---
+	const { shareUrl, isSharing, start, stop } = useSessionShare(shareDirectory, sessionId)
+	const [shareCopied, setShareCopied] = useState(false)
+	const [shareError, setShareError] = useState<string | null>(null)
 
-	const handleOpenChange = (open: boolean) => {
-		if (open && !isSharing) {
-			const result = start()
-			setError(result.ok ? null : result.error)
-		}
-	}
+	const handleStartShare = useCallback(() => {
+		const result = start()
+		setShareError(result.ok ? null : result.error)
+	}, [start])
 
-	const copyLink = () => {
+	const copyShareLink = useCallback(() => {
 		if (!shareUrl) return
 		navigator.clipboard.writeText(shareUrl)
-		setCopied(true)
-		setTimeout(() => setCopied(false), 1500)
-	}
+		setShareCopied(true)
+		setTimeout(() => setShareCopied(false), 1500)
+	}, [shareUrl])
 
-	return (
-		<Popover onOpenChange={handleOpenChange}>
-			<Tooltip>
-				<TooltipTrigger
-					render={
-						<PopoverTrigger
-							render={
-								<button
-									type="button"
-									className={cn(
-										"flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
-										isSharing
-											? "bg-muted text-foreground"
-											: "text-muted-foreground hover:bg-muted hover:text-foreground",
-									)}
-								/>
-							}
-						/>
-					}
-				>
-					<RadioTowerIcon className="size-3.5" />
-				</TooltipTrigger>
-				<TooltipContent>{isSharing ? "Live Share is on" : "Share this session — watch + help live"}</TooltipContent>
-			</Tooltip>
-			<PopoverContent align="end" className="w-80">
-				{error ? (
-					<p className="text-red-500 text-sm">{error}</p>
-				) : (
-					<div className="flex flex-col gap-3">
-						<div>
-							<p className="font-medium text-sm">Live Share</p>
-							<p className="text-muted-foreground text-xs">
-								Anyone with this link can watch this session live and send messages into it — no account
-								needed.
-							</p>
-						</div>
-						<div className="flex items-center gap-2">
-							<Input readOnly value={shareUrl ?? ""} className="text-xs" onFocus={(e) => e.target.select()} />
-							<Button size="sm" variant="outline" onClick={copyLink}>
-								{copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
-							</Button>
-						</div>
-						<Button size="sm" variant="ghost" onClick={stop} className="self-start text-muted-foreground">
-							Stop sharing
-						</Button>
-					</div>
-				)}
-			</PopoverContent>
-		</Popover>
-	)
-}
-
-/**
- * Dropdown button that opens the project directory in an available editor,
- * terminal, or file manager. Fetches targets lazily on first open.
- *
- * The primary action (clicking the main button) opens in the preferred target.
- * The chevron opens a dropdown to choose a different target.
- */
-function OpenInButton({ directory }: { directory: string }) {
+	// --- Open elsewhere (browser / editor / terminal) ---
+	const browserUrl = useAtomValue(browserUrlAtom)
+	const { url: serverUrl } = useServerConnection()
 	const [targets, setTargets] = useState<OpenInTarget[]>([])
 	const [preferred, setPreferred] = useState<string | null>(null)
 	const [loaded, setLoaded] = useState(false)
 	const [opening, setOpening] = useState<string | null>(null)
+	const [chromeBusy, setChromeBusy] = useState(false)
 
 	const loadTargets = useCallback(async () => {
-		if (loaded) {
-			return { targets, preferredTarget: preferred }
-		}
+		if (loaded) return
 		try {
 			const result = await fetchOpenInTargets()
-			const availableTargets = result.targets.filter((t) => t.available)
-			setTargets(availableTargets)
+			setTargets(result.targets.filter((t) => t.available))
 			setPreferred(result.preferredTarget)
-			setLoaded(true)
-			return { targets: availableTargets, preferredTarget: result.preferredTarget }
 		} catch {
-			// Silently fail — button will show no targets
+			// Silently fail — menu will show "No editors found"
+		} finally {
 			setLoaded(true)
-			return { targets: [], preferredTarget: null }
 		}
-	}, [loaded, preferred, targets])
+	}, [loaded])
 
-	useEffect(() => {
-		void loadTargets()
-	}, [loadTargets])
-
-	const handleOpen = useCallback(
+	const handleOpenTarget = useCallback(
 		async (targetId: string) => {
 			setOpening(targetId)
 			try {
-				await openInTarget(directory, targetId, true)
+				await openInTarget(openDirectory, targetId, true)
 				setPreferred(targetId)
 			} catch {
 				// Silently fail
@@ -803,84 +705,137 @@ function OpenInButton({ directory }: { directory: string }) {
 				setOpening(null)
 			}
 		},
-		[directory],
+		[openDirectory],
 	)
 
-	const handlePrimaryClick = useCallback(async () => {
-		const { targets: availableTargets, preferredTarget } = loaded
-			? { targets, preferredTarget: preferred }
-			: await loadTargets()
-		const target = preferredTarget
-			? availableTargets.find((t) => t.id === preferredTarget)
-			: availableTargets[0]
-		if (target) {
-			await handleOpen(target.id)
+	const handleOpenChrome = useCallback(async () => {
+		// Already showing something real (whatever the agent previewed, or a page
+		// the user navigated to) — just mirror it into the real browser.
+		if (browserUrl !== BROWSER_PANE_PLACEHOLDER) {
+			openExternal(browserUrl)
+			return
 		}
-	}, [loaded, loadTargets, preferred, targets, handleOpen])
+		// Nothing's being previewed — let the user pick a page and serve it over
+		// localhost (not file://, which breaks relative paths/fetch/modules),
+		// same server the agent's own preview tool uses.
+		setChromeBusy(true)
+		try {
+			const filePath = await pickHtmlFile()
+			if (!filePath) return
+			const servedUrl = await servePreviewFile(filePath)
+			if (servedUrl) openExternal(servedUrl)
+		} finally {
+			setChromeBusy(false)
+		}
+	}, [browserUrl])
 
-	// Don't show on non-Electron
-	if (!isElectron) return null
-
-	// Resolve the preferred target's icon data URL for the primary button
-	const preferredTarget = targets.find((t) => t.id === preferred)
+	const handleCopyAttachCommand = useCallback(() => {
+		const command = `opencode attach ${serverUrl ?? "http://127.0.0.1:4101"} --session ${sessionId} --dir ${openDirectory}`
+		navigator.clipboard.writeText(command)
+		toast.success("Attach command copied", {
+			description: "Paste in your terminal to attach — both views stay in sync.",
+		})
+	}, [serverUrl, sessionId, openDirectory])
 
 	return (
-		<div className="flex items-center rounded-md border border-border/60">
-			<button
-				type="button"
-				onClick={handlePrimaryClick}
-				disabled={opening !== null}
-				className="flex items-center gap-1.5 rounded-l-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-			>
-				{preferredTarget?.iconDataUrl ? (
-					<TargetIcon iconDataUrl={preferredTarget.iconDataUrl} className="size-3.5" />
-				) : (
-					<ExternalLinkIcon className="size-3" />
-				)}
-				<span>Open</span>
-			</button>
-
-			<DropdownMenu onOpenChange={(open) => open && loadTargets()}>
-				<DropdownMenuTrigger
+		<Popover onOpenChange={(open) => open && void loadTargets()}>
+			<Tooltip>
+				<TooltipTrigger
 					render={
-						<button
-							type="button"
-							className="rounded-r-md border-l border-border/60 px-1 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						<PopoverTrigger
+							render={
+								<button
+									type="button"
+									className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								/>
+							}
 						/>
 					}
 				>
-					<ChevronDownIcon className="size-3" />
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" className="min-w-[180px]">
-					{!loaded ? (
-						<DropdownMenuItem disabled>Loading...</DropdownMenuItem>
-					) : targets.length === 0 ? (
-						<DropdownMenuItem disabled>No editors found</DropdownMenuItem>
+					<MoreHorizontalIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>More</TooltipContent>
+			</Tooltip>
+			<PopoverContent align="end" className="w-72 gap-0 p-0">
+				{/* Live Share */}
+				<div className="p-3">
+					<p className="font-medium text-sm">Live Share</p>
+					{isSharing ? (
+						<div className="mt-2 flex flex-col gap-2">
+							<div className="flex items-center gap-2">
+								<Input
+									readOnly
+									value={shareUrl ?? ""}
+									className="text-xs"
+									onFocus={(e) => e.target.select()}
+								/>
+								<Button size="sm" variant="outline" onClick={copyShareLink}>
+									{shareCopied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+								</Button>
+							</div>
+							<Button size="sm" variant="ghost" onClick={stop} className="self-start text-muted-foreground">
+								Stop sharing
+							</Button>
+						</div>
 					) : (
-						<>
-							{targets.map((target) => (
-								<DropdownMenuItem
-									key={target.id}
-									onClick={() => handleOpen(target.id)}
-									disabled={opening === target.id}
-									className="flex items-center gap-2"
-								>
-									<TargetIcon iconDataUrl={target.iconDataUrl} className="size-4" />
-									<span className="flex-1">{target.label}</span>
-									{preferred === target.id && (
-										<CheckIcon className="size-3 shrink-0 text-muted-foreground/60" />
-									)}
-								</DropdownMenuItem>
-							))}
-							<DropdownMenuSeparator />
-							<DropdownMenuItem disabled className="text-[11px] text-muted-foreground/50">
-								{directory}
-							</DropdownMenuItem>
-						</>
+						<div className="mt-2 flex flex-col gap-2">
+							<p className="text-muted-foreground text-xs">
+								Anyone with the link can watch this session live and send messages into it — no
+								account needed.
+							</p>
+							{shareError && <p className="text-red-500 text-xs">{shareError}</p>}
+							<Button size="sm" variant="outline" onClick={handleStartShare} className="w-fit gap-1.5">
+								<RadioTowerIcon className="size-3.5" />
+								Start Live Share
+							</Button>
+						</div>
 					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
-		</div>
+				</div>
+
+				<div className="h-px bg-border" />
+
+				{/* Open elsewhere */}
+				<div className="p-1">
+					<MoreMenuRow
+						icon={<ArrowUpRightIcon className="size-4" />}
+						label={browserUrl !== BROWSER_PANE_PLACEHOLDER ? "Open in your browser" : "Preview a page in browser…"}
+						onClick={handleOpenChrome}
+						disabled={chromeBusy}
+					/>
+
+					{isElectron &&
+						(!loaded ? (
+							<p className="px-2 py-1.5 text-muted-foreground text-xs">Loading editors...</p>
+						) : targets.length === 0 ? (
+							<p className="px-2 py-1.5 text-muted-foreground text-xs">No editors found</p>
+						) : (
+							targets.map((target) => (
+								<MoreMenuRow
+									key={target.id}
+									icon={<TargetIcon iconDataUrl={target.iconDataUrl} className="size-4" />}
+									label={target.label}
+									onClick={() => handleOpenTarget(target.id)}
+									disabled={opening === target.id}
+									trailing={
+										preferred === target.id ? (
+											<CheckIcon className="size-3 shrink-0 text-muted-foreground/60" />
+										) : undefined
+									}
+								/>
+							))
+						))}
+
+					<MoreMenuRow
+						icon={<TerminalIcon className="size-4" />}
+						label="Attach in terminal"
+						onClick={handleCopyAttachCommand}
+					/>
+				</div>
+
+				<div className="h-px bg-border" />
+				<p className="truncate px-3 py-2 text-[11px] text-muted-foreground/50">{openDirectory}</p>
+			</PopoverContent>
+		</Popover>
 	)
 }
 
@@ -916,76 +871,3 @@ function WorktreeBranchBadge({ branch }: { branch: string }) {
 	)
 }
 
-/**
- * Popover with the `opencode attach` command for opening this session in a terminal.
- */
-function AttachCommand({ sessionId, directory }: { sessionId: string; directory: string }) {
-	const { url } = useServerConnection()
-	const [copied, setCopied] = useState(false)
-	const [open, setOpen] = useState(false)
-
-	const command = `opencode attach ${url ?? "http://127.0.0.1:4101"} --session ${sessionId} --dir ${directory}`
-
-	const handleOpen = useCallback(
-		async (nextOpen: boolean) => {
-			if (nextOpen) {
-				await navigator.clipboard.writeText(command)
-				setCopied(true)
-				setTimeout(() => setCopied(false), 2000)
-			}
-			setOpen(nextOpen)
-		},
-		[command],
-	)
-
-	const handleCopy = useCallback(async () => {
-		await navigator.clipboard.writeText(command)
-		setCopied(true)
-		setTimeout(() => setCopied(false), 2000)
-	}, [command])
-
-	return (
-		<Popover open={open} onOpenChange={handleOpen}>
-			<Tooltip>
-				<TooltipTrigger
-					render={
-						<PopoverTrigger
-							render={
-								<button
-									type="button"
-									className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-								/>
-							}
-						/>
-					}
-				>
-					<TerminalIcon className="size-3.5" />
-				</TooltipTrigger>
-				<TooltipContent>Open in terminal</TooltipContent>
-			</Tooltip>
-			<PopoverContent align="end" className="w-auto max-w-sm p-3">
-				<div className="flex flex-col gap-2">
-					<div className="flex items-center gap-1.5">
-						<CheckIcon className="size-3 text-green-500" />
-						<p className="text-xs font-medium">Copied to clipboard</p>
-					</div>
-					<div className="flex items-center gap-1.5">
-						<code className="flex-1 rounded-md bg-muted px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-foreground select-all">
-							{command}
-						</code>
-						<Button size="sm" variant="ghost" className="h-7 w-7 shrink-0 p-0" onClick={handleCopy}>
-							{copied ? (
-								<CheckIcon className="size-3.5 text-green-500" />
-							) : (
-								<CopyIcon className="size-3.5" />
-							)}
-						</Button>
-					</div>
-					<p className="text-[11px] leading-normal text-muted-foreground">
-						Paste in your terminal to attach. Both views will stay in sync.
-					</p>
-				</div>
-			</PopoverContent>
-		</Popover>
-	)
-}

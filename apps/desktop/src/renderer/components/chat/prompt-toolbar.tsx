@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 import { useCallback, useMemo, useState } from "react"
 import { messagesFamily } from "../../atoms/messages"
+import { SessionMetricsBar } from "../session-metrics-bar"
 import type { DisplayMode } from "../../atoms/preferences"
 import { useDisplayMode, useSetDisplayMode } from "../../hooks/use-agents"
 import type {
@@ -745,6 +746,11 @@ export function StatusBar({
 					<DisplayModeIcon className="size-3" />
 					<span>{DISPLAY_MODE_LABELS[displayMode]}</span>
 				</button>
+
+				{/* Session cost + token/tool breakdown — moved here from the session
+				 *  header so all the "usage" info (this, context %, branch) lives in
+				 *  one place instead of being split across two toolbars. */}
+				{sessionId && <SessionMetricsBar sessionId={sessionId} />}
 
 				{/* Context window usage */}
 				{sessionId && (

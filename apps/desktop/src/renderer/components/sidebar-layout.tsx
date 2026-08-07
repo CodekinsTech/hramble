@@ -243,21 +243,6 @@ function TopRightControls() {
 							variant="ghost"
 							size="icon"
 							className="size-7 shrink-0"
-							onClick={() => navigate({ to: "/community" })}
-						/>
-					}
-				>
-					<RssIcon className="size-3.5" />
-				</TooltipTrigger>
-				<TooltipContent>Community — share what you built</TooltipContent>
-			</Tooltip>
-			<Tooltip>
-				<TooltipTrigger
-					render={
-						<Button
-							variant="ghost"
-							size="icon"
-							className="size-7 shrink-0"
 							onClick={() => navigate({ to: "/team" })}
 						/>
 					}
@@ -265,6 +250,22 @@ function TopRightControls() {
 					<UsersIcon className="size-3.5" />
 				</TooltipTrigger>
 				<TooltipContent>Team Spaces — work on this together</TooltipContent>
+			</Tooltip>
+			{/* Community — kept last/outermost corner for now, per request. */}
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/community" })}
+						/>
+					}
+				>
+					<RssIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Community — share what you built</TooltipContent>
 			</Tooltip>
 		</div>
 	)
