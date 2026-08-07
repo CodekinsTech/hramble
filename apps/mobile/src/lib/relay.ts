@@ -41,6 +41,16 @@ export interface ChatEvent {
 	text: string
 }
 
+/** Wire shape for a file riding along with an outgoing viewer-message —
+ *  matches the desktop's FileAttachment fields it gets converted into
+ *  (see use-dispatch-bridge.ts), just renamed `mime` for the wire since the
+ *  relay itself is content-opaque and this isn't the desktop's own type. */
+export interface OutgoingFileAttachment {
+	mime: string
+	filename?: string
+	url: string
+}
+
 export type ScreenContent =
 	| { kind: "html"; html: string }
 	| { kind: "url"; url: string }
@@ -52,6 +62,18 @@ export interface DispatchSessionSummary {
 	project: string
 	directory: string
 	lastActiveAt: number
+	/** Lets the chat screen show a "Stop" quick-action while a session is running. */
+	status: string
+}
+
+/** A pending permission ask mirrored from the desktop's own permission card
+ *  (chat-permission.tsx) — see DispatchPermissionRequest in share-client.ts. */
+export interface PermissionRequest {
+	id: string
+	sessionId: string
+	permission: string
+	patterns: string[]
+	metadata: Record<string, unknown>
 }
 
 export interface RelayState {
@@ -62,6 +84,7 @@ export interface RelayState {
 	screen: ScreenContent | null
 	sessions: DispatchSessionSummary[]
 	noHostNotice: number
+	permissionRequest: PermissionRequest | null
 }
 
 export type RelayListener = (state: RelayState) => void
@@ -80,6 +103,7 @@ export class RelayClient {
 		screen: null,
 		sessions: [],
 		noHostNotice: 0,
+		permissionRequest: null,
 	}
 
 	constructor(private roomToken: string) {
@@ -135,18 +159,36 @@ export class RelayClient {
 				this.setState({ screen: msg.content ?? null })
 			} else if (msg.type === "session-list" && Array.isArray(msg.sessions)) {
 				this.setState({ sessions: msg.sessions })
+			} else if (msg.type === "permission-request") {
+				this.setState({ permissionRequest: msg.request ?? null })
 			}
 		}
 	}
 
-	sendMessage(text: string) {
+	sendMessage(text: string, files?: OutgoingFileAttachment[]) {
 		if (this.ws?.readyState !== WebSocket.OPEN) return
-		this.ws.send(JSON.stringify({ type: "viewer-message", text }))
+		const payload: Record<string, unknown> = { type: "viewer-message", text }
+		if (files && files.length > 0) payload.files = files
+		this.ws.send(JSON.stringify(payload))
 	}
 
 	selectSession(sessionId: string) {
 		if (this.ws?.readyState !== WebSocket.OPEN) return
 		this.ws.send(JSON.stringify({ type: "select-session", sessionId }))
+	}
+
+	/** Clears the card immediately on this device (optimistic) — the next
+	 *  snapshot/permission push from the host confirms it either stays
+	 *  cleared or (rare race) reappears if the response didn't land. */
+	respondPermission(sessionId: string, permissionId: string, decision: "allow" | "deny") {
+		this.setState({ permissionRequest: null })
+		if (this.ws?.readyState !== WebSocket.OPEN) return
+		this.ws.send(JSON.stringify({ type: "permission-response", sessionId, permissionId, decision }))
+	}
+
+	stopSession(sessionId: string) {
+		if (this.ws?.readyState !== WebSocket.OPEN) return
+		this.ws.send(JSON.stringify({ type: "stop-session", sessionId }))
 	}
 
 	stop() {

@@ -35,11 +35,25 @@ export async function isCommunityBackendEnabled(): Promise<boolean> {
 	return (await loadConfig()).enabled
 }
 
-/** Shared with team-client.ts — Team Spaces lives in the same Supabase project as Community. */
+/** Shared with team-client.ts — Team Spaces lives in the same Supabase project as Community.
+ *
+ * autoRefreshToken/persistSession are OFF on purpose: the main process
+ * (community-session-store.ts + community-auth.ts) is the single authority
+ * for this session — it owns the encrypted on-disk copy and refreshes the
+ * access token on a timer before it expires, then pushes the new pair down
+ * via syncClientSession() below. If this renderer client refreshed on its
+ * own too, Supabase's refresh-token rotation would invalidate whichever
+ * refresh token the OTHER side was still holding the next time it tried —
+ * this is exactly what caused a live "refresh_token_already_used" 400 while
+ * debugging the Dispatch reconnect-forever bug. */
 export async function getClient(): Promise<SupabaseClient | null> {
 	const cfg = await loadConfig()
 	if (!cfg.enabled) return null
-	if (!client) client = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey)
+	if (!client) {
+		client = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+			auth: { autoRefreshToken: false, persistSession: false },
+		})
+	}
 	return client
 }
 

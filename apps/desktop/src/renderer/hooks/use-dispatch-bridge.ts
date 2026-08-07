@@ -12,6 +12,7 @@
 import { useAtomValue } from "jotai"
 import { useCallback, useEffect, useRef } from "react"
 import { agentsAtom, projectListAtom } from "../atoms/derived/agents"
+import { effectivePermissionFamily } from "../atoms/derived/session-requests"
 import { communityAccessTokenAtom } from "../atoms/community"
 import { dispatchPairTokenAtom, dispatchSessionRefAtom } from "../atoms/dispatch"
 import { messagesFamily } from "../atoms/messages"
@@ -22,20 +23,24 @@ import type { BrowserPaneContent } from "../lib/browser-pane-bridge"
 import {
 	buildSnapshot,
 	createScreenDedupe,
+	type DispatchPermissionRequest,
 	type DispatchSessionSummary,
+	type IncomingFileAttachment,
 	type ShareEvent,
 	startShareHost,
 } from "../lib/share-client"
+import type { FileAttachment } from "../lib/types"
 import { useAgentActions } from "./use-server"
 
 export function useDispatchBridge(): void {
 	const pairToken = useAtomValue(dispatchPairTokenAtom)
 	const accessToken = useAtomValue(communityAccessTokenAtom)
-	const { createSession, sendPrompt } = useAgentActions()
+	const { createSession, sendPrompt, respondToPermission, abort } = useAgentActions()
 
 	const sendSnapshotRef = useRef<((events: ShareEvent[]) => void) | null>(null)
 	const sendScreenRef = useRef<((content: BrowserPaneContent) => void) | null>(null)
 	const sendSessionListRef = useRef<((sessions: DispatchSessionSummary[]) => void) | null>(null)
+	const sendPermissionRequestRef = useRef<((request: DispatchPermissionRequest | null) => void) | null>(null)
 	const mirrorUnsubRef = useRef<(() => void) | null>(null)
 	const mirroringSessionIdRef = useRef<string | null>(null)
 
@@ -45,16 +50,38 @@ export function useDispatchBridge(): void {
 		mirrorUnsubRef.current?.()
 
 		const screenDedupe = createScreenDedupe()
+		let lastPermissionId: string | null = null
 		const push = () => {
 			const messages = appStore.get(messagesFamily(sessionId))
 			sendSnapshotRef.current?.(buildSnapshot(messages, (id) => appStore.get(partsFamily(id))))
 			if (sendScreenRef.current) screenDedupe.pushIfChanged(sendScreenRef.current)
+
+			// Mirror the first pending permission ask in this session's subtree
+			// (self + sub-agents) — same source the desktop permission card reads.
+			const effPermission = appStore.get(effectivePermissionFamily(sessionId))
+			const permissionId = effPermission?.request.id ?? null
+			if (permissionId !== lastPermissionId) {
+				lastPermissionId = permissionId
+				sendPermissionRequestRef.current?.(
+					effPermission
+						? {
+								id: effPermission.request.id,
+								sessionId: effPermission.sessionId,
+								permission: effPermission.request.permission,
+								patterns: effPermission.request.patterns,
+								metadata: effPermission.request.metadata,
+							}
+						: null,
+				)
+			}
 		}
 		push()
 		const unsubMessages = appStore.sub(messagesFamily(sessionId), push)
+		const unsubPermission = appStore.sub(effectivePermissionFamily(sessionId), push)
 		const interval = setInterval(push, 1500)
 		mirrorUnsubRef.current = () => {
 			unsubMessages()
+			unsubPermission()
 			clearInterval(interval)
 		}
 	}, [])
@@ -77,6 +104,7 @@ export function useDispatchBridge(): void {
 				project: a.project,
 				directory: a.directory,
 				lastActiveAt: a.lastActiveAt,
+				status: a.status,
 			}))
 			.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 		sendSessionListRef.current(sessions)
@@ -98,8 +126,33 @@ export function useDispatchBridge(): void {
 		[mirrorSession, reportError],
 	)
 
+	/** A phone tapping Allow/Deny on a mirrored permission card — resolve it
+	 *  through the same respondToPermission() the desktop permission card
+	 *  uses, routed to whichever session actually owns it (sub-agent-aware,
+	 *  same as handleApprovePermission in session-view.tsx). */
+	const handlePermissionResponse = useCallback(
+		(sessionId: string, permissionId: string, decision: "allow" | "deny") => {
+			const entry = appStore.get(sessionFamily(sessionId))
+			if (!entry) return
+			respondToPermission(entry.directory, sessionId, permissionId, decision === "allow" ? "once" : "reject").catch(
+				() => reportError("Couldn't act on that permission — try approving it on the desktop instead."),
+			)
+		},
+		[respondToPermission, reportError],
+	)
+
+	/** A phone tapping "Stop" on the actively-running mirrored session. */
+	const handleStopSession = useCallback(
+		(sessionId: string) => {
+			const entry = appStore.get(sessionFamily(sessionId))
+			if (!entry) return
+			abort(entry.directory, sessionId).catch(() => reportError("Couldn't stop that session — try again from the desktop."))
+		},
+		[abort, reportError],
+	)
+
 	const handleViewerMessage = useCallback(
-		async (text: string) => {
+		async (text: string, files?: IncomingFileAttachment[]) => {
 			let ref = appStore.get(dispatchSessionRefAtom)
 			if (!ref) {
 				// Exclude the "/" global bucket (OpenCode's no-project-picked namespace,
@@ -134,7 +187,13 @@ export function useDispatchBridge(): void {
 			}
 			mirrorSession(ref.sessionId)
 			try {
-				await sendPrompt(ref.directory, ref.sessionId, text)
+				const attachments: FileAttachment[] | undefined = files?.map((f) => ({
+					type: "file",
+					url: f.url,
+					mediaType: f.mime,
+					filename: f.filename,
+				}))
+				await sendPrompt(ref.directory, ref.sessionId, text, attachments ? { files: attachments } : undefined)
 			} catch {
 				reportError("Something went wrong sending that to Hramble — try again.")
 			}
@@ -147,13 +206,16 @@ export function useDispatchBridge(): void {
 
 		const host = startShareHost(
 			accessToken,
-			(text) => handleViewerMessage(text),
+			(text, files) => handleViewerMessage(text, files),
 			pairToken,
 			(sessionId) => handleSelectSession(sessionId),
+			(sessionId, permissionId, decision) => handlePermissionResponse(sessionId, permissionId, decision),
+			(sessionId) => handleStopSession(sessionId),
 		)
 		sendSnapshotRef.current = host.sendSnapshot
 		sendScreenRef.current = host.sendScreen
 		sendSessionListRef.current = host.sendSessionList
+		sendPermissionRequestRef.current = host.sendPermissionRequest
 
 		const existingRef = appStore.get(dispatchSessionRefAtom)
 		if (existingRef) mirrorSession(existingRef.sessionId)
@@ -169,9 +231,19 @@ export function useDispatchBridge(): void {
 			sendSnapshotRef.current = null
 			sendScreenRef.current = null
 			sendSessionListRef.current = null
+			sendPermissionRequestRef.current = null
 			unsubAgents()
 			clearInterval(sessionListInterval)
 			host.stop()
 		}
-	}, [pairToken, accessToken, handleViewerMessage, handleSelectSession, mirrorSession, pushSessionList])
+	}, [
+		pairToken,
+		accessToken,
+		handleViewerMessage,
+		handleSelectSession,
+		handlePermissionResponse,
+		handleStopSession,
+		mirrorSession,
+		pushSessionList,
+	])
 }

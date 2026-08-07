@@ -151,3 +151,16 @@ input {
 .mono {
 	font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
+
+/* Voice-input "listening…" dot (ChatScreen) */
+@keyframes hramble-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.4;
+		transform: scale(1.3);
+	}
+}

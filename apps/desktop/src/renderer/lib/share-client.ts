@@ -34,6 +34,32 @@ export interface DispatchSessionSummary {
 	project: string
 	directory: string
 	lastActiveAt: number
+	/** Lets the phone show a "Stop" quick-action when the mirrored session is actively running. */
+	status: string
+}
+
+/** A file riding along with an incoming viewer-message (see attachFile.ts /
+ *  relay.ts on the mobile side) — same three fields the mobile client sends
+ *  over the wire, converted into a real FileAttachment (types.ts) by the
+ *  caller before it reaches sendPrompt(). */
+export interface IncomingFileAttachment {
+	mime: string
+	filename?: string
+	url: string
+}
+
+/**
+ * A pending permission ask (bash command, file edit, etc.) mirrored to the
+ * phone — same underlying data as PermissionRequest (types.ts) plus the
+ * subtree-aware sessionId from effectivePermissionFamily, so a sub-agent's
+ * permission still resolves against the right session.
+ */
+export interface DispatchPermissionRequest {
+	id: string
+	sessionId: string
+	permission: string
+	patterns: string[]
+	metadata: Record<string, unknown>
 }
 
 function partsToText(parts: Part[]): string {
@@ -73,13 +99,16 @@ export interface ShareHost {
  */
 export function startShareHost(
 	accessToken: string,
-	onViewerMessage: (text: string) => void,
+	onViewerMessage: (text: string, files?: IncomingFileAttachment[]) => void,
 	roomToken: string = crypto.randomUUID(),
 	onSelectSession?: (sessionId: string) => void,
+	onPermissionResponse?: (sessionId: string, permissionId: string, decision: "allow" | "deny") => void,
+	onStopSession?: (sessionId: string) => void,
 ): ShareHost & {
 	sendSnapshot: (events: ShareEvent[]) => void
 	sendScreen: (content: BrowserPaneContent) => void
 	sendSessionList: (sessions: DispatchSessionSummary[]) => void
+	sendPermissionRequest: (request: DispatchPermissionRequest | null) => void
 } {
 	// A dropped connection (network blip, relay redeploy, Mac sleep/wake)
 	// shouldn't need an app restart to recover — reconnect automatically,
@@ -96,8 +125,28 @@ export function startShareHost(
 			if (typeof event.data !== "string") return
 			try {
 				const msg = JSON.parse(event.data)
-				if (msg.type === "viewer-message" && typeof msg.text === "string") onViewerMessage(msg.text)
+				if (msg.type === "viewer-message" && typeof msg.text === "string") {
+					const files = Array.isArray(msg.files)
+						? msg.files.filter(
+								(f: unknown): f is IncomingFileAttachment =>
+									!!f &&
+									typeof f === "object" &&
+									typeof (f as IncomingFileAttachment).mime === "string" &&
+									typeof (f as IncomingFileAttachment).url === "string",
+							)
+						: undefined
+					onViewerMessage(msg.text, files && files.length > 0 ? files : undefined)
+				}
 				if (msg.type === "select-session" && typeof msg.sessionId === "string") onSelectSession?.(msg.sessionId)
+				if (
+					msg.type === "permission-response" &&
+					typeof msg.sessionId === "string" &&
+					typeof msg.permissionId === "string" &&
+					(msg.decision === "allow" || msg.decision === "deny")
+				) {
+					onPermissionResponse?.(msg.sessionId, msg.permissionId, msg.decision)
+				}
+				if (msg.type === "stop-session" && typeof msg.sessionId === "string") onStopSession?.(msg.sessionId)
 			} catch {
 				// Ignore malformed frames.
 			}
@@ -124,12 +173,18 @@ export function startShareHost(
 		ws.send(JSON.stringify({ type: "session-list", sessions }))
 	}
 
+	function sendPermissionRequest(request: DispatchPermissionRequest | null) {
+		if (ws.readyState !== WebSocket.OPEN) return
+		ws.send(JSON.stringify({ type: "permission-request", request }))
+	}
+
 	return {
 		url: `https://${RELAY_BASE}/?room=${roomToken}`,
 		roomToken,
 		sendSnapshot,
 		sendScreen,
 		sendSessionList,
+		sendPermissionRequest,
 		stop: () => {
 			stopped = true
 			if (reconnectTimer) clearTimeout(reconnectTimer)
