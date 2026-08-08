@@ -13,7 +13,9 @@ import {
 	HeartIcon,
 	ImagePlusIcon,
 	LogOutIcon,
+	MaximizeIcon,
 	MessageCircleIcon,
+	MinimizeIcon,
 	SearchIcon,
 	SparklesIcon,
 	XIcon,
@@ -124,7 +126,7 @@ function LoginGate() {
 	)
 }
 
-function Composer({ user }: { user: CommunityUser }) {
+function Composer({ user, defaultTag }: { user: CommunityUser; defaultTag?: string }) {
 	const setPosts = useSetAtom(communityPostsAtom)
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const accessToken = useAtomValue(communityAccessTokenAtom)
@@ -142,6 +144,25 @@ function Composer({ user }: { user: CommunityUser }) {
 	const [skillDescription, setSkillDescription] = useState("")
 	const [skillInstructions, setSkillInstructions] = useState("")
 
+	// Shared across both post types — comma-separated so it stays a single
+	// plain-text input rather than a full chip-input widget for what's a
+	// minor, low-frequency field. Feeds the agent hub pages' filtered feeds
+	// (see community-tag-feed.tsx) — e.g. "website" or "browser-game".
+	// Pre-filled with `defaultTag` when posting from an embedded, tag-filtered
+	// panel (see CommunityPage's `filterTag`) so a build shared from there
+	// actually shows up in that same filtered feed without the user having to
+	// know/type the tag themselves.
+	const [tagsInput, setTagsInput] = useState(defaultTag ?? "")
+	const parseTags = () =>
+		Array.from(
+			new Set(
+				tagsInput
+					.split(",")
+					.map((t) => t.trim().toLowerCase())
+					.filter(Boolean),
+			),
+		)
+
 	const onFileChange = (e: ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
 		if (!file) return
@@ -155,6 +176,7 @@ function Composer({ user }: { user: CommunityUser }) {
 	const canPostSkill = skillName.trim() && skillDescription.trim() && skillInstructions.trim()
 
 	const post = async () => {
+		const tags = parseTags()
 		if (postType === "build") {
 			if (!canPostBuild) return
 			setPosting(true)
@@ -170,6 +192,7 @@ function Composer({ user }: { user: CommunityUser }) {
 						caption: caption.trim(),
 						img,
 						repoUrl: repoUrl.trim() || null,
+						tags,
 					})
 					if (created) setPosts((prev) => [created, ...prev])
 				} else {
@@ -183,12 +206,14 @@ function Composer({ user }: { user: CommunityUser }) {
 						createdAt: Date.now(),
 						likedByMe: false,
 						likeCount: 0,
+						tags,
 					}
 					setPosts((prev) => [newPost, ...prev])
 				}
 				setCaption("")
 				setRepoUrl("")
 				setThumbnailDataUrl(null)
+				setTagsInput("")
 			} finally {
 				setPosting(false)
 			}
@@ -208,6 +233,7 @@ function Composer({ user }: { user: CommunityUser }) {
 						caption: "",
 						img: null,
 						repoUrl: null,
+						tags,
 						skill,
 					})
 					if (created) setPosts((prev) => [created, ...prev])
@@ -222,6 +248,7 @@ function Composer({ user }: { user: CommunityUser }) {
 						createdAt: Date.now(),
 						likedByMe: false,
 						likeCount: 0,
+						tags,
 						skill,
 					}
 					setPosts((prev) => [newPost, ...prev])
@@ -229,6 +256,7 @@ function Composer({ user }: { user: CommunityUser }) {
 				setSkillName("")
 				setSkillDescription("")
 				setSkillInstructions("")
+				setTagsInput("")
 			} finally {
 				setPosting(false)
 			}
@@ -300,6 +328,12 @@ function Composer({ user }: { user: CommunityUser }) {
 							{posting ? "Posting…" : "Post"}
 						</button>
 					</div>
+					<input
+						value={tagsInput}
+						onChange={(e) => setTagsInput(e.target.value)}
+						placeholder="Tags, comma-separated (e.g. website, browser-game)"
+						className="mt-2 h-7 w-full rounded-md border border-border bg-background px-2 text-xs outline-none focus:ring-1 focus:ring-ring"
+					/>
 					<input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={onFileChange} />
 				</>
 			) : (
@@ -322,6 +356,12 @@ function Composer({ user }: { user: CommunityUser }) {
 						placeholder="The step-by-step instructions"
 						rows={3}
 						className="w-full resize-none rounded-md border border-border bg-background p-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
+					/>
+					<input
+						value={tagsInput}
+						onChange={(e) => setTagsInput(e.target.value)}
+						placeholder="Tags, comma-separated (optional)"
+						className="h-8 rounded-md border border-border bg-background px-2.5 text-xs outline-none focus:ring-1 focus:ring-ring"
 					/>
 					<button
 						type="button"
@@ -565,7 +605,32 @@ function SkillsBrowser() {
 	)
 }
 
-export function CommunityPage() {
+interface CommunityPageProps {
+	/** When set, the feed shows only posts tagged with this (e.g. "website",
+	 *  "browser-game") instead of everything — used when embedded in an
+	 *  agent hub page's Community panel (see agent-hub-page.tsx). Filters the
+	 *  same `communityPostsAtom` the unfiltered page reads (kept fresh
+	 *  app-wide by useCommunityAuthSync), so this doesn't duplicate any
+	 *  fetch/backend logic — it's the real feed, just narrowed client-side. */
+	filterTag?: string
+	/** True when rendered inside the agent hub page's right-hand panel
+	 *  instead of as the standalone /community route. Adds the panel-only
+	 *  expand/close controls next to the page's own header and drops the
+	 *  centered max-width so it fills whatever width the panel is given. */
+	embedded?: boolean
+	/** Current expanded (full-width) state — only meaningful when embedded. */
+	expanded?: boolean
+	onToggleExpanded?: () => void
+	onClose?: () => void
+}
+
+export function CommunityPage({
+	filterTag,
+	embedded = false,
+	expanded = false,
+	onToggleExpanded,
+	onClose,
+}: CommunityPageProps = {}) {
 	// Auth session is synced app-wide from SidebarLayout — this page only reads the atoms.
 	const user = useAtomValue(communityUserAtom)
 	const setUser = useSetAtom(communityUserAtom)
@@ -580,19 +645,50 @@ export function CommunityPage() {
 		else setUser(null)
 	}
 
+	const displayedPosts = filterTag ? posts.filter((p) => p.tags.includes(filterTag)) : posts
+
 	return (
 		<div className="flex h-full flex-col overflow-y-auto">
-			<div className="mx-auto w-full max-w-lg flex-1 px-4 py-6">
+			<div className={embedded ? "w-full flex-1 px-4 py-4" : "mx-auto w-full max-w-lg flex-1 px-4 py-6"}>
 				<div className="mb-4 flex items-center justify-between">
-					<h1 className="font-semibold text-foreground text-lg">Community</h1>
-					<button
-						type="button"
-						onClick={signOut}
-						title="Sign out"
-						className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
-					>
-						<LogOutIcon className="size-3.5" /> {user.name}
-					</button>
+					<div className="flex items-center gap-2">
+						<h1 className="font-semibold text-foreground text-lg">Community</h1>
+						{filterTag && (
+							<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+								#{filterTag}
+							</span>
+						)}
+					</div>
+					<div className="flex items-center gap-0.5">
+						{embedded && onToggleExpanded && (
+							<button
+								type="button"
+								onClick={onToggleExpanded}
+								className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+								title={expanded ? "Restore panel size" : "Expand to full width"}
+							>
+								{expanded ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
+							</button>
+						)}
+						{embedded && onClose && (
+							<button
+								type="button"
+								onClick={onClose}
+								className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+								title="Close — back to the browser pane"
+							>
+								<XIcon className="size-3.5" />
+							</button>
+						)}
+						<button
+							type="button"
+							onClick={signOut}
+							title="Sign out"
+							className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
+						>
+							<LogOutIcon className="size-3.5" /> {user.name}
+						</button>
+					</div>
 				</div>
 				<div className="mb-4 flex gap-1 rounded-lg bg-muted/40 p-1">
 					<button
@@ -612,11 +708,15 @@ export function CommunityPage() {
 				</div>
 				{tab === "feed" ? (
 					<>
-						<Composer user={user} />
+						<Composer user={user} defaultTag={filterTag} />
 						<div className="mt-4 flex flex-col gap-3">
-							{posts.map((post) => (
-								<PostCard key={post.id} post={post} />
-							))}
+							{displayedPosts.length === 0 && filterTag ? (
+								<p className="py-8 text-center text-muted-foreground text-xs">
+									Nothing tagged "{filterTag}" yet — be the first.
+								</p>
+							) : (
+								displayedPosts.map((post) => <PostCard key={post.id} post={post} />)
+							)}
 						</div>
 					</>
 				) : (

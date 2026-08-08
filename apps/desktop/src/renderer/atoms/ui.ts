@@ -52,6 +52,34 @@ export const reviewPanelSettingsAtom = atomWithStorage<ReviewPanelSettings>(
 	{ diffStyle: "unified", expanded: false },
 )
 
+// ============================================================
+// Community Panel State (agent hub pages — website/browser-game only)
+// ============================================================
+
+/**
+ * Whether the embedded Community panel is showing in the right-hand slot
+ * (see sidebar-layout.tsx) instead of the persistent browser pane. Toggled
+ * from agent-hub-page.tsx's "Community" button; resets to false on
+ * navigating away so the other 5 agent pages (and every other route) are
+ * never affected.
+ */
+export const communityPanelOpenAtom = atom(false)
+
+/** Which tag the embedded Community panel is filtered to (e.g. "website"). */
+export const communityPanelTagAtom = atom<string | null>(null)
+
+/** Community panel user preferences (persisted) — same "expand to full
+ *  width" pattern as reviewPanelSettingsAtom above. */
+export interface CommunityPanelSettings {
+	/** Whether the embedded Community panel is expanded to full width. */
+	expanded: boolean
+}
+
+export const communityPanelSettingsAtom = atomWithStorage<CommunityPanelSettings>(
+	"hramble:community-panel-settings",
+	{ expanded: false },
+)
+
 /** Per-session diff data from the OpenCode API */
 export const sessionDiffFamily = atomFamily((_sessionId: string) => atom<FileDiff[]>([]))
 

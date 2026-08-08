@@ -35,6 +35,8 @@ export interface CommunityPost {
 	createdAt: number
 	likedByMe: boolean
 	likeCount: number
+	/** Lowercase tags, e.g. ["website"] — powers the agent hub pages' "community builds" feed. Empty for posts made before tags existed. */
+	tags: string[]
 	/** Only set when type === "skill". Same shape the create_skill agent tool writes. */
 	skill?: {
 		name: string
@@ -56,6 +58,7 @@ const SEED_POSTS: CommunityPost[] = [
 		createdAt: Date.now() - 1000 * 60 * 60 * 5,
 		likedByMe: false,
 		likeCount: 12,
+		tags: ["data-automation"],
 	},
 	{
 		id: "seed-2",
@@ -67,6 +70,7 @@ const SEED_POSTS: CommunityPost[] = [
 		createdAt: Date.now() - 1000 * 60 * 60 * 26,
 		likedByMe: true,
 		likeCount: 34,
+		tags: ["website", "cli-tools"],
 	},
 	{
 		id: "seed-3",
@@ -78,6 +82,7 @@ const SEED_POSTS: CommunityPost[] = [
 		createdAt: Date.now() - 1000 * 60 * 60 * 3,
 		likedByMe: false,
 		likeCount: 21,
+		tags: [],
 		skill: {
 			name: "changelog-writer",
 			description:
@@ -85,6 +90,30 @@ const SEED_POSTS: CommunityPost[] = [
 			instructions:
 				"1. Run `git log` (or read the given diff) to see what actually changed.\n2. Group changes into Added / Changed / Fixed / Removed.\n3. Write one line per change, plain language, no commit hashes.\n4. Prepend the new section to CHANGELOG.md under today's date.",
 		},
+	},
+	{
+		id: "seed-4",
+		author: { email: "jonas@example.com", name: "Jonas Weber" },
+		type: "build",
+		caption: "Built a portfolio site matched to Linear's look using the browser pane's Inspect Design tool — huge time saver.",
+		thumbnailDataUrl: null,
+		repoUrl: "https://github.com/example/linear-style-portfolio",
+		createdAt: Date.now() - 1000 * 60 * 60 * 8,
+		likedByMe: false,
+		likeCount: 19,
+		tags: ["website"],
+	},
+	{
+		id: "seed-5",
+		author: { email: "sara@example.com", name: "Sara Kim" },
+		type: "build",
+		caption: "A tiny top-down dodger game, fully generated shapes/sounds, no asset files at all.",
+		thumbnailDataUrl: null,
+		repoUrl: "https://github.com/example/canvas-dodger",
+		createdAt: Date.now() - 1000 * 60 * 60 * 12,
+		likedByMe: false,
+		likeCount: 27,
+		tags: ["browser-game"],
 	},
 ]
 

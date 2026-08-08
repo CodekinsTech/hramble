@@ -22,6 +22,7 @@ const log = createLogger("auto-title-session")
 const attempted = new Set<string>()
 
 const TITLE_MAX_CHARS = 80
+const TITLE_MAX_WORDS = 5
 const USER_TEXT_MAX_CHARS = 2000
 const ASSISTANT_TEXT_MAX_CHARS = 500
 
@@ -81,12 +82,16 @@ function sanitizeTitle(raw: string): string | null {
 	title = title.replace(/\s+/g, " ").trim()
 	if (!title) return null
 	if (title.length > TITLE_MAX_CHARS) title = title.slice(0, TITLE_MAX_CHARS).trim()
+	// Hard cap regardless of what the model actually returned — the prompt asks
+	// for 2-3 words and never more than 5, but this is the backstop if it doesn't listen.
+	const words = title.split(" ")
+	if (words.length > TITLE_MAX_WORDS) title = words.slice(0, TITLE_MAX_WORDS).join(" ")
 	return title
 }
 
 function buildTitlePrompt(userText: string, assistantText: string): string {
 	return [
-		"Summarize the opening exchange of a chat conversation into a short title, 3 to 6 words, plain text, sentence case, no quotes, no trailing period, no markdown.",
+		"Summarize the opening exchange of a chat conversation into a short title. Prefer just 2-3 words; never use more than 5. Plain text, sentence case, no quotes, no trailing period, no markdown.",
 		"Reply with ONLY the title and nothing else.",
 		"",
 		`User: ${userText.slice(0, USER_TEXT_MAX_CHARS)}`,

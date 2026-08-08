@@ -190,6 +190,18 @@ export function BrowserPane() {
 	const [address, setAddress] = useState(url)
 	const [loading, setLoading] = useState(false)
 	const ref = useRef<WebviewEl | null>(null)
+	// wv.getURL()/loadURL() throw until Electron fires "dom-ready" on the
+	// <webview> — matters here because the panel is a persistent singleton
+	// (see below), so effects reacting to browserUrlAtom changes can run
+	// long after mount, but also potentially before this first fires.
+	const domReadyRef = useRef(false)
+	// Mirrors `url` for the dom-ready handler below, which lives inside an
+	// effect that intentionally doesn't depend on `url` (re-running it would
+	// tear down/reattach every webview listener on every navigation).
+	const urlRef = useRef(url)
+	useEffect(() => {
+		urlRef.current = url
+	}, [url])
 	// Every console.log/warn/error the previewed page makes, captured natively
 	// from the webview — so the agent can check for JS errors itself instead of
 	// asking the user to open DevTools and read them out loud. Capped so a
@@ -493,6 +505,15 @@ export function BrowserPane() {
 		if (!wv) return
 		const onStart = () => setLoading(true)
 		const onStop = () => setLoading(false)
+		const onDomReady = () => {
+			domReadyRef.current = true
+			// Catch up if browserUrlAtom changed while we weren't ready to act on it yet.
+			const latest = urlRef.current
+			if (latest && wv.getURL() !== latest) {
+				setAddress(latest)
+				wv.loadURL(latest).catch(() => {})
+			}
+		}
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const onNav = (e: any) => {
 			if (e?.url) {
@@ -515,12 +536,14 @@ export function BrowserPane() {
 				consoleLogRef.current = consoleLogRef.current.slice(-CONSOLE_LOG_CAP)
 			}
 		}
+		wv.addEventListener("dom-ready", onDomReady)
 		wv.addEventListener("did-start-loading", onStart)
 		wv.addEventListener("did-stop-loading", onStop)
 		wv.addEventListener("did-navigate", onNav)
 		wv.addEventListener("did-navigate-in-page", onNav)
 		wv.addEventListener("console-message", onConsole)
 		return () => {
+			wv.removeEventListener("dom-ready", onDomReady)
 			wv.removeEventListener("did-start-loading", onStart)
 			wv.removeEventListener("did-stop-loading", onStop)
 			wv.removeEventListener("did-navigate", onNav)
@@ -528,6 +551,24 @@ export function BrowserPane() {
 			wv.removeEventListener("console-message", onConsole)
 		}
 	}, [setUrl])
+
+	// The panel is a persistent singleton (see sidebar-layout.tsx — always
+	// mounted, just width-collapsed when closed), so `initialUrl` above is
+	// only ever right the very first time. Anything that sets browserUrlAtom
+	// from elsewhere (repo links in community-page.tsx, reference sites in
+	// agent-hub-page.tsx) needs this effect to actually drive the webview,
+	// not just the address bar text. Guarded against the webview's own
+	// did-navigate echo (which also calls setUrl) so this doesn't reload the
+	// page it just finished navigating to, and against calling getURL/loadURL
+	// before "dom-ready" (see domReadyRef above) — doing that throws and, left
+	// unguarded, took down the whole page via the route error boundary.
+	useEffect(() => {
+		const wv = ref.current
+		if (!wv || !url || !domReadyRef.current) return
+		if (wv.getURL() === url) return
+		setAddress(url)
+		wv.loadURL(url).catch(() => {})
+	}, [url])
 
 	const navigate = (input: string) => {
 		const target = toUrl(input)

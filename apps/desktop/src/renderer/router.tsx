@@ -5,6 +5,7 @@ import {
 	createRouter,
 	redirect,
 } from "@tanstack/react-router"
+import { AgentHubPage } from "./components/agent-hub-page"
 import { AutomationDetail } from "./components/automations/automation-detail"
 import { AutomationRunDetail } from "./components/automations/automation-run-detail"
 import { AutomationsPage } from "./components/automations/automations-page"
@@ -64,6 +65,12 @@ const templatesRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "templates",
 	component: TemplatesPage,
+})
+
+const agentHubRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "agent/$agentId",
+	component: AgentHubPage,
 })
 
 const communityRoute = createRoute({
@@ -209,6 +216,7 @@ const routeTree = rootRoute.addChildren([
 		indexRoute,
 		homeRoute,
 		templatesRoute,
+		agentHubRoute,
 		communityRoute,
 		teamRoute,
 		projectRoute.addChildren([projectIndexRoute, sessionRoute]),

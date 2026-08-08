@@ -36,7 +36,6 @@ import {
 	GitForkIcon,
 	Loader2Icon,
 	MoreVerticalIcon,
-	PencilIcon,
 	PlusIcon,
 	SettingsIcon,
 	TimerIcon,
@@ -545,7 +544,22 @@ const SessionItem = memo(function SessionItem({
 					/>
 				) : (
 					<div className="min-w-0 flex-1">
-						<span className={`block truncate leading-tight ${compact ? "text-xs" : "text-[13px]"}`}>
+						{/* Claude-style rename: click the title of the session you're
+						 *  already viewing to edit it inline — no menu needed. Other
+						 *  (non-active) rows keep click-to-navigate as their one job. */}
+						<span
+							className={`block truncate leading-tight ${compact ? "text-xs" : "text-[13px]"} ${
+								isSelected && onRename ? "hover:underline" : ""
+							}`}
+							onClick={
+								isSelected && onRename
+									? (e) => {
+											e.stopPropagation()
+											startEditing()
+										}
+									: undefined
+							}
+						>
 							{displayName}
 						</span>
 
@@ -564,8 +578,9 @@ const SessionItem = memo(function SessionItem({
 				)}
 			</SidebarMenuButton>
 
-			{/* Visible ⋯ button (appears on hover) — same actions as the right-click menu */}
-			{!isEditing && (onRename || onFork || onDelete) && (
+			{/* Visible ⋯ button (appears on hover) — same actions as the right-click menu.
+			 *  Rename lives on the title itself now (click it while selected), not here. */}
+			{!isEditing && (onFork || onDelete) && (
 				<DropdownMenu>
 					<DropdownMenuTrigger
 						render={
@@ -579,19 +594,13 @@ const SessionItem = memo(function SessionItem({
 						<MoreVerticalIcon />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end" side="right" className="min-w-[150px]">
-						{onRename && (
-							<DropdownMenuItem onClick={startEditing}>
-								<PencilIcon className="size-4" />
-								Rename
-							</DropdownMenuItem>
-						)}
 						{onFork && (
 							<DropdownMenuItem onClick={() => onFork(agent)}>
 								<GitForkIcon className="size-4" />
 								Fork
 							</DropdownMenuItem>
 						)}
-						{(onRename || onFork) && onDelete && <DropdownMenuSeparator />}
+						{onFork && onDelete && <DropdownMenuSeparator />}
 						{onDelete && (
 							<DropdownMenuItem variant="destructive" onClick={() => onDelete(agent)}>
 								<TrashIcon className="size-4" />
@@ -608,19 +617,13 @@ const SessionItem = memo(function SessionItem({
 		<ContextMenu>
 			<ContextMenuTrigger render={btn} />
 			<ContextMenuContent>
-				{onRename && (
-					<ContextMenuItem onSelect={startEditing}>
-						<PencilIcon className="size-4" />
-						Rename
-					</ContextMenuItem>
-				)}
 				{onFork && (
 					<ContextMenuItem onSelect={() => onFork(agent)}>
 						<GitForkIcon className="size-4" />
 						Fork
 					</ContextMenuItem>
 				)}
-				{(onRename || onFork) && onDelete && <ContextMenuSeparator />}
+				{onFork && onDelete && <ContextMenuSeparator />}
 				{onDelete && (
 					<ContextMenuItem variant="destructive" onSelect={() => onDelete(agent)}>
 						<TrashIcon className="size-4" />

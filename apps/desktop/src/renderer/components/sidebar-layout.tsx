@@ -12,13 +12,15 @@ import {
 } from "@hramble/ui/components/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
-import { useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, PanelLeftIcon, RssIcon, SearchIcon, UsersIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
 import { browserPanelOpenAtom, browserPanelWidthAtom } from "../atoms/browser"
+import { communityPanelOpenAtom, communityPanelSettingsAtom, communityPanelTagAtom } from "../atoms/ui"
 import { BrowserPane } from "./browser-pane"
+import { CommunityPage } from "./community-page"
 import { useAgents, useProjectList, useSetCommandPaletteOpen } from "../hooks/use-agents"
 import { useCommunityAuthSync } from "../hooks/use-community-auth-sync"
 import { useDispatchBridge } from "../hooks/use-dispatch-bridge"
@@ -350,6 +352,14 @@ export function SidebarLayout() {
 	const browserPanelOpen = useAtomValue(browserPanelOpenAtom)
 	const browserPanelWidth = useAtomValue(browserPanelWidthAtom)
 	const setBrowserPanelWidth = useSetAtom(browserPanelWidthAtom)
+	// Community panel (agent-hub-page.tsx's "Community" toggle, website/browser-game
+	// only) — takes over this same right-hand slot in place of the browser pane
+	// while it's open. See atoms/ui.ts for why these are separate atoms from the
+	// review panel's own (same "expanded" pattern, different feature).
+	const communityPanelOpen = useAtomValue(communityPanelOpenAtom)
+	const setCommunityPanelOpen = useSetAtom(communityPanelOpenAtom)
+	const communityPanelTag = useAtomValue(communityPanelTagAtom)
+	const [communityPanelSettings, setCommunityPanelSettings] = useAtom(communityPanelSettingsAtom)
 	const browserResizeRef = useRef<{ startX: number; startWidthVw: number } | null>(null)
 	const [browserResizing, setBrowserResizing] = useState(false)
 
@@ -469,22 +479,53 @@ export function SidebarLayout() {
 						>
 							<Outlet />
 						</div>
-						{/* Browser panel — always mounted (even at 0 width) so the agent
-						    can drive it regardless of the current route. */}
-						{browserPanelOpen && (
+						{/* Community panel (agent-hub-page.tsx) takes over this slot in
+						    place of the browser pane while it's open — an explicit
+						    replacement, not a co-existing split, per the feature's design.
+						    No drag-resize here on purpose (unlike the browser pane below):
+						    just the persisted normal/expanded sizes, same as the review
+						    panel's own expand toggle (agent-detail.tsx). */}
+						{communityPanelOpen ? (
+							// No fixed-pixel inner wrapper here (unlike the review panel's
+							// own expand toggle) — that trick guards against mid-transition
+							// reflow for its virtualized diff list, which CommunityPage has
+							// no equivalent of. A "100vw" minWidth would actually be wrong
+							// here anyway: this row sits to the right of the sidebar, so the
+							// real available width is less than the full window's vw.
 							<div
-								onMouseDown={handleBrowserResizeStart}
-								className="w-1 shrink-0 cursor-ew-resize border-border border-l hover:bg-ring active:bg-ring"
-							/>
-						)}
-						<div
-							className={`shrink-0 overflow-hidden ${browserResizing ? "" : "transition-[width] duration-250 ease-in-out"}`}
-							style={{ width: browserPanelOpen ? `${browserPanelWidth}vw` : 0 }}
-						>
-							<div className="h-full" style={{ width: `${browserPanelWidth}vw` }}>
-								<BrowserPane />
+								className="h-full shrink-0 overflow-hidden border-l border-border transition-[width] duration-250 ease-in-out"
+								style={{ width: communityPanelSettings.expanded ? "100%" : `${browserPanelWidth}vw` }}
+							>
+								<CommunityPage
+									embedded
+									filterTag={communityPanelTag ?? undefined}
+									expanded={communityPanelSettings.expanded}
+									onToggleExpanded={() =>
+										setCommunityPanelSettings((prev) => ({ ...prev, expanded: !prev.expanded }))
+									}
+									onClose={() => setCommunityPanelOpen(false)}
+								/>
 							</div>
-						</div>
+						) : (
+							<>
+								{/* Browser panel — always mounted (even at 0 width) so the agent
+								    can drive it regardless of the current route. */}
+								{browserPanelOpen && (
+									<div
+										onMouseDown={handleBrowserResizeStart}
+										className="w-1 shrink-0 cursor-ew-resize border-border border-l hover:bg-ring active:bg-ring"
+									/>
+								)}
+								<div
+									className={`shrink-0 overflow-hidden ${browserResizing ? "" : "transition-[width] duration-250 ease-in-out"}`}
+									style={{ width: browserPanelOpen ? `${browserPanelWidth}vw` : 0 }}
+								>
+									<div className="h-full" style={{ width: `${browserPanelWidth}vw` }}>
+										<BrowserPane />
+									</div>
+								</div>
+							</>
+						)}
 					</div>
 				</SidebarInset>
 				{/* Rendered last so it paints on top of the sidebar and app bar,

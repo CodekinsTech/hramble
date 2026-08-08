@@ -79,6 +79,7 @@ interface CommunityPostRow {
 	skill: CommunityPost["skill"] | null
 	likes: number
 	created_at: string
+	tags: string[] | null
 }
 
 function rowToPost(row: CommunityPostRow): CommunityPost {
@@ -92,6 +93,7 @@ function rowToPost(row: CommunityPostRow): CommunityPost {
 		createdAt: new Date(row.created_at).getTime(),
 		likedByMe: false, // whether *I* liked it isn't in this row — see note below
 		likeCount: row.likes,
+		tags: row.tags || [],
 		skill: row.skill || undefined,
 	}
 }
@@ -112,12 +114,33 @@ export async function fetchCommunityPosts(): Promise<CommunityPost[]> {
 	return (data as CommunityPostRow[]).map(rowToPost)
 }
 
+/**
+ * Feed for an agent hub page's "community builds" box (see
+ * components/community-tag-feed.tsx) — same table, filtered server-side to
+ * one tag via array-containment so the client never has to fetch (and RLS
+ * never has to expose) more than it renders. Covered by the same public
+ * community_posts_select_all policy as fetchCommunityPosts — see
+ * supabase/migrations/0006_community_tags.sql.
+ */
+export async function fetchCommunityPostsByTag(tag: string): Promise<CommunityPost[]> {
+	const c = await getClient()
+	if (!c) return []
+	const { data, error } = await c
+		.from("community_posts")
+		.select("*")
+		.contains("tags", [tag])
+		.order("created_at", { ascending: false })
+	if (error || !data) return []
+	return (data as CommunityPostRow[]).map(rowToPost)
+}
+
 export async function createCommunityPost(input: {
 	author: { email: string; name: string }
 	type: "build" | "skill"
 	caption: string
 	img: string | null
 	repoUrl: string | null
+	tags: string[]
 	skill?: CommunityPost["skill"]
 }): Promise<CommunityPost | null> {
 	const c = await getClient()
@@ -130,6 +153,7 @@ export async function createCommunityPost(input: {
 		caption: input.caption,
 		img: input.img,
 		repo_url: input.repoUrl,
+		tags: input.tags,
 		skill: input.skill || null,
 	}
 	const { data, error } = await c.from("community_posts").insert(row).select().single()

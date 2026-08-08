@@ -24,7 +24,8 @@ body {
 
 /* ---- Hramble animated logo (second logo from the brand preview) ---- */
 .hramble-logo { display:flex; flex-direction:column; align-items:center; gap:14px; }
-.hramble-stage { position:relative; width:110px; height:110px; animation:hramble-spectrum 10s ease-in-out infinite; }
+/* Colour-cycling disabled per feedback — stays on the natural green tone. Keep hramble-spectrum defined below in case this gets revisited. */
+.hramble-stage { position:relative; width:110px; height:110px; }
 .hramble-stage img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
 .hramble-dim { position:absolute; border-radius:12%; background:rgba(8,22,14,0.28); pointer-events:none; }
 .hramble-dim.left { left:26%; top:56.5%; width:16%; height:6.5%; }
@@ -36,7 +37,7 @@ body {
   background:radial-gradient(circle at 50% 45%, rgba(210,255,220,0.55) 0%, rgba(90,245,140,0.3) 100%);
   mix-blend-mode:screen; pointer-events:none; overflow:hidden; animation:hramble-pulse 2.4s ease-in-out infinite; }
 .hramble-mark { display:flex; flex-direction:column; align-items:center; line-height:1; }
-.hramble-word { font-family:"Quadrangle",sans-serif; font-size:40px; letter-spacing:1px; color:#12c24f; animation:hramble-hue 10s ease-in-out infinite; }
+.hramble-word { font-family:"Quadrangle",sans-serif; font-size:40px; letter-spacing:1px; color:#12c24f; }
 .hramble-code { font-family:"Quadrangle",sans-serif; font-size:16px; letter-spacing:3px; color:#8a94a3; margin-top:4px; }
 
 @keyframes hramble-spectrum {
