@@ -23,7 +23,6 @@ import {
 	GlobeIcon,
 	PaletteIcon,
 	PlayIcon,
-	PlugIcon,
 	RssIcon,
 	ScaleIcon,
 	Volume2Icon,
@@ -31,6 +30,7 @@ import {
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { ACCENT_CAT_FILTERS, ACCENT_STYLES, getAgent } from "../lib/agent-catalog"
+import { ConnectorIcon } from "../lib/connector-icons"
 import { setDraftAtom } from "../atoms/preferences"
 import { NEW_CHAT_DRAFT_KEY } from "../hooks/use-draft"
 import { appStore } from "../atoms/store"
@@ -220,10 +220,15 @@ export function AgentHubPage() {
 								key={preset.id}
 								type="button"
 								onClick={() => connectTool(preset)}
-								className="flex items-start gap-2.5 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent"
+								className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent"
 							>
-								<div className="mt-0.5 shrink-0 text-muted-foreground">
-									{connected ? <CheckIcon className="size-4 text-emerald-500" /> : <PlugIcon className="size-4" />}
+								<div className="relative">
+									<ConnectorIcon id={preset.id} />
+									{connected && (
+										<span className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-card">
+											<CheckIcon className="size-2.5 text-white" />
+										</span>
+									)}
 								</div>
 								<div className="min-w-0 flex-1">
 									<div className="font-medium text-foreground text-xs">{preset.name}</div>
