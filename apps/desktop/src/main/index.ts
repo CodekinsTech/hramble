@@ -297,6 +297,15 @@ if (!gotLock) {
 	})
 
 	app.whenReady().then(() => {
+		// Dev mode launches the raw Electron binary, so macOS shows Electron's own
+		// generic Dock icon instead of Hramble's — only the packaged build gets the
+		// real one (via electron-builder's `mac.icon`). Set it explicitly here so
+		// `bun run dev` looks right too; packaged builds already have it baked in.
+		if (!app.isPackaged && process.platform === "darwin") {
+			const resourcesPath = path.join(__dirname, "../../resources")
+			app.dock?.setIcon(path.join(resourcesPath, "icon-macos.png"))
+		}
+
 		// One-time move of legacy "palot" storage → "hramble". MUST run first, before
 		// anything touches getDataDir()/getConfigDir() (automations DB, server lockfile).
 		migrateLegacyStorage()

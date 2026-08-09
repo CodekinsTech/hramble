@@ -37,6 +37,7 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { CodebaseGraph } from "./codebase-graph"
+import { Semaphore } from "../lib/semaphore"
 import { projectModelsAtom, setProjectModelAtom } from "../atoms/preferences"
 import {
 	removeSessionAtom,
@@ -218,6 +219,23 @@ function DraftSync({ setDraft }: { setDraft: (text: string) => void }) {
 
 	return null
 }
+
+// Global across every Hyperloop run in the app (not per-run) — otherwise 3
+// overlapping runs would each get their own "cap of 5" and still add up to 15
+// concurrent step-sessions. A local model can't really parallelize generation
+// requests (it serializes them internally anyway, or chokes holding multiple
+// contexts in memory), so it gets a hard limit of 1. A hosted model can handle
+// real concurrency but still has real rate limits, so it gets a bounded cap
+// rather than "all at once."
+const hyperSequentialGate = new Semaphore(1)
+const hyperConcurrentGate = new Semaphore(5)
+
+// Appended to every step's task text so each step ends its own reply with a
+// short, plain summary — the same "what changed, what's next" convention used
+// for end-of-turn summaries — instead of leaving the recap to fall back on
+// whatever the last message happened to be.
+const STEP_SUMMARY_INSTRUCTION =
+	"\n\nWhen you're done, end your reply with a short summary in plain language — one or two sentences, what changed and what's next. Nothing else after that."
 
 export function NewChat() {
 	const { projectSlug } = useParams({ strict: false })
@@ -857,28 +875,39 @@ export function NewChat() {
 		promptText: string,
 		attempt: number,
 	): Promise<void> => {
-		await client.session.promptAsync({
-			sessionID: sid,
-			directory: dir,
-			parts: [{ type: "text", text: promptText }],
-			model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined,
-		})
-		// Poll until the session goes idle (max 10 min). A finished session drops out
-		// of the status map, so track seenBusy: break as soon as it's been busy and
-		// then disappears — instead of spinning the full timeout.
-		let seenBusy = false
-		for (let t = 0; t < 600; t++) {
-			if (manuallyStoppedRef.current.has(sid)) break
-			await new Promise((r) => setTimeout(r, 1000))
-			if (manuallyStoppedRef.current.has(sid)) break
-			const status = await client.session.status({ directory: dir }).catch(() => null)
-			const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
-			if (st?.type === "busy") {
-				seenBusy = true
-				continue
+		// Small/local models can't really run multiple generations at once (they
+		// serialize internally, or choke holding several contexts in memory) — so
+		// they get a hard queue of 1. Hosted models get real concurrency, capped
+		// rather than unbounded so a burst of steps/runs doesn't trip rate limits.
+		const isLocalModel = effectiveModel?.providerID === "ollama"
+		const gate = isLocalModel ? hyperSequentialGate : hyperConcurrentGate
+		const release = await gate.acquire()
+		try {
+			await client.session.promptAsync({
+				sessionID: sid,
+				directory: dir,
+				parts: [{ type: "text", text: `${promptText}${STEP_SUMMARY_INSTRUCTION}` }],
+				model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined,
+			})
+			// Poll until the session goes idle (max 10 min). A finished session drops out
+			// of the status map, so track seenBusy: break as soon as it's been busy and
+			// then disappears — instead of spinning the full timeout.
+			let seenBusy = false
+			for (let t = 0; t < 600; t++) {
+				if (manuallyStoppedRef.current.has(sid)) break
+				await new Promise((r) => setTimeout(r, 1000))
+				if (manuallyStoppedRef.current.has(sid)) break
+				const status = await client.session.status({ directory: dir }).catch(() => null)
+				const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
+				if (st?.type === "busy") {
+					seenBusy = true
+					continue
+				}
+				if (seenBusy) break
+				if (t >= 12) break
 			}
-			if (seenBusy) break
-			if (t >= 12) break
+		} finally {
+			release()
 		}
 
 		// A step the user deliberately Stopped is not a mechanical failure — skip
@@ -1619,6 +1648,9 @@ export function NewChat() {
 																<span className="min-w-0 flex-1">
 																	<span className="block">{step.text}</span>
 																	{step.timeEstimate && <span className="text-[10px] text-muted-foreground">{step.timeEstimate}</span>}
+																	{!isBusy && step.preview && (step.status === "done" || step.status === "failed") && (
+																		<span className="mt-1 block text-[11px] text-muted-foreground">{step.preview}</span>
+																	)}
 																</span>
 															)}
 															{isRunning && <HyperloopSpinner className="h-3.5 w-auto shrink-0 text-primary" />}
