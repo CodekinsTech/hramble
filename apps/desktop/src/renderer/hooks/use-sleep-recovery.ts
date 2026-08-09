@@ -7,6 +7,9 @@ const bridge = () => (window as any).hramble
 
 export function useSleepRecovery() {
 	useEffect(() => {
+		// No Electron preload bridge — e.g. running via `dev:web` in a plain
+		// browser tab. Sleep/wake events don't exist there; nothing to wire up.
+		if (!bridge()) return
 		const offSuspend = bridge().onPowerSuspend(handleSuspend)
 		const offResume = bridge().onPowerResume(handleResume)
 		return () => {

@@ -33,6 +33,11 @@ export function useCommunityAuthSync() {
 	useEffect(() => {
 		let cancelled = false
 
+		// No Electron preload bridge — e.g. running via `dev:web` in a plain
+		// browser tab for a quick UI preview. Nothing to sync; the public feed
+		// path (below, via refreshPosts) still works over plain HTTP.
+		if (!bridge()?.community) return
+
 		const applySession = (session: CommunitySession | null) => {
 			setToken(session?.accessToken ?? null)
 			setUser(session ? { email: session.email, name: session.name } : null)

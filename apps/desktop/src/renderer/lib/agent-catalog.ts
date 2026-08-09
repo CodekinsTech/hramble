@@ -65,6 +65,20 @@ export interface Agent {
 	showDesignStudio?: boolean
 	/** Replaces the Design Studio slot with a static callout when set (Browser Game: emphasizes playtesting over a design tool). */
 	livePreviewNote?: string
+	/**
+	 * IDs into the REAL MCP connector presets (apps/main/connectors.ts PRESETS) —
+	 * not a separate list. agent-hub-page.tsx fetches the live preset/installed
+	 * data via bridge().connectors.list() and filters to these ids, so "already
+	 * connected" here can never drift out of sync with Settings → Connectors.
+	 */
+	connectorIds?: string[]
+	/**
+	 * Real, verified repos (checked via `gh api` before adding, never guessed)
+	 * worth a look for this agent's kind of build — reference/study, not
+	 * necessarily "clone this exact thing." Shown in a "Suggested Git Repo"
+	 * section on the hub page; more get added over time.
+	 */
+	suggestedRepos?: { name: string; url: string; note: string }[]
 }
 
 export const AGENTS: Agent[] = [
@@ -92,6 +106,24 @@ export const AGENTS: Agent[] = [
 			{ name: "Apple", url: "https://www.apple.com" },
 			{ name: "Notion", url: "https://www.notion.com" },
 			{ name: "Airbnb", url: "https://www.airbnb.com" },
+		],
+		connectorIds: ["figma", "github", "supabase"],
+		suggestedRepos: [
+			{
+				name: "1.5K Developer Portfolio Collection",
+				url: "https://github.com/MalayBhunia/1.5K_Developer_Portfolio_Collection./",
+				note: "1500+ real portfolio site examples to pick a look from",
+			},
+			{
+				name: "Open React Template",
+				url: "https://github.com/cruip/open-react-template",
+				note: "Free Next.js/Tailwind landing page template",
+			},
+			{
+				name: "shadcn/ui",
+				url: "https://github.com/shadcn-ui/ui",
+				note: "The component set most modern sites are built from",
+			},
 		],
 	},
 	{
@@ -149,6 +181,19 @@ export const AGENTS: Agent[] = [
 		showDesignStudio: false,
 		livePreviewNote:
 			"No build step — once the dev server's running, open the browser pane and actually play it as you go, not just read the code.",
+		connectorIds: ["github", "playwright", "filesystem"],
+		suggestedRepos: [
+			{
+				name: "Phaser",
+				url: "https://github.com/phaserjs/phaser",
+				note: "The Phaser.js engine option above — read its examples for real patterns",
+			},
+			{
+				name: "Kaplay",
+				url: "https://github.com/kaplayjs/kaplay",
+				note: "The Kaplay engine option above — lightweight, code-first game loop",
+			},
+		],
 	},
 	{
 		id: "backend",
@@ -164,6 +209,19 @@ export const AGENTS: Agent[] = [
 			"You're building a backend: servers, REST/GraphQL APIs, databases, auth, and deployment config. Reach for the terminal to run migrations, start the dev server, and inspect the database directly rather than guessing at schema or endpoint behavior — verify against real responses, not assumptions.",
 		toolsNote: "Tools: file read/write/edit, dev server, terminal/process management, database inspection",
 		placeholder: "e.g. A REST API for a todo app with JWT auth and a Postgres database",
+		connectorIds: ["supabase", "postgres", "cloudflare"],
+		suggestedRepos: [
+			{
+				name: "Hono",
+				url: "https://github.com/honojs/hono",
+				note: "Fast, modern backend web framework — a solid base for a real API",
+			},
+			{
+				name: "Drizzle ORM",
+				url: "https://github.com/drizzle-team/drizzle-orm",
+				note: "Type-safe SQL ORM for the database layer",
+			},
+		],
 	},
 	{
 		id: "mobile",
@@ -179,6 +237,19 @@ export const AGENTS: Agent[] = [
 			"You're building a mobile app (Capacitor or React Native). Use the terminal for native build commands (e.g. `npx cap sync`, platform builds) and verify changes actually run on a simulator/emulator or device — don't assume a web build behaves the same natively.",
 		toolsNote: "Tools: file read/write/edit, dev server, terminal (native build commands like `npx cap sync`)",
 		placeholder: "e.g. A habit tracker app with local notifications, for iOS and Android",
+		connectorIds: ["firebase", "supabase", "github"],
+		suggestedRepos: [
+			{
+				name: "Capacitor",
+				url: "https://github.com/ionic-team/capacitor",
+				note: "Cross-platform native runtime — matches the Capacitor option above",
+			},
+			{
+				name: "React Native",
+				url: "https://github.com/react/react-native",
+				note: "Build native apps with React — matches the React Native option above",
+			},
+		],
 	},
 	{
 		id: "data-automation",
@@ -194,6 +265,19 @@ export const AGENTS: Agent[] = [
 			"You're building a data or automation script: scrapers, CSV/file processing, pipelines, or scheduled jobs. Use the terminal to run and re-run the script against real input as you go — a pipeline that only works in theory isn't done.",
 		toolsNote: "Tools: file read/write/edit, terminal",
 		placeholder: "e.g. A script that scrapes daily prices from a site and appends them to a CSV",
+		connectorIds: ["postgres", "filesystem", "web-search"],
+		suggestedRepos: [
+			{
+				name: "n8n",
+				url: "https://github.com/n8n-io/n8n",
+				note: "Visual workflow automation, 400+ integrations",
+			},
+			{
+				name: "Scrapy",
+				url: "https://github.com/scrapy/scrapy",
+				note: "Python web crawling & scraping framework",
+			},
+		],
 	},
 	{
 		id: "browser-extension",
@@ -209,6 +293,19 @@ export const AGENTS: Agent[] = [
 			"You're building a browser extension (Manifest V3). Use the built-in browser to load and test the unpacked extension as you iterate — don't just read the manifest and assume it works, actually load it and check the content script/popup behavior on a real page.",
 		toolsNote: "Tools: file read/write/edit, browser (load/test unpacked extension), dev server if needed",
 		placeholder: "e.g. A Chrome extension that highlights all links on a page",
+		connectorIds: ["chrome-devtools", "playwright-chrome", "github"],
+		suggestedRepos: [
+			{
+				name: "Plasmo",
+				url: "https://github.com/PlasmoHQ/plasmo",
+				note: "The standard modern browser extension framework",
+			},
+			{
+				name: "Chrome Extension Boilerplate (React)",
+				url: "https://github.com/lxieyang/chrome-extension-boilerplate-react",
+				note: "React + Webpack boilerplate to start from",
+			},
+		],
 	},
 	{
 		id: "cli-tools",
@@ -224,6 +321,19 @@ export const AGENTS: Agent[] = [
 			"You're building a CLI tool or npm package. Use the terminal constantly — run the command for real after every change instead of reading the code and assuming the output is right, and check `--help` output and exit codes as you go.",
 		toolsNote: "Tools: file read/write/edit, terminal",
 		placeholder: "e.g. A CLI that renames files in a folder based on a pattern",
+		connectorIds: ["filesystem", "github", "sequential-thinking"],
+		suggestedRepos: [
+			{
+				name: "Commander.js",
+				url: "https://github.com/tj/commander.js",
+				note: "The standard for building Node CLI interfaces",
+			},
+			{
+				name: "oclif",
+				url: "https://github.com/oclif/oclif",
+				note: "Salesforce's framework for larger, multi-command CLIs",
+			},
+		],
 	},
 ]
 

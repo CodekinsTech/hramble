@@ -15,6 +15,7 @@
 import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtom, useSetAtom } from "jotai"
 import {
+	CheckIcon,
 	ChevronDownIcon,
 	DatabaseIcon,
 	EyeIcon,
@@ -22,6 +23,7 @@ import {
 	GlobeIcon,
 	PaletteIcon,
 	PlayIcon,
+	PlugIcon,
 	RssIcon,
 	ScaleIcon,
 	Volume2Icon,
@@ -39,6 +41,32 @@ import { GraphFork, GraphForkOption, GraphNode, GraphSpine } from "./agent-graph
 import { CommunityTagFeed } from "./community-tag-feed"
 import catUrl from "../hramble-cat.png"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const bridge = () => (window as any).hramble
+
+type ConnectorPreset = { id: string; name: string; command: string[]; note: string; envKey?: string }
+
+// Visual-only stand-in for `bridge().connectors.list()`'s real preset data,
+// used ONLY when there's no Electron bridge (e.g. this page open via
+// `dev:web` in a plain browser tab for a quick layout check) — so the section
+// still has something to render instead of just disappearing. The real app
+// always has a bridge and ignores this entirely. Covers every id referenced
+// by any agent's connectorIds in agent-catalog.ts.
+const BROWSER_PREVIEW_CONNECTOR_PRESETS: ConnectorPreset[] = [
+	{ id: "figma", name: "Figma (design)", command: [], note: "Read Figma designs to build UI from them — free key at figma.com/developers/api", envKey: "FIGMA_API_KEY" },
+	{ id: "github", name: "GitHub", command: [], note: "Repos, issues, PRs (needs a token env var)" },
+	{ id: "supabase", name: "Supabase", command: [], note: "Postgres DB, auth, storage, edge functions, migrations, advisors — token at supabase.com/dashboard/account/tokens", envKey: "SUPABASE_ACCESS_TOKEN" },
+	{ id: "postgres", name: "Postgres", command: [], note: "Query a Postgres database" },
+	{ id: "cloudflare", name: "Cloudflare (Workers/R2/D1/KV)", command: [], note: "Build & manage Workers, R2, D1, KV, deploys — opens a browser once to authorize your Cloudflare account" },
+	{ id: "firebase", name: "Firebase", command: [], note: "Firestore, Auth, Functions, Hosting — uses your Firebase CLI login" },
+	{ id: "filesystem", name: "Filesystem", command: [], note: "Read/write files on your machine" },
+	{ id: "playwright", name: "Browser (built-in)", command: [], note: "Drive a browser — navigate, click, type, fill & submit forms" },
+	{ id: "playwright-chrome", name: "Browser (your Chrome)", command: [], note: "Drives your installed Chrome with your logged-in sessions" },
+	{ id: "chrome-devtools", name: "Chrome DevTools", command: [], note: "Inspect/debug pages" },
+	{ id: "web-search", name: "Web Search (free)", command: [], note: "Search the web + read pages — DuckDuckGo, no API key" },
+	{ id: "sequential-thinking", name: "Sequential Thinking", command: [], note: "Step-by-step reasoning for hard problems" },
+]
+
 export function AgentHubPage() {
 	const { agentId } = useParams({ strict: false }) as { agentId?: string }
 	const navigate = useNavigate()
@@ -48,11 +76,58 @@ export function AgentHubPage() {
 	const setBrowserOpen = useSetAtom(browserPanelOpenAtom)
 	const [goal, setGoal] = useState("")
 	const [feedOpen, setFeedOpen] = useState(false)
+	const [connectorPresets, setConnectorPresets] = useState<ConnectorPreset[]>([])
+	const [connectedNames, setConnectedNames] = useState<Set<string>>(new Set())
 
 	const agent = getAgent(agentId)
 	// Hooks above must run unconditionally; these only make sense once an
 	// agent is found, so they're declared after the early return below via `agent?.` guards.
 	const [engineId, setEngineId] = useState(() => agent?.enginePicker?.[0]?.id)
+
+	// Live status straight from the same source Settings → Connectors reads,
+	// so "already connected" here can never drift out of sync with that page.
+	// Falls back to a static preview (no real "connect" action) when there's no
+	// Electron bridge, e.g. this page open via `dev:web` for a layout check.
+	useEffect(() => {
+		const ids = agent?.connectorIds ?? []
+		if (ids.length === 0) {
+			setConnectorPresets([])
+			return
+		}
+		if (!bridge()?.connectors) {
+			setConnectorPresets(BROWSER_PREVIEW_CONNECTOR_PRESETS.filter((p) => ids.includes(p.id)))
+			return
+		}
+		bridge()
+			.connectors.list()
+			.then((r: { installed?: { name: string }[]; presets?: ConnectorPreset[] }) => {
+				setConnectedNames(new Set((r?.installed ?? []).map((i) => i.name)))
+				setConnectorPresets((r?.presets ?? []).filter((p) => ids.includes(p.id)))
+			})
+			.catch(() => {})
+	}, [agent?.connectorIds])
+
+	const connectTool = async (preset: ConnectorPreset) => {
+		if (!bridge()?.connectors) {
+			toast.info("Preview only — this button doesn't connect anything here.", {
+				description: "Open the real app to actually connect a tool.",
+			})
+			return
+		}
+		if (connectedNames.has(preset.id)) {
+			navigate({ to: "/settings/connectors" })
+			return
+		}
+		let environment: Record<string, string> | undefined
+		if (preset.envKey) {
+			const key = window.prompt(`${preset.name} needs an API key.\n\n${preset.note}\n\nPaste your ${preset.envKey}:`)
+			if (!key) return
+			environment = { [preset.envKey]: key.trim() }
+		}
+		await bridge()?.connectors?.add({ name: preset.id, command: preset.command, environment })
+		setConnectedNames((prev) => new Set(prev).add(preset.id))
+		toast.success(`${preset.name} connected`, { description: "Restart OpenCode in Settings → Connectors to apply it." })
+	}
 
 	// Community panel — the real Community page, filtered to this agent's tag,
 	// shown in the same right-hand slot the browser pane normally occupies
@@ -126,6 +201,74 @@ export function AgentHubPage() {
 		navigate({ to: "/" })
 	}
 
+	// Shared between the graph agents (Website/Browser Game, rendered after the
+	// spine) and the other 5 agents (rendered inline in their card stack) so
+	// this markup exists exactly once instead of being duplicated per layout.
+	const renderConnectorsSection = () =>
+		connectorPresets.length > 0 && (
+			<div className="rounded-xl border border-border bg-card p-4">
+				<h2 className="font-medium text-foreground text-sm">Connect your tools</h2>
+				<p className="mt-0.5 text-muted-foreground text-xs">
+					Real MCP connectors — same mechanism Claude uses. Once connected, the agent can actually use them
+					during your session instead of guessing.
+				</p>
+				<div className="mt-3 flex flex-col gap-2">
+					{connectorPresets.map((preset) => {
+						const connected = connectedNames.has(preset.id)
+						return (
+							<button
+								key={preset.id}
+								type="button"
+								onClick={() => connectTool(preset)}
+								className="flex items-start gap-2.5 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent"
+							>
+								<div className="mt-0.5 shrink-0 text-muted-foreground">
+									{connected ? <CheckIcon className="size-4 text-emerald-500" /> : <PlugIcon className="size-4" />}
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="font-medium text-foreground text-xs">{preset.name}</div>
+									<div className="text-[11px] text-muted-foreground">{preset.note}</div>
+								</div>
+								<span
+									className={`shrink-0 rounded-full px-2 py-0.5 font-medium text-[10px] ${
+										connected
+											? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+											: "bg-muted text-muted-foreground"
+									}`}
+								>
+									{connected ? "Connected" : "Connect"}
+								</span>
+							</button>
+						)
+					})}
+				</div>
+			</div>
+		)
+
+	const renderSuggestedReposSection = () =>
+		agent.suggestedRepos &&
+		agent.suggestedRepos.length > 0 && (
+			<div className="rounded-xl border border-border bg-card p-4">
+				<h2 className="font-medium text-foreground text-sm">Suggested Git Repo</h2>
+				<p className="mt-0.5 text-muted-foreground text-xs">
+					For reference and study — real repos worth a look. More get added here over time.
+				</p>
+				<div className="mt-3 flex flex-wrap gap-2">
+					{agent.suggestedRepos.map((repo) => (
+						<button
+							key={repo.url}
+							type="button"
+							title={repo.note}
+							onClick={() => openInBrowser(repo.url)}
+							className={`rounded-full border border-border bg-muted/40 px-3 py-1.5 text-foreground text-xs transition-colors ${styles.border}`}
+						>
+							{repo.name}
+						</button>
+					))}
+				</div>
+			</div>
+		)
+
 	return (
 		<div className="flex h-full flex-col items-center overflow-y-auto p-8">
 			<div className="w-full max-w-2xl">
@@ -177,6 +320,7 @@ export function AgentHubPage() {
 					// feed (both pages) and Browser Game's old livePreviewNote callout are
 					// folded into the closest-fitting node instead of getting cut, since
 					// neither is called out separately in the mockup's node list.
+					<>
 					<div className="relative mt-8">
 						<GraphSpine />
 						<div className="flex flex-col">
@@ -262,35 +406,17 @@ export function AgentHubPage() {
 										</p>
 									</GraphNode>
 
-									<GraphNode kind="optional" icon={<GlobeIcon className="size-[18px]" />} title="Domain & hosting" tag="Before you launch">
+									<GraphNode
+										kind="optional"
+										icon={<GlobeIcon className="size-[18px]" />}
+										title="Domain & hosting"
+										tag="Before you launch"
+										isLast
+									>
 										<p className="mt-1 text-muted-foreground text-xs">
 											Connect a real domain name and put the finished site online. Not automated yet — a manual step
 											once the site's ready.
 										</p>
-									</GraphNode>
-
-									<GraphNode kind="final" icon={<PlayIcon className="size-[18px]" />} title="Start building" isLast>
-										<p className="mt-1 text-muted-foreground text-xs">
-											Everything picked above becomes the agent's brief automatically.
-										</p>
-										<textarea
-											value={goal}
-											onChange={(e) => setGoal(e.target.value)}
-											onKeyDown={(e) => {
-												if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) start()
-											}}
-											placeholder={agent.placeholder}
-											rows={3}
-											className="mt-3 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-										/>
-										<button
-											type="button"
-											onClick={start}
-											disabled={!goal.trim()}
-											className={`mt-3 w-full rounded-lg px-3 py-2 font-medium text-sm disabled:opacity-50 ${styles.solid}`}
-										>
-											Start session
-										</button>
 									</GraphNode>
 								</>
 							) : (
@@ -359,7 +485,13 @@ export function AgentHubPage() {
 										)}
 									</GraphNode>
 
-									<GraphNode kind="optional" icon={<Volume2Icon className="size-[18px]" />} title="Free assets & sound tools" tag="Optional">
+									<GraphNode
+										kind="optional"
+										icon={<Volume2Icon className="size-[18px]" />}
+										title="Free assets & sound tools"
+										tag="Optional"
+										isLast
+									>
 										<p className="mt-1 text-muted-foreground text-xs">Opens in the browser pane, same as reference games above.</p>
 										<div className="mt-3 flex flex-wrap gap-2">
 											{agent.assetLinks?.map((link) => (
@@ -383,34 +515,46 @@ export function AgentHubPage() {
 											)}
 										</div>
 									</GraphNode>
-
-									<GraphNode kind="final" icon={<PlayIcon className="size-[18px]" />} title="Start building" isLast>
-										<p className="mt-1 text-muted-foreground text-xs">
-											{agent.livePreviewNote} Everything picked above becomes the agent's brief automatically.
-										</p>
-										<textarea
-											value={goal}
-											onChange={(e) => setGoal(e.target.value)}
-											onKeyDown={(e) => {
-												if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) start()
-											}}
-											placeholder={agent.placeholder}
-											rows={3}
-											className="mt-3 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-										/>
-										<button
-											type="button"
-											onClick={start}
-											disabled={!goal.trim()}
-											className={`mt-3 w-full rounded-lg px-3 py-2 font-medium text-sm disabled:opacity-50 ${styles.solid}`}
-										>
-											Start session
-										</button>
-									</GraphNode>
 								</>
 							)}
 						</div>
 					</div>
+
+					{/* Reference/tooling call-outs — deliberately NOT graph nodes (this
+					    blueprint's dotted spine is the step-by-step build path; these are
+					    reference material, not a step), so they sit as plain sections after
+					    the graph and before the actual Start session action. */}
+					<div className="mt-8 flex flex-col gap-3">
+						{renderConnectorsSection()}
+						{renderSuggestedReposSection()}
+
+						<div className="rounded-xl border border-border bg-card p-4">
+							<h2 className="font-medium text-foreground text-sm">Start building</h2>
+							<p className="mt-0.5 text-muted-foreground text-xs">
+								{agent.livePreviewNote ? `${agent.livePreviewNote} ` : ""}Everything picked above becomes the agent's
+								brief automatically.
+							</p>
+							<textarea
+								value={goal}
+								onChange={(e) => setGoal(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) start()
+								}}
+								placeholder={agent.placeholder}
+								rows={3}
+								className="mt-3 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+							/>
+							<button
+								type="button"
+								onClick={start}
+								disabled={!goal.trim()}
+								className={`mt-3 w-full rounded-lg px-3 py-2 font-medium text-sm disabled:opacity-50 ${styles.solid}`}
+							>
+								Start session
+							</button>
+						</div>
+					</div>
+					</>
 				) : (
 					<>
 						<div className="mt-6 flex flex-col gap-3">
@@ -540,6 +684,9 @@ export function AgentHubPage() {
 									)}
 								</div>
 							)}
+
+							{renderConnectorsSection()}
+							{renderSuggestedReposSection()}
 						</div>
 
 						<div className="mt-8 rounded-xl border border-border bg-card p-4">
