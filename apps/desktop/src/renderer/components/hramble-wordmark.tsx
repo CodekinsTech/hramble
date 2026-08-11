@@ -1,17 +1,18 @@
 /**
- * Inline SVG wordmark for "Hramble code" -- renders at currentColor via SVG
+ * Inline SVG wordmark for "Hramble Coder" -- renders at currentColor via SVG
  * <text> so it scales with the className height (h-5, h-4, h-[11px], ...) with
- * no font-loading dependency for layout.
+ * no font-loading dependency for layout. viewBox width widened from the
+ * original 360 (tuned for "Hramble" alone) to fit the longer "Hramble Coder".
  */
 export function HrambleWordmark({ className }: { className?: string }) {
 	return (
 		<svg
-			viewBox="0 0 360 80"
+			viewBox="0 0 620 80"
 			fill="none"
 			xmlns="http://www.w3.org/2000/svg"
 			className={className}
 			style={{ overflow: "visible" }}
-			aria-label="Hramble code"
+			aria-label="Hramble Coder"
 		>
 			<text
 				x="0"
@@ -21,7 +22,7 @@ export function HrambleWordmark({ className }: { className?: string }) {
 				fontSize="60"
 				fontWeight="400"
 			>
-				Hramble
+				Hramble Coder
 			</text>
 		</svg>
 	)

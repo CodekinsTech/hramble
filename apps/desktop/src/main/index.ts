@@ -173,7 +173,7 @@ if (isDev) {
 }
 
 async function createWindow(): Promise<BrowserWindow> {
-	const title = isDev ? "Hramble code (Dev)" : "Hramble code"
+	const title = isDev ? "Hramble Coder (Dev)" : "Hramble Coder"
 
 	const isMac = process.platform === "darwin"
 

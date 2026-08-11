@@ -1,7 +1,7 @@
 {
 	"name": "@hramble/mobile",
 	"version": "0.1.0",
-	"description": "Hramble mobile companion — monitor and steer coding sessions from your phone",
+	"description": "Hramble Coder mobile companion — monitor and steer coding sessions from your phone",
 	"private": true,
 	"type": "module",
 	"scripts": {

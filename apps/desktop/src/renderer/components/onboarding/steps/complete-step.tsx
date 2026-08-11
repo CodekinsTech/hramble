@@ -100,8 +100,8 @@ export function CompleteStep({
 					<h2 className="text-2xl font-semibold text-foreground">You're all set.</h2>
 					<p className="text-sm text-muted-foreground">
 						{opencodeVersion
-							? `Hramble is connected to OpenCode ${formatVersion(opencodeVersion)}`
-							: "Hramble is ready to go"}
+							? `Hramble Coder is connected to OpenCode ${formatVersion(opencodeVersion)}`
+							: "Hramble Coder is ready to go"}
 						{hasMigrated ? " and your configuration has been migrated." : "."}
 					</p>
 				</motion.div>

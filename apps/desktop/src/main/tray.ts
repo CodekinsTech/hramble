@@ -126,7 +126,7 @@ export function createTray(windowGetter: () => BrowserWindow | undefined): void 
 	}
 
 	tray = new Tray(icon)
-	tray.setToolTip("Hramble")
+	tray.setToolTip("Hramble Coder")
 
 	// Click to show/focus window
 	tray.on("click", () => {
@@ -456,7 +456,7 @@ function updateTrayTitle(
 		(s) => !s.parentID && (s.status === "busy" || s.status === "retry"),
 	).length
 
-	let tooltip = "Hramble"
+	let tooltip = "Hramble Coder"
 	if (totalSessions > 0) {
 		tooltip += ` - ${totalSessions} agent${totalSessions !== 1 ? "s" : ""}`
 		if (busyCount > 0) {

@@ -70,7 +70,7 @@ export function AboutSettings() {
 			<div>
 				<h2 className="text-xl font-semibold">About</h2>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Hramble — a friendly AI coding companion with a talking, listening avatar. It runs your
+					Hramble Coder — a friendly AI coding companion with a talking, listening avatar. It runs your
 					choice of model: fully offline on your machine, or any hosted provider with your own key.
 				</p>
 			</div>
@@ -156,7 +156,7 @@ export function AboutSettings() {
 			</SettingsSection>
 
 			<SettingsSection title="Legal">
-				<SettingsRow label="Terms of Service" description="How Hramble may be used">
+				<SettingsRow label="Terms of Service" description="How Hramble Coder may be used">
 					<Button variant="outline" size="sm" onClick={() => openUrl("https://hramble.app/terms")}>
 						View
 					</Button>

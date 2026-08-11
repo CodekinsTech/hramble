@@ -1,4 +1,4 @@
-# hramble
+# Hramble Coder
 
 ### Your independent AI coding companion — multi-agent workflows, memory, and a voice built in.
 
@@ -8,13 +8,13 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/worldkingk777/hramble-code/total?label=downloads)](https://github.com/worldkingk777/hramble-code/releases)
 [![License](https://img.shields.io/badge/license-FSL--1.1-blue.svg)](LICENSE)
 
-> **Alpha Software** -- Hramble is under active development. Expect breaking changes, missing features, and rough edges. Feedback and contributions are welcome!
+> **Alpha Software** -- Hramble Coder is under active development. Expect breaking changes, missing features, and rough edges. Feedback and contributions are welcome!
 
 ---
 
-## What is Hramble?
+## What is Hramble Coder?
 
-Hramble is a desktop AI coding companion with its own harness, prompts, and workflow features on top of a real agent execution engine — not a thin wrapper around a terminal tool. It manages multiple projects and sessions from one window, decomposes a goal into steps it runs in parallel without you babysitting each one, remembers context across your whole codebase and past sessions, and talks to you with a voice and an animated companion instead of staying a silent text box.
+Hramble Coder is a desktop AI coding companion with its own harness, prompts, and workflow features on top of a real agent execution engine — not a thin wrapper around a terminal tool. It manages multiple projects and sessions from one window, decomposes a goal into steps it runs in parallel without you babysitting each one, remembers context across your whole codebase and past sessions, and talks to you with a voice and an animated companion instead of staying a silent text box.
 
 <br>
 
@@ -41,7 +41,7 @@ Purpose-built starting points for Website, Browser Game, Backend Manager, Mobile
 
 ### Chat & Agent Interaction
 
-- **Multi-project workspace** -- Manage AI sessions across all your projects from a single window. OpenCode is scoped to one project per instance; Hramble lifts that limitation.
+- **Multi-project workspace** -- Manage AI sessions across all your projects from a single window. OpenCode is scoped to one project per instance; Hramble Coder lifts that limitation.
 
 - **Full chat interface** -- Conversational UI with real-time SSE streaming, Markdown rendering, auto-scroll, lazy-load pagination, and draft persistence across session switches.
 
@@ -77,7 +77,7 @@ Purpose-built starting points for Website, Browser Game, Backend Manager, Mobile
 
 - **Diff commenting** -- Click any line in the diff viewer to leave a comment. Comments are automatically collected and injected into the chat input so you can send feedback to the agent in one go.
 
-- **Commit and push** -- Integrated dialog to create branches, commit changes, push to remotes, and open a GitHub Pull Request, all without leaving Hramble.
+- **Commit and push** -- Integrated dialog to create branches, commit changes, push to remotes, and open a GitHub Pull Request, all without leaving Hramble Coder.
 
 - **Smart diff gates** -- Auto-collapses generated files (lockfiles, etc.) and very large diffs to keep the review panel responsive.
 
@@ -99,13 +99,13 @@ Purpose-built starting points for Website, Browser Game, Backend Manager, Mobile
 
 ### Avatar & Voice Companion
 
-- **Talk to Hramble** -- A mic button for voice input, so you can describe what you want out loud instead of typing.
+- **Talk to Hramble Coder** -- A mic button for voice input, so you can describe what you want out loud instead of typing.
 
 - **Animated companion** -- A live avatar that reacts to what's happening in your session, with narration you can mute, collapse to a compact bar, or pop out as its own floating window.
 
 ### Automations
 
-- **Scheduled agent runs** -- Define recurring tasks with RRule-based scheduling. Hramble runs the agent in the background and queues the results for your review.
+- **Scheduled agent runs** -- Define recurring tasks with RRule-based scheduling. Hramble Coder runs the agent in the background and queues the results for your review.
 
 - **Human-in-the-loop review** -- Automation runs land in a `pending_review` state so you can inspect changes in the review panel before accepting or archiving them.
 
@@ -157,14 +157,14 @@ Download the latest release from the [Releases page](https://github.com/worldkin
 
 ### macOS: unsigned app warning
 
-Hramble is not yet code-signed or notarized. macOS Gatekeeper will block the app on first launch with a message like *"Hramble is damaged and can't be opened"* or *"Apple could not verify Hramble"*. To fix this:
+Hramble Coder is not yet code-signed or notarized. macOS Gatekeeper will block the app on first launch with a message like *"Hramble Coder is damaged and can't be opened"* or *"Apple could not verify Hramble Coder"*. To fix this:
 
 **Option A** -- Right-click (or Control-click) the app in Finder and select **Open**, then click **Open** in the dialog.
 
 **Option B** -- Remove the quarantine attribute from the terminal:
 
 ```bash
-xattr -cr /Applications/Hramble code.app
+xattr -cr /Applications/Hramble\ Coder.app
 ```
 
 This is expected behavior for unsigned apps and does not indicate malware.
@@ -176,24 +176,24 @@ This is expected behavior for unsigned apps and does not indicate malware.
 ### From a release (recommended)
 
 1. Download and install from the [Releases page](https://github.com/worldkingk777/hramble-code/releases)
-2. On first launch, Hramble walks you through a guided setup: it checks your environment and, if the OpenCode CLI isn't installed yet, offers a one-click **Install for me** -- no terminal required.
+2. On first launch, Hramble Coder walks you through a guided setup: it checks your environment and, if the OpenCode CLI isn't installed yet, offers a one-click **Install for me** -- no terminal required.
 3. The same guided setup helps you connect an AI provider (Anthropic, OpenAI, Google, a local model, and more) before you start your first session.
 
-Nothing beyond downloading and installing Hramble itself is required -- everything else happens inside the app.
+Nothing beyond downloading and installing Hramble Coder itself is required -- everything else happens inside the app.
 
 ### Coming from Claude Code or Cursor?
 
-On first launch, Hramble offers a guided migration wizard that detects your existing config and history. You can also trigger it later from Settings.
+On first launch, Hramble Coder offers a guided migration wizard that detects your existing config and history. You can also trigger it later from Settings.
 
 ### Configuration
 
-Core configuration -- model providers, MCP connectors, custom tools, and agent behavior -- is managed through config files on OpenCode's execution engine underneath Hramble. Refer to the [OpenCode documentation](https://opencode.ai/docs) for the low-level config format; connectors and providers can also be managed from Hramble's own Settings UI.
+Core configuration -- model providers, MCP connectors, custom tools, and agent behavior -- is managed through config files on OpenCode's execution engine underneath Hramble Coder. Refer to the [OpenCode documentation](https://opencode.ai/docs) for the low-level config format; connectors and providers can also be managed from Hramble Coder's own Settings UI.
 
 ### From source
 
-For contributors -- if you just want to use Hramble, download a release instead (above), no Bun required.
+For contributors -- if you just want to use Hramble Coder, download a release instead (above), no Bun required.
 
-**Prerequisites:** [Bun](https://bun.sh) 1.3.8+ and [OpenCode CLI](https://opencode.ai) (the same CLI Hramble can install for you in-app -- see above -- or install manually with `curl -fsSL https://opencode.ai/install | bash`)
+**Prerequisites:** [Bun](https://bun.sh) 1.3.8+ and [OpenCode CLI](https://opencode.ai) (the same CLI Hramble Coder can install for you in-app -- see above -- or install manually with `curl -fsSL https://opencode.ai/install | bash`)
 
 ```bash
 git clone https://github.com/worldkingk777/hramble-code.git
@@ -286,7 +286,7 @@ bun run version-packages # Apply changesets and bump versions
 
 ## Contributing
 
-Hramble is in early alpha and we welcome contributions! Here's how to get started:
+Hramble Coder is in early alpha and we welcome contributions! Here's how to get started:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
@@ -301,7 +301,7 @@ Please see the [AGENTS.md](AGENTS.md) file for code style conventions, naming pa
 
 ## Under the Hood
 
-Hramble's harness, prompts, multi-agent workflows (Hyperloop), memory system, connectors, and desktop app are all our own. For model orchestration and tool execution, Hramble runs on [OpenCode](https://github.com/anomalyco/opencode) -- an open, model-agnostic execution engine -- via the [`@opencode-ai/sdk`](https://www.npmjs.com/package/@opencode-ai/sdk) package, the same way a browser might be built on an open rendering engine underneath its own UI and features.
+Hramble Coder's harness, prompts, multi-agent workflows (Hyperloop), memory system, connectors, and desktop app are all our own. For model orchestration and tool execution, Hramble Coder runs on [OpenCode](https://github.com/anomalyco/opencode) -- an open, model-agnostic execution engine -- via the [`@opencode-ai/sdk`](https://www.npmjs.com/package/@opencode-ai/sdk) package, the same way a browser might be built on an open rendering engine underneath its own UI and features.
 
 The UI component library is built with [shadcn/ui](https://ui.shadcn.com/), [Base UI](https://base-ui.com/), and [Tailwind CSS](https://tailwindcss.com/).
 
@@ -311,4 +311,4 @@ See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for a full list of third-pa
 
 ## License
 
-Hramble is source-available under the [Functional Source License 1.1](LICENSE) (Apache 2.0 future license) -- you're free to read, self-host, and modify the code for any purpose other than building a competing product or service. Each release automatically converts to the fully open Apache License 2.0 two years after its publish date.
+Hramble Coder is source-available under the [Functional Source License 1.1](LICENSE) (Apache 2.0 future license) -- you're free to read, self-host, and modify the code for any purpose other than building a competing product or service. Each release automatically converts to the fully open Apache License 2.0 two years after its publish date.

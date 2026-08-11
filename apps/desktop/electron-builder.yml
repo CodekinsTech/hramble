@@ -1,6 +1,6 @@
 appId: com.hrambal.code
-productName: Hramble code
-copyright: Copyright (c) 2026 Hrambal code
+productName: Hramble Coder
+copyright: Copyright (c) 2026 Hramble Coder
 directories:
   buildResources: resources
   output: release
@@ -93,7 +93,7 @@ linux:
   maintainer: hramble
   desktop:
     entry:
-      Name: Hramble
+      Name: Hramble Coder
       Comment: AI-powered coding assistant
       Categories: Development;IDE;
       StartupWMClass: Hramble

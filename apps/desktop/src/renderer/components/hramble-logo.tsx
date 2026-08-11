@@ -18,7 +18,7 @@ export function HrambleLogo() {
 			</div>
 			<div className="hramble-mark">
 				<span className="hramble-word">Hramble</span>
-				<span className="hramble-code">code</span>
+				<span className="hramble-code">Coder</span>
 			</div>
 		</div>
 	)
