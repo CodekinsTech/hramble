@@ -9,6 +9,12 @@ import type { ColorScheme } from "../lib/themes"
 
 export type DisplayMode = "default" | "verbose"
 
+// "default" = today's behavior, active sessions first then most-recent.
+// "numbered" = stable order by when each session was created, but whichever
+//   one is actively working is pinned to the top.
+// "date" = grouped under Today / Yesterday / Previous 7 Days / Older headers.
+export type SessionSortMode = "default" | "numbered" | "date"
+
 export interface PersistedModelRef {
 	providerID: string
 	modelID: string
@@ -60,6 +66,8 @@ migrateDisplayMode()
 // ============================================================
 
 export const displayModeAtom = atomWithStorage<DisplayMode>("hramble:displayMode", "default")
+
+export const sessionSortModeAtom = atomWithStorage<SessionSortMode>("hramble:sessionSortMode", "default")
 
 export const themeAtom = atomWithStorage<string>("hramble:theme", "default")
 

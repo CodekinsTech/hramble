@@ -29,7 +29,9 @@ import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import {
 	AlertCircleIcon,
+	ArrowDownUpIcon,
 	BotIcon,
+	CheckIcon,
 	CheckCircle2Icon,
 	CircleDotIcon,
 	CommandIcon,
@@ -51,6 +53,7 @@ import {
 	hyperloopSessionSetAtom,
 	workspaceModeAtom,
 } from "../atoms/workspace"
+import { useSessionSortMode } from "../hooks/use-agents"
 import type { Agent, AgentStatus, SidebarProject } from "../lib/types"
 import { splitDefaultSessionName } from "../lib/session-title"
 import { ServerIndicator } from "./server-indicator"
@@ -144,6 +147,44 @@ function HyperloopRunItem({
 	)
 }
 
+const SORT_OPTIONS: { mode: "default" | "numbered" | "date"; label: string; hint: string }[] = [
+	{ mode: "default", label: "Default", hint: "Active first, then most recent — no extra sorting." },
+	{ mode: "numbered", label: "Numbered", hint: "Stable order by when each was created; whatever's working stays on top." },
+	{ mode: "date", label: "Today, Yesterday…", hint: "Grouped under date headers, Claude-style." },
+]
+
+/** Sort-mode picker for the Sessions list — Default / Numbered / by-date groups. */
+function SessionSortButton() {
+	const [mode, setMode] = useSessionSortMode()
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				render={
+					<button
+						type="button"
+						title="Sort sessions"
+						className={`text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors ${mode !== "default" ? "text-primary" : ""}`}
+					/>
+				}
+			>
+				<ArrowDownUpIcon className="size-4 shrink-0" />
+				<span className="sr-only">Sort sessions</span>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				{SORT_OPTIONS.map((opt) => (
+					<DropdownMenuItem key={opt.mode} onClick={() => setMode(opt.mode)} className="flex flex-col items-start gap-0.5">
+						<span className="flex w-full items-center gap-1.5">
+							{opt.label}
+							{mode === opt.mode && <CheckIcon className="ml-auto size-3.5 text-primary" />}
+						</span>
+						<span className="text-[11px] text-muted-foreground">{opt.hint}</span>
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	)
+}
+
 /**
  * Default sidebar content: Active Now, Recent, Projects groups + Settings footer.
  * Rendered inside the `<Sidebar>` shell provided by `SidebarLayout`.
@@ -173,9 +214,12 @@ export function AppSidebarContent({
 	const activeRun = useAtomValue(hyperloopRunAtom)
 	const setActiveRun = useSetAtom(hyperloopRunAtom)
 
-	// Flat list of sessions (Claude-style), filtered to the active mode, active
-	// ones first, then by most-recently-active. No project-folder tree.
-	const sessionList = useMemo(
+	const [sessionSortMode] = useSessionSortMode()
+
+	// Sessions (Claude-style), filtered to the active mode. Three sort modes:
+	// "default" (active first, then most-recent), "numbered" (stable creation
+	// order, active still pinned above), "date" (grouped under Today/Yesterday/…).
+	const sessionListBase = useMemo(
 		() =>
 			agents
 				.filter((a) => !a.parentId)
@@ -186,18 +230,52 @@ export function AppSidebarContent({
 					// Code list — the 7 steps are not pages the user should browse.
 					const isHyper = hyperloopSessions.has(a.id) || /^Hyperloop(\s|:|$)/i.test(a.name)
 					return workspaceMode === "hyperloop" ? isHyper : !isHyper
-				})
-				.sort((a, b) => {
-					const aActive =
-						a.status === "running" || a.status === "waiting" || a.status === "failed"
-					const bActive =
-						b.status === "running" || b.status === "waiting" || b.status === "failed"
-					if (aActive !== bActive) return aActive ? -1 : 1
-					return b.lastActiveAt - a.lastActiveAt
-				})
-				.slice(0, SESSION_COUNT),
+				}),
 		[agents, workspaceMode, hyperloopSessions],
 	)
+
+	const isActiveSession = (a: Agent) =>
+		a.status === "running" || a.status === "waiting" || a.status === "failed"
+
+	type SortedSessions = { mode: "flat"; items: Agent[] } | { mode: "grouped"; groups: { label: string; items: Agent[] }[] }
+
+	const sessionList = useMemo<SortedSessions>(() => {
+		if (sessionSortMode === "numbered") {
+			const working = sessionListBase.filter(isActiveSession).sort((a, b) => a.createdAt - b.createdAt)
+			const rest = sessionListBase.filter((a) => !isActiveSession(a)).sort((a, b) => a.createdAt - b.createdAt)
+			return { mode: "flat", items: [...working, ...rest].slice(0, SESSION_COUNT) }
+		}
+
+		const defaultSorted = [...sessionListBase]
+			.sort((a, b) => {
+				const aActive = isActiveSession(a)
+				const bActive = isActiveSession(b)
+				if (aActive !== bActive) return aActive ? -1 : 1
+				return b.lastActiveAt - a.lastActiveAt
+			})
+			.slice(0, SESSION_COUNT)
+
+		if (sessionSortMode !== "date") return { mode: "flat", items: defaultSorted }
+
+		const today = new Date()
+		today.setHours(0, 0, 0, 0)
+		const todayMs = today.getTime()
+		const yesterdayMs = todayMs - 86_400_000
+		const weekAgoMs = todayMs - 7 * 86_400_000
+		const buckets: { label: string; items: Agent[] }[] = [
+			{ label: "Today", items: [] },
+			{ label: "Yesterday", items: [] },
+			{ label: "Previous 7 Days", items: [] },
+			{ label: "Older", items: [] },
+		]
+		for (const a of defaultSorted) {
+			if (a.lastActiveAt >= todayMs) buckets[0].items.push(a)
+			else if (a.lastActiveAt >= yesterdayMs) buckets[1].items.push(a)
+			else if (a.lastActiveAt >= weekAgoMs) buckets[2].items.push(a)
+			else buckets[3].items.push(a)
+		}
+		return { mode: "grouped", groups: buckets.filter((b) => b.items.length > 0) }
+	}, [sessionListBase, sessionSortMode])
 
 	const hasContent = agents.length > 0 || projects.length > 0 || hyperloopRuns.length > 0
 	const showEmptyState = !hasContent
@@ -273,8 +351,9 @@ export function AppSidebarContent({
 				{hasContent && (
 					<SidebarGroup>
 						<SidebarGroupLabel>{workspaceMode === "hyperloop" ? "Hyperloop runs" : "Sessions"}</SidebarGroupLabel>
-						{/* Action buttons: command palette + add folder */}
+						{/* Action buttons: sort + command palette + add folder */}
 						<div className="absolute top-3.5 right-3 flex items-center gap-0.5">
+							{workspaceMode !== "hyperloop" && <SessionSortButton />}
 							<Tooltip>
 								<TooltipTrigger
 									render={
@@ -327,9 +406,30 @@ export function AppSidebarContent({
 										<p className="px-2 py-1.5 text-xs text-muted-foreground/60">No runs yet</p>
 									)}
 								</>
+							) : sessionList.mode === "grouped" ? (
+								<>
+									{sessionList.groups.map((group) => (
+										<div key={group.label} className="mb-1">
+											<p className="px-2 pt-1.5 pb-0.5 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wide">
+												{group.label}
+											</p>
+											{group.items.map((agent) => (
+												<SessionItem
+													key={agent.id}
+													agent={agent}
+													isSelected={agent.id === selectedSessionId}
+													onRename={onRenameSession}
+													onDelete={onDeleteSession}
+													onFork={onForkSession}
+													showProject
+												/>
+											))}
+										</div>
+									))}
+								</>
 							) : (
 								<>
-									{sessionList.map((agent) => (
+									{sessionList.items.map((agent) => (
 										<SessionItem
 											key={agent.id}
 											agent={agent}
@@ -340,7 +440,7 @@ export function AppSidebarContent({
 											showProject
 										/>
 									))}
-									{sessionList.length === 0 && (
+									{sessionList.items.length === 0 && (
 										<p className="px-2 py-1.5 text-xs text-muted-foreground/60">No sessions yet</p>
 									)}
 								</>

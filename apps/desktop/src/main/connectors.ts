@@ -63,6 +63,9 @@ const PRESETS = [
 	{ id: "neon", name: "Neon (serverless Postgres)", command: ["npx", "-y", "@neondatabase/mcp-server-neon", "start"], note: "Serverless Postgres — branches, SQL, migrations. API key at console.neon.tech", envKey: "NEON_API_KEY" },
 	{ id: "mongodb", name: "MongoDB (Atlas)", command: ["npx", "-y", "mongodb-mcp-server"], note: "Query & manage MongoDB / Atlas — paste your DB connection string", envKey: "MDB_MCP_CONNECTION_STRING" },
 	{ id: "stripe", name: "Stripe (payments)", command: ["npx", "-y", "@stripe/mcp", "--tools=all"], note: "Payments, subscriptions, customers — secret key at dashboard.stripe.com/apikeys", envKey: "STRIPE_SECRET_KEY" },
+
+	// --- Remote (url-based) connectors — no local command, just an endpoint ---
+	{ id: "stitch", name: "Stitch (Google UI design)", command: [], note: "Generate & edit UI screens with Google's Stitch — paste the MCP URL from stitch.withgoogle.com/docs/mcp/setup", urlPrompt: "Stitch MCP URL" },
 ]
 
 export function registerConnectors() {
@@ -82,13 +85,23 @@ export function registerConnectors() {
 		"connectors:add",
 		async (
 			_e,
-			entry: { name: string; command: string[]; enabled?: boolean; environment?: Record<string, string> },
+			entry: {
+				name: string
+				command?: string[]
+				url?: string
+				enabled?: boolean
+				environment?: Record<string, string>
+			},
 		) => {
-			if (!entry?.name || !Array.isArray(entry.command)) return { ok: false, error: "invalid" }
+			if (!entry?.name) return { ok: false, error: "invalid" }
+			const isRemote = !!entry.url
+			if (!isRemote && !Array.isArray(entry.command)) return { ok: false, error: "invalid" }
 			const cfg = await readConfig()
 			cfg.mcp = cfg.mcp ?? {}
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const mcpEntry: any = { type: "local", command: entry.command, enabled: entry.enabled !== false }
+			const mcpEntry: any = isRemote
+				? { type: "remote", url: entry.url, enabled: entry.enabled !== false }
+				: { type: "local", command: entry.command, enabled: entry.enabled !== false }
 			if (entry.environment && Object.keys(entry.environment).length) {
 				mcpEntry.environment = entry.environment
 			}

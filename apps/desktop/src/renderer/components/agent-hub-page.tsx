@@ -44,7 +44,7 @@ import catUrl from "../hramble-cat.png"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const bridge = () => (window as any).hramble
 
-type ConnectorPreset = { id: string; name: string; command: string[]; note: string; envKey?: string }
+type ConnectorPreset = { id: string; name: string; command: string[]; note: string; envKey?: string; urlPrompt?: string }
 
 // Visual-only stand-in for `bridge().connectors.list()`'s real preset data,
 // used ONLY when there's no Electron bridge (e.g. this page open via
@@ -54,6 +54,7 @@ type ConnectorPreset = { id: string; name: string; command: string[]; note: stri
 // by any agent's connectorIds in agent-catalog.ts.
 const BROWSER_PREVIEW_CONNECTOR_PRESETS: ConnectorPreset[] = [
 	{ id: "figma", name: "Figma (design)", command: [], note: "Read Figma designs to build UI from them — free key at figma.com/developers/api", envKey: "FIGMA_API_KEY" },
+	{ id: "stitch", name: "Stitch (Google UI design)", command: [], note: "Generate & edit UI screens with Google's Stitch — paste the MCP URL from stitch.withgoogle.com/docs/mcp/setup", urlPrompt: "Stitch MCP URL" },
 	{ id: "github", name: "GitHub", command: [], note: "Repos, issues, PRs (needs a token env var)" },
 	{ id: "supabase", name: "Supabase", command: [], note: "Postgres DB, auth, storage, edge functions, migrations, advisors — token at supabase.com/dashboard/account/tokens", envKey: "SUPABASE_ACCESS_TOKEN" },
 	{ id: "postgres", name: "Postgres", command: [], note: "Query a Postgres database" },
@@ -116,6 +117,14 @@ export function AgentHubPage() {
 		}
 		if (connectedNames.has(preset.id)) {
 			navigate({ to: "/settings/connectors" })
+			return
+		}
+		if (preset.urlPrompt) {
+			const url = window.prompt(`${preset.name}\n\n${preset.note}\n\nPaste the ${preset.urlPrompt}:`)
+			if (!url) return
+			await bridge()?.connectors?.add({ name: preset.id, url: url.trim() })
+			setConnectedNames((prev) => new Set(prev).add(preset.id))
+			toast.success(`${preset.name} connected`, { description: "Restart OpenCode in Settings → Connectors to apply it." })
 			return
 		}
 		let environment: Record<string, string> | undefined

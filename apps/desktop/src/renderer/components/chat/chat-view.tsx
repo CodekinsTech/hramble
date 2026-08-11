@@ -1248,15 +1248,148 @@ function ChatInputSection({
 		[agent, onUndo, onRedo, effectiveModel],
 	)
 
-	// Run the queued steps in sequence. Each onSendMessage resolves when that
-	// step's turn (or full Hyperloop run) completes, so awaiting it in a loop
-	// gives step-1 → wait → step-2 → wait → … automatically.
+	/**
+	 * Objectively check whether a step actually did something, instead of just
+	 * trusting that its turn finished. Only looks at messages added after
+	 * `sinceIndex` — all 7 steps share this one session, so without that bound
+	 * this would re-check every prior step's messages too. Mirrors the same
+	 * mechanical check Hyperloop's separate-session steps use: no tool call at
+	 * all, a hallucinated tool, or a tool that errored all fail the step. This
+	 * can't judge whether the result is actually what the user wanted — only
+	 * that real work was attempted.
+	 */
+	const verifyStepMessages = async (
+		client: NonNullable<ReturnType<typeof getProjectClient>>,
+		sessionID: string,
+		directory: string,
+		sinceIndex: number,
+	): Promise<{ ok: boolean; reason?: string }> => {
+		try {
+			const msgs = await client.session.messages({ sessionID, directory }).catch(() => null)
+			type ToolPart = { type: string; tool?: string; state?: { status?: string; output?: string; error?: string } }
+			const arr = ((msgs?.data as Array<{ parts: ToolPart[] }>) ?? []).slice(sinceIndex)
+			const toolParts = arr.flatMap((m) => m.parts ?? []).filter((p) => p.type === "tool")
+
+			if (toolParts.length === 0) {
+				return { ok: false, reason: "No tool call was made — the model replied with text instead of doing the work" }
+			}
+			// OpenCode represents "the model called a tool that doesn't exist" as a
+			// synthetic tool part named "invalid" with status "completed" (not
+			// "error") — so status alone won't catch it; check the tool name too.
+			const hallucinated = toolParts.find((p) => p.tool === "invalid")
+			if (hallucinated) {
+				return {
+					ok: false,
+					reason: (hallucinated.state?.output || hallucinated.state?.error || "Tried to call a tool that doesn't exist").slice(0, 300),
+				}
+			}
+			const errored = toolParts.find((p) => p.state?.status === "error")
+			if (errored) {
+				return { ok: false, reason: `${errored.tool} failed: ${(errored.state?.error || "").slice(0, 250)}` }
+			}
+			return { ok: true }
+		} catch {
+			// Can't verify (server hiccup, etc.) — don't punish the step for our own fetch failure.
+			return { ok: true }
+		}
+	}
+
+	// "Run one at a time" — user picked manual pacing instead of running the
+	// whole queue unattended, e.g. to watch step 1 land before trusting the
+	// rest. Mirrors Hyperloop's own manual queue mode.
+	const [manualStepMode, setManualStepMode] = useState(false)
+	const nextManualStepIndex = manualStepMode
+		? stepsRef.current.findIndex((s, i) => s.trim() && !completedSteps.includes(i) && i !== failedStep)
+		: -1
+
+	// Run ONE step: send it, then verify (auto check + optional shell gate),
+	// retrying with the failure fed back up to MAX_STEP_RETRIES. Shared by both
+	// "Run all steps" (looped below) and "Run one at a time" (called once per
+	// click). Returns whether the step ultimately passed.
+	const runOneStep = useCallback(
+		async (i: number): Promise<boolean> => {
+			const stepText = (stepsRef.current[i] ?? "").trim()
+			if (!stepText || !onSendMessage) return true
+			const hyperloop = workspaceMode === "hyperloop"
+			const client = getProjectClient(agent.directory)
+			setCurrentStep(i)
+			setFailedStep(-1)
+			const send = (text: string) =>
+				onSendMessage(agent, text, {
+					model: effectiveModel ?? undefined,
+					agentName: selectedAgent || undefined,
+					variant: selectedVariant,
+					hyperloop,
+				})
+
+			// All 7 steps share this one session, so "did this step's turn do
+			// real work" has to be checked against only the messages it just
+			// added — record the count before sending, diff against it after.
+			const beforeCount =
+				client && agent.directory
+					? ((await client.session.messages({ sessionID: agent.sessionId, directory: agent.directory }).catch(() => null))
+							?.data?.length ?? 0)
+					: 0
+
+			await send(stepText)
+
+			// Combined verification: an automatic, no-setup check (did the step
+			// actually call a tool, and did it succeed) runs on every step for
+			// free, on top of the optional shell "done when" gate a user can add
+			// for a harder, objective check. Either failing triggers the same
+			// feed-back-and-retry loop, sharing one retry budget.
+			const gate = (gatesRef.current[i] ?? "").trim()
+			let passed = false
+			for (let attempt = 0; attempt <= MAX_STEP_RETRIES; attempt++) {
+				if (stopStepsRef.current) break
+
+				const autoVerdict =
+					client && agent.directory
+						? await verifyStepMessages(client, agent.sessionId, agent.directory, beforeCount)
+						: { ok: true as const }
+				if (!autoVerdict.ok) {
+					if (attempt === MAX_STEP_RETRIES) break
+					await send(
+						`That didn't do real work: ${autoVerdict.reason}\n\nActually use your tools to complete this step, then stop.`,
+					)
+					continue
+				}
+
+				if (gate && agent.directory) {
+					setGateRunningStep(i)
+					const res = await window.hramble
+						.runShell(agent.directory, gate, 120_000)
+						.catch(() => ({ code: 1, stdout: "", stderr: "gate could not run" }))
+					setGateRunningStep(-1)
+					if (res.code !== 0) {
+						if (attempt === MAX_STEP_RETRIES) break
+						const detail = (res.stderr || res.stdout || "").slice(-1500)
+						await send(
+							`The verification check \`${gate}\` still fails (exit ${res.code}):\n\n${detail}\n\nFix the code so that command passes, then stop.`,
+						)
+						continue
+					}
+				}
+
+				passed = true
+				break
+			}
+			if (passed) {
+				setCompletedSteps((prev) => (prev.includes(i) ? prev : [...prev, i]))
+			} else {
+				setFailedStep(i)
+			}
+			return passed
+		},
+		[onSendMessage, workspaceMode, effectiveModel, agent, selectedAgent, selectedVariant],
+	)
+
+	// "Run all steps" — the existing unattended path, now just a loop over runOneStep.
 	const runSteps = useCallback(async () => {
 		if (!onSendMessage || runningSteps || !stepsRef.current.some((s) => s.trim())) return
 		setRunningSteps(true)
 		setCompletedSteps([])
 		stopStepsRef.current = false
-		const hyperloop = workspaceMode === "hyperloop"
 		try {
 			if (effectiveModel && agent.directory) {
 				appStore.set(setProjectModelAtom, {
@@ -1264,66 +1397,44 @@ function ChatInputSection({
 					model: { ...effectiveModel, variant: selectedVariant, agent: selectedAgent || undefined },
 				})
 			}
-			// Read each step from the live ref so edits to not-yet-run steps take effect.
 			for (let i = 0; i < STEP_COUNT; i++) {
-				const stepText = (stepsRef.current[i] ?? "").trim()
-				if (!stepText) continue
+				if (!(stepsRef.current[i] ?? "").trim()) continue
 				if (stopStepsRef.current) break
-				setCurrentStep(i)
-				setFailedStep(-1)
-				const send = (text: string) =>
-					onSendMessage(agent, text, {
-						model: effectiveModel ?? undefined,
-						agentName: selectedAgent || undefined,
-						variant: selectedVariant,
-						hyperloop,
-					})
-				await send(stepText)
-
-				// Verification gate — run the step's "done when" check objectively.
-				// Retry the step (feeding the failure back) until it passes or we run
-				// out of retries; then pause so the user can intervene.
-				const gate = (gatesRef.current[i] ?? "").trim()
-				if (gate && agent.directory && !stopStepsRef.current) {
-					let passed = false
-					for (let attempt = 0; attempt <= MAX_STEP_RETRIES; attempt++) {
-						if (stopStepsRef.current) break
-						setGateRunningStep(i)
-						const res = await window.hramble
-							.runShell(agent.directory, gate, 120_000)
-							.catch(() => ({ code: 1, stdout: "", stderr: "gate could not run" }))
-						setGateRunningStep(-1)
-						if (res.code === 0) {
-							passed = true
-							break
-						}
-						if (attempt === MAX_STEP_RETRIES || stopStepsRef.current) break
-						const detail = (res.stderr || res.stdout || "").slice(-1500)
-						await send(
-							`The verification check \`${gate}\` still fails (exit ${res.code}):\n\n${detail}\n\nFix the code so that command passes, then stop.`,
-						)
-					}
-					if (!passed) {
-						setFailedStep(i)
-						stopStepsRef.current = true
-						break
-					}
+				const passed = await runOneStep(i)
+				if (!passed) {
+					stopStepsRef.current = true
+					break
 				}
-				setCompletedSteps((prev) => (prev.includes(i) ? prev : [...prev, i]))
 			}
 		} finally {
 			setRunningSteps(false)
 			setCurrentStep(-1)
 		}
-	}, [
-		onSendMessage,
-		runningSteps,
-		workspaceMode,
-		effectiveModel,
-		agent,
-		selectedAgent,
-		selectedVariant,
-	])
+	}, [onSendMessage, runningSteps, effectiveModel, agent, selectedAgent, selectedVariant, runOneStep])
+
+	// "Run one at a time" — run just this one step, then stop and wait for the
+	// user to click Run on whichever step they want next.
+	const runSingleStep = useCallback(
+		async (i: number) => {
+			if (!onSendMessage || runningSteps || !(stepsRef.current[i] ?? "").trim()) return
+			setManualStepMode(true)
+			setRunningSteps(true)
+			stopStepsRef.current = false
+			try {
+				if (effectiveModel && agent.directory) {
+					appStore.set(setProjectModelAtom, {
+						directory: agent.directory,
+						model: { ...effectiveModel, variant: selectedVariant, agent: selectedAgent || undefined },
+					})
+				}
+				await runOneStep(i)
+			} finally {
+				setRunningSteps(false)
+				setCurrentStep(-1)
+			}
+		},
+		[onSendMessage, runningSteps, effectiveModel, agent, selectedAgent, selectedVariant, runOneStep],
+	)
 
 	const stopSteps = useCallback(() => {
 		stopStepsRef.current = true
@@ -2285,6 +2396,16 @@ function ChatInputSection({
 																className="w-full rounded-md border border-border/60 bg-background/50 px-2 py-1 font-mono text-[11px] text-muted-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
 															/>
 														)}
+														{manualStepMode && s.trim() && !runningSteps && !completedSteps.includes(i) && failedStep !== i && (
+															<button
+																type="button"
+																onClick={() => runSingleStep(i)}
+																disabled={!canSend}
+																className={`flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-primary hover:bg-primary/10 disabled:opacity-40 ${i === nextManualStepIndex ? "animate-pulse bg-primary/10 ring-1 ring-primary" : ""}`}
+															>
+																<PlayIcon className="size-3" /> Run this step
+															</button>
+														)}
 													</div>
 												</div>
 											))}
@@ -2297,15 +2418,29 @@ function ChatInputSection({
 										)}
 										<div className="mt-2 flex items-center gap-2">
 											{!runningSteps ? (
-												<button
-													type="button"
-													onClick={runSteps}
-													disabled={!canSend || !hasSteps}
-													className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:opacity-90 disabled:opacity-50"
-												>
-													<PlayIcon className="size-3.5" />
-													Run steps
-												</button>
+												<>
+													<button
+														type="button"
+														onClick={() => {
+															setManualStepMode(false)
+															runSteps()
+														}}
+														disabled={!canSend || !hasSteps}
+														className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:opacity-90 disabled:opacity-50"
+													>
+														<PlayIcon className="size-3.5" />
+														Run all steps
+													</button>
+													<button
+														type="button"
+														onClick={() => runSingleStep(nextManualStepIndex >= 0 ? nextManualStepIndex : 0)}
+														disabled={!canSend || !hasSteps}
+														title="Run just the next step, then wait — pick your own pace and check each result before continuing."
+														className="rounded-md border border-border px-3 py-1.5 text-muted-foreground text-xs hover:bg-muted hover:text-foreground disabled:opacity-40"
+													>
+														Run one at a time
+													</button>
+												</>
 											) : (
 												<button
 													type="button"
@@ -2323,6 +2458,7 @@ function ChatInputSection({
 													setGates(Array(STEP_COUNT).fill(""))
 													setCompletedSteps([])
 													setFailedStep(-1)
+													setManualStepMode(false)
 												}}
 												disabled={runningSteps || !hasSteps}
 												className="rounded-md px-2 py-1.5 font-medium text-muted-foreground text-xs hover:text-foreground disabled:opacity-40"

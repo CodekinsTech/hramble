@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react"
 // Changes apply after an OpenCode restart (button provided).
 
 type Installed = { name: string; command: string[]; url?: string; enabled: boolean }
-type Preset = { id: string; name: string; command: string[]; note: string; envKey?: string }
+type Preset = { id: string; name: string; command: string[]; note: string; envKey?: string; urlPrompt?: string }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const bridge = () => (window as any).hramble
@@ -36,6 +36,15 @@ export function ConnectorsSettings() {
 	const installedNames = new Set(installed.map((i) => i.name))
 
 	const addPreset = async (p: Preset) => {
+		if (p.urlPrompt) {
+			// Remote connectors have no local command — just an endpoint URL.
+			const url = window.prompt(`${p.name}\n\n${p.note}\n\nPaste the ${p.urlPrompt}:`)
+			if (!url) return
+			await bridge()?.connectors?.add({ name: p.id, url: url.trim() })
+			setDirty(true)
+			load()
+			return
+		}
 		let environment: Record<string, string> | undefined
 		if (p.envKey) {
 			// Search/API connectors need a key — ask for it (stored in the config's env).

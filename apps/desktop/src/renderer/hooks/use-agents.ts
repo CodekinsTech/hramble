@@ -1,4 +1,4 @@
-import { useAtomValue, useSetAtom } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	agentFamily,
 	agentsAtom,
@@ -7,7 +7,7 @@ import {
 	projectListAtom,
 	sessionNameFamily,
 } from "../atoms/derived/agents"
-import { type DisplayMode, displayModeAtom } from "../atoms/preferences"
+import { type DisplayMode, type SessionSortMode, displayModeAtom, sessionSortModeAtom } from "../atoms/preferences"
 import { commandPaletteOpenAtom } from "../atoms/ui"
 import type { Agent, SidebarProject } from "../lib/types"
 
@@ -42,6 +42,11 @@ export function useSessionName(sessionId: string): string | undefined {
  */
 export function useProjectList(): SidebarProject[] {
 	return useAtomValue(projectListAtom)
+}
+
+/** The sidebar Sessions list's sort mode — see SessionSortMode. */
+export function useSessionSortMode(): [SessionSortMode, (mode: SessionSortMode) => void] {
+	return useAtom(sessionSortModeAtom)
 }
 
 /**

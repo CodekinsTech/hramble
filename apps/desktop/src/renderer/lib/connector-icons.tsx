@@ -7,7 +7,7 @@
  * (built-in)") fall back to a plain lucide icon — not a fabricated logo.
  */
 import { siCloudflare, siDuckduckgo, siFigma, siFirebase, siGithub, siGooglechrome, siPostgresql, siSupabase } from "simple-icons"
-import { BrainIcon, FolderIcon, MousePointerClickIcon, PlugIcon } from "lucide-react"
+import { BrainIcon, FolderIcon, MousePointerClickIcon, PaletteIcon, PlugIcon } from "lucide-react"
 
 type BrandIcon = { title: string; hex: string; path: string }
 
@@ -33,6 +33,8 @@ const FALLBACK_ICONS: Record<string, { icon: typeof PlugIcon; hex: string }> = {
 	filesystem: { icon: FolderIcon, hex: "#8b8b8b" },
 	playwright: { icon: MousePointerClickIcon, hex: "#2d9c3f" },
 	"sequential-thinking": { icon: BrainIcon, hex: "#8b5cf6" },
+	// No official Stitch mark in simple-icons yet — Google blue, not a fabricated logo.
+	stitch: { icon: PaletteIcon, hex: "#4285F4" },
 }
 
 /** Small colored chip (brand tint background + real mark) for a connector preset id. */

@@ -416,8 +416,13 @@ contextBridge.exposeInMainWorld("hramble", {
 	// --- Connectors (MCP servers) ---
 	connectors: {
 		list: () => ipcRenderer.invoke("connectors:list"),
-		add: (entry: { name: string; command: string[]; enabled?: boolean }) =>
-			ipcRenderer.invoke("connectors:add", entry),
+		add: (entry: {
+			name: string
+			command?: string[]
+			url?: string
+			enabled?: boolean
+			environment?: Record<string, string>
+		}) => ipcRenderer.invoke("connectors:add", entry),
 		remove: (name: string) => ipcRenderer.invoke("connectors:remove", name),
 		toggle: (name: string, enabled: boolean) => ipcRenderer.invoke("connectors:toggle", name, enabled),
 	},

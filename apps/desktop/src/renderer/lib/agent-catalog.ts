@@ -107,7 +107,7 @@ export const AGENTS: Agent[] = [
 			{ name: "Notion", url: "https://www.notion.com" },
 			{ name: "Airbnb", url: "https://www.airbnb.com" },
 		],
-		connectorIds: ["figma", "github", "supabase"],
+		connectorIds: ["figma", "stitch", "github", "supabase"],
 		suggestedRepos: [
 			{
 				name: "1.5K Developer Portfolio Collection",
@@ -177,6 +177,11 @@ export const AGENTS: Agent[] = [
 				label: "Kaplay",
 				briefNote: "Engine: Kaplay (formerly Kaboom.js) for a lightweight, code-first game loop.",
 			},
+			{
+				id: "playcanvas",
+				label: "PlayCanvas (3D)",
+				briefNote: "Engine: PlayCanvas (npm install playcanvas) — WebGL/WebGPU 3D, entity-component API, for real 3D games like a racer or shooter.",
+			},
 		],
 		showDesignStudio: false,
 		livePreviewNote:
@@ -192,6 +197,11 @@ export const AGENTS: Agent[] = [
 				name: "Kaplay",
 				url: "https://github.com/kaplayjs/kaplay",
 				note: "The Kaplay engine option above — lightweight, code-first game loop",
+			},
+			{
+				name: "PlayCanvas Engine",
+				url: "https://github.com/playcanvas/engine",
+				note: "The PlayCanvas engine option above — WebGL/WebGPU 3D for a racer, shooter, or anything real-3D",
 			},
 		],
 	},
@@ -220,6 +230,11 @@ export const AGENTS: Agent[] = [
 				name: "Drizzle ORM",
 				url: "https://github.com/drizzle-team/drizzle-orm",
 				note: "Type-safe SQL ORM for the database layer",
+			},
+			{
+				name: "Openship",
+				url: "https://github.com/oblien/openship",
+				note: "Self-hostable deploy platform — build, ship, and TLS-route the backend from a repo",
 			},
 		],
 	},
@@ -271,6 +286,11 @@ export const AGENTS: Agent[] = [
 				name: "n8n",
 				url: "https://github.com/n8n-io/n8n",
 				note: "Visual workflow automation, 400+ integrations",
+			},
+			{
+				name: "n8n Workflows Collection",
+				url: "https://github.com/Zie619/n8n-workflows",
+				note: "4,343 real, ready-to-import n8n workflows across 365 integrations — searchable examples, not just the bare engine",
 			},
 			{
 				name: "Scrapy",
