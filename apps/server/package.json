@@ -2,7 +2,7 @@
 	"name": "@hramble/server",
 	"version": "0.4.0",
 	"private": true,
-	"license": "MIT",
+	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"exports": {
 		".": {

@@ -2,7 +2,7 @@
 	"name": "configconv",
 	"version": "0.5.2",
 	"private": false,
-	"license": "MIT",
+	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"bin": {
 		"configconv": "./src/index.ts"

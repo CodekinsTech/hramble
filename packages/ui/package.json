@@ -2,7 +2,7 @@
 	"name": "@hramble/ui",
 	"version": "0.6.0",
 	"private": true,
-	"license": "MIT",
+	"license": "SEE LICENSE IN LICENSE",
 	"type": "module",
 	"exports": {
 		"./components/*": "./src/components/*.tsx",

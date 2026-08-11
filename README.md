@@ -1,12 +1,12 @@
 # hramble
 
-### A desktop GUI for [OpenCode](https://opencode.ai)
+### Your independent AI coding companion — multi-agent workflows, memory, and a voice built in.
 
 [![CI](https://github.com/worldkingk777/hramble-code/actions/workflows/ci.yml/badge.svg)](https://github.com/worldkingk777/hramble-code/actions/workflows/ci.yml)
 [![Release](https://github.com/worldkingk777/hramble-code/actions/workflows/release.yml/badge.svg)](https://github.com/worldkingk777/hramble-code/actions/workflows/release.yml)
 [![GitHub release](https://img.shields.io/github/v/release/worldkingk777/hramble-code?include_prereleases&label=version)](https://github.com/worldkingk777/hramble-code/releases)
 [![GitHub Downloads](https://img.shields.io/github/downloads/worldkingk777/hramble-code/total?label=downloads)](https://github.com/worldkingk777/hramble-code/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-FSL--1.1-blue.svg)](LICENSE)
 
 > **Alpha Software** -- Hramble is under active development. Expect breaking changes, missing features, and rough edges. Feedback and contributions are welcome!
 
@@ -14,13 +14,30 @@
 
 ## What is Hramble?
 
-Hramble is an open-source Electron app that gives [OpenCode](https://opencode.ai) a full desktop interface. OpenCode is a powerful terminal-based AI coding agent, but it runs one project at a time and lives in the terminal. Hramble wraps it with a visual UI so you can manage multiple projects and sessions from a single window, review file changes in a dedicated diff panel, schedule automated agent runs, and migrate your existing setup from other coding agents.
-
-Hramble spawns and manages the OpenCode server automatically, streams responses in real time, and renders tool calls with syntax-highlighted diffs, file previews, and terminal output.
+Hramble is a desktop AI coding companion with its own harness, prompts, and workflow features on top of a real agent execution engine — not a thin wrapper around a terminal tool. It manages multiple projects and sessions from one window, decomposes a goal into steps it runs in parallel without you babysitting each one, remembers context across your whole codebase and past sessions, and talks to you with a voice and an animated companion instead of staying a silent text box.
 
 <br>
 
 ## Features
+
+### Hyperloop — parallel, unattended builds
+
+- **7-step queue coding** -- Describe a goal and Hyperloop splits it into up to 7 parallel steps (more via chained loops for bigger plans), launches them together, and runs a verify → repair loop on each one automatically. You don't sit there approving every single step — check back when it's done.
+
+- **Live, plain-language step summaries** -- Each step ends with a short "what changed, what's next" summary the moment it finishes, not a wall of raw agent output you have to read through.
+
+- **Model-aware concurrency** -- Detects whether you're on a local or hosted model and paces execution accordingly (strict one-at-a-time for local models, a bounded concurrent pool for hosted ones), so it stays fast without overloading either your machine or your API rate limits.
+
+- **Manual queue mode** -- Prefer to run one step at a time and inspect each before the next starts? A single toggle switches Hyperloop from fully automatic to a manual queue.
+
+### 7 Specialized Agents
+
+Purpose-built starting points for Website, Browser Game, Backend Manager, Mobile App, Data & Automation, Browser Extension, and CLI & Dev Tools -- each with:
+
+- A guided build path (reference sites/games to pull real inspiration from, a Design Studio vs. template fork for Website)
+- **Real MCP connectors** relevant to that agent (e.g. Figma/GitHub/Supabase for Website, Postgres/Cloudflare for Backend, Firebase for Mobile) -- one click to actually connect the agent to that tool, not just a link out
+- **Suggested Git repos** verified real, worth studying for that kind of build
+- A goal box that hands everything you picked straight to the agent as its brief
 
 ### Chat & Agent Interaction
 
@@ -63,6 +80,28 @@ Hramble spawns and manages the OpenCode server automatically, streams responses 
 - **Commit and push** -- Integrated dialog to create branches, commit changes, push to remotes, and open a GitHub Pull Request, all without leaving Hramble.
 
 - **Smart diff gates** -- Auto-collapses generated files (lockfiles, etc.) and very large diffs to keep the review panel responsive.
+
+### Memory & Skills
+
+- **Cross-project memory** -- Facts and preferences learned in one project carry over to the next, instead of re-explaining yourself every session.
+
+- **Global session search** -- Search across every past session in every project, not just the one you're currently in.
+
+- **100+ bundled skills** -- A library of ready-to-use agent skills (CC-BY-4.0), invoked with `/` in chat.
+
+- **Create your own skill** -- Turn a pattern you use often into a reusable skill, saved to the same library as the bundled ones.
+
+### Team Spaces & Community
+
+- **Team Spaces** -- A shared workspace for a team's sessions, with a Combine feature that merges parallel work via a real `git merge`, not a manual copy-paste.
+
+- **Community feed** -- Share what you built, browse what others are building, and install a shared skill in one click -- filterable by tag (e.g. by agent type, so the Website agent's community feed only shows website builds).
+
+### Avatar & Voice Companion
+
+- **Talk to Hramble** -- A mic button for voice input, so you can describe what you want out loud instead of typing.
+
+- **Animated companion** -- A live avatar that reacts to what's happening in your session, with narration you can mute, collapse to a compact bar, or pop out as its own floating window.
 
 ### Automations
 
@@ -137,10 +176,10 @@ This is expected behavior for unsigned apps and does not indicate malware.
 ### From a release (recommended)
 
 1. Download and install from the [Releases page](https://github.com/worldkingk777/hramble-code/releases)
-2. Make sure [OpenCode CLI](https://opencode.ai) is installed (`~/.opencode/bin/opencode`)
-3. Hramble will automatically manage the OpenCode server
+2. On first launch, Hramble walks you through a guided setup: it checks your environment and, if the OpenCode CLI isn't installed yet, offers a one-click **Install for me** -- no terminal required.
+3. The same guided setup helps you connect an AI provider (Anthropic, OpenAI, Google, a local model, and more) before you start your first session.
 
-> OpenCode needs at least one AI provider configured (Anthropic, OpenAI, Google, etc.). Run `opencode` in a terminal once to complete initial setup.
+Nothing beyond downloading and installing Hramble itself is required -- everything else happens inside the app.
 
 ### Coming from Claude Code or Cursor?
 
@@ -148,11 +187,13 @@ On first launch, Hramble offers a guided migration wizard that detects your exis
 
 ### Configuration
 
-Hramble is a GUI layer on top of OpenCode, so core configuration like model providers, MCP servers, custom tools, and agent behavior is managed through OpenCode's own config files. Refer to the [OpenCode documentation](https://opencode.ai/docs) for setup instructions.
+Core configuration -- model providers, MCP connectors, custom tools, and agent behavior -- is managed through config files on OpenCode's execution engine underneath Hramble. Refer to the [OpenCode documentation](https://opencode.ai/docs) for the low-level config format; connectors and providers can also be managed from Hramble's own Settings UI.
 
 ### From source
 
-**Prerequisites:** [Bun](https://bun.sh) 1.3.8+ and [OpenCode CLI](https://opencode.ai)
+For contributors -- if you just want to use Hramble, download a release instead (above), no Bun required.
+
+**Prerequisites:** [Bun](https://bun.sh) 1.3.8+ and [OpenCode CLI](https://opencode.ai) (the same CLI Hramble can install for you in-app -- see above -- or install manually with `curl -fsSL https://opencode.ai/install | bash`)
 
 ```bash
 git clone https://github.com/worldkingk777/hramble-code.git
@@ -163,15 +204,13 @@ bun install
 cd apps/desktop && bun run dev
 ```
 
-#### Browser-only mode (no Electron)
-
-For frontend development without Electron:
+Prefer iterating on the UI without the full Electron process running? Same prerequisites, two terminals instead of one:
 
 ```bash
 # Terminal 1: Start the backend
 cd apps/server && bun run dev     # port 3100
 
-# Terminal 2: Start the renderer
+# Terminal 2: Start the renderer, browser-only, no Electron
 cd apps/desktop && bun run dev:web  # port 1420
 ```
 
@@ -260,9 +299,9 @@ Please see the [AGENTS.md](AGENTS.md) file for code style conventions, naming pa
 
 <br>
 
-## Acknowledgments
+## Under the Hood
 
-Hramble is built on top of [OpenCode](https://github.com/anomalyco/opencode), an open-source AI coding agent. Hramble communicates with the OpenCode server via the [`@opencode-ai/sdk`](https://www.npmjs.com/package/@opencode-ai/sdk) package.
+Hramble's harness, prompts, multi-agent workflows (Hyperloop), memory system, connectors, and desktop app are all our own. For model orchestration and tool execution, Hramble runs on [OpenCode](https://github.com/anomalyco/opencode) -- an open, model-agnostic execution engine -- via the [`@opencode-ai/sdk`](https://www.npmjs.com/package/@opencode-ai/sdk) package, the same way a browser might be built on an open rendering engine underneath its own UI and features.
 
 The UI component library is built with [shadcn/ui](https://ui.shadcn.com/), [Base UI](https://base-ui.com/), and [Tailwind CSS](https://tailwindcss.com/).
 
@@ -272,4 +311,4 @@ See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for a full list of third-pa
 
 ## License
 
-[MIT](LICENSE)
+Hramble is source-available under the [Functional Source License 1.1](LICENSE) (Apache 2.0 future license) -- you're free to read, self-host, and modify the code for any purpose other than building a competing product or service. Each release automatically converts to the fully open Apache License 2.0 two years after its publish date.

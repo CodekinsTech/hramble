@@ -1,7 +1,9 @@
 # Third-Party Notices
 
 This file lists the third-party libraries used by Hramble and their respective licenses.
-Hramble itself is licensed under the [MIT License](LICENSE).
+Hramble itself is source-available under the [Functional Source License 1.1](LICENSE)
+(Apache 2.0 future license). Portions originating from Palot remain under the MIT
+License -- see the Prior Work Notice in [LICENSE](LICENSE) for the full text.
 
 Last updated: 2025-02-12
 
@@ -22,7 +24,8 @@ Last updated: 2025-02-12
 | Other (W3C, MPL-2.0, Zlib, 0BSD, etc.) | ~30 | Various permissive licenses |
 
 The full dependency tree contains approximately 1,100 packages. The overwhelming majority
-(~95%) use MIT, ISC, or BSD licenses. All licenses are compatible with Hramble's MIT license.
+(~95%) use MIT, ISC, or BSD licenses. These are all permissive licenses that Hramble's own
+use of them (as a dependency, not a redistribution of their source) is compatible with.
 
 ---
 
