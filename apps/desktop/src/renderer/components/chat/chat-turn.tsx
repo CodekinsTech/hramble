@@ -768,7 +768,7 @@ export const ChatTurnComponent = memo(
 							<p className="whitespace-pre-wrap">{userText}</p>
 							{/* Actions on YOUR command: copy the prompt, fork, or rewind here. */}
 							{!isSynthetic && userText && (
-								<MessageActions className="mt-1 opacity-50 transition-opacity group-hover/turn:opacity-100">
+								<MessageActions className="mt-1 opacity-0 transition-opacity group-hover/turn:opacity-100">
 									<MessageAction
 										tooltip={cmdCopied ? "Copied" : "Copy command"}
 										onClick={handleCopyCommand}
@@ -1055,7 +1055,7 @@ export const ChatTurnComponent = memo(
 				    always — hover-only hid them so users didn't know they existed —
 				    and brightened to full on hover. */}
 				{responseText && (
-					<MessageActions className="opacity-50 transition-opacity group-hover/turn:opacity-100">
+					<MessageActions className="opacity-0 transition-opacity group-hover/turn:opacity-100">
 						<MessageAction tooltip="Scroll to top" onClick={handleScrollToTop}>
 							<ArrowUpToLineIcon className="size-3" />
 						</MessageAction>
