@@ -1,5 +1,7 @@
-import { SearchIcon } from "lucide-react"
+import { SearchIcon, SparklesIcon } from "lucide-react"
+import { useSetAtom } from "jotai"
 import { useEffect, useMemo, useState } from "react"
+import { companionCollapsedAtom } from "../../atoms/preferences"
 
 // The avatar catalog (id, name, price in gems, description, tags…) is served from
 // public/store-avatars.json; thumbnails live in public/store-images/<id>.png.
@@ -21,6 +23,7 @@ export function StoreSettings() {
 	const [avatars, setAvatars] = useState<StoreAvatar[] | null>(null)
 	const [error, setError] = useState(false)
 	const [query, setQuery] = useState("")
+	const setCompanionCollapsed = useSetAtom(companionCollapsedAtom)
 
 	useEffect(() => {
 		let alive = true
@@ -53,12 +56,32 @@ export function StoreSettings() {
 
 	return (
 		<div className="space-y-6">
-			<div>
-				<h2 className="text-xl font-semibold">Store</h2>
-				<p className="mt-1 text-sm text-muted-foreground">
-					Browse the avatar library. Buy avatars with gems to use them in the box and perch companion.
-					<span className="ml-1 text-foreground/70">1 gem = ₹1.</span>
-				</p>
+			<div className="flex items-start justify-between gap-3">
+				<div>
+					<h2 className="text-xl font-semibold">Store</h2>
+					<p className="mt-1 text-sm text-muted-foreground">
+						Browse the avatar library. Buy avatars with gems to use them in the box and perch companion.
+						<span className="ml-1 text-foreground/70">1 gem = ₹1.</span>
+					</p>
+				</div>
+				<button
+					type="button"
+					onClick={() => setCompanionCollapsed(false)}
+					title="Show the companion box"
+					className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 font-medium text-xs hover:bg-muted"
+				>
+					<SparklesIcon className="size-3.5" />
+					Get your AI assistant
+				</button>
+			</div>
+
+			<div className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 bg-muted/20 p-4">
+				<img
+					src="/avatarbox-companion.png"
+					alt="The avatar companion box — a live 3D character you can talk to"
+					className="w-full max-w-xs rounded-lg"
+				/>
+				<p className="text-[11px] text-muted-foreground">Powered by AvatarBox — a Codekins product.</p>
 			</div>
 
 			<div className="relative">
