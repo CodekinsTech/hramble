@@ -1398,7 +1398,11 @@ export function NewChat() {
 								<div className="mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/30 bg-muted/30 p-3">
 									<div className="mb-2 flex items-center justify-between">
 										<span className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
-											<HyperloopSpinner className="h-3.5 w-auto text-primary" />
+											{hyperRunning ? (
+												<HyperloopSpinner className="h-3.5 w-auto text-primary" />
+											) : (
+												<InfinityIcon className="size-3.5 shrink-0" />
+											)}
 											{hyperCollapsed
 												? "Hyperloop — what was built"
 												: hyperSteps.length === 0
