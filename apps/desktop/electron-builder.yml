@@ -49,6 +49,9 @@ extraResources:
     to: icon.png
   - from: resources/iconTray.png
     to: iconTray.png
+  # Session MCP server — stdio MCP tool giving the AI cross-session list/send capabilities.
+  - from: resources/session-mcp.cjs
+    to: session-mcp.cjs
 
 # Rebuild native modules for Electron's Node.js ABI during packaging.
 npmRebuild: true
