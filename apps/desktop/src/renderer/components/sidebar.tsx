@@ -39,15 +39,12 @@ import {
 	Loader2Icon,
 	MoreVerticalIcon,
 	PlusIcon,
-	LinkIcon,
 	SettingsIcon,
 	TimerIcon,
 	TrashIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
-import { activeBridgeAtom } from "../atoms/bridge"
-import { parseBridgeUrl } from "../lib/bridge-client"
 import { activeServerConfigAtom } from "../atoms/connection"
 import { automationsEnabledAtom } from "../atoms/feature-flags"
 import {
@@ -457,7 +454,6 @@ export function AppSidebarContent({
 			<SidebarFooter className="space-y-0 p-2">
 				<ServerIndicator />
 				<SidebarMenu>
-					<JoinBridgeButton />
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							tooltip="Settings"
@@ -740,48 +736,3 @@ const SessionItem = memo(function SessionItem({
 	)
 })
 
-function JoinBridgeButton() {
-	const [open, setOpen] = useState(false)
-	const [url, setUrl] = useState("")
-	const setActiveBridge = useSetAtom(activeBridgeAtom)
-
-	const handleJoin = () => {
-		const parsed = parseBridgeUrl(url.trim())
-		if (!parsed) {
-			toast.error("Invalid bridge URL")
-			return
-		}
-		setActiveBridge({ roomToken: parsed.roomToken, meta: parsed.meta, events: [], status: "connecting" })
-		setOpen(false)
-		setUrl("")
-	}
-
-	if (open) {
-		return (
-			<SidebarMenuItem>
-				<div className="flex items-center gap-1 px-2 py-1">
-					<Input
-						autoFocus
-						placeholder="Paste bridge URL…"
-						value={url}
-						onChange={(e) => setUrl(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") handleJoin()
-							if (e.key === "Escape") { setOpen(false); setUrl("") }
-						}}
-						className="h-7 text-xs"
-					/>
-				</div>
-			</SidebarMenuItem>
-		)
-	}
-
-	return (
-		<SidebarMenuItem>
-			<SidebarMenuButton tooltip="Join Bridge" onClick={() => setOpen(true)} className="text-muted-foreground">
-				<LinkIcon className="size-4" />
-				<span>Join Bridge</span>
-			</SidebarMenuButton>
-		</SidebarMenuItem>
-	)
-}
