@@ -17,6 +17,7 @@ import { stopServer } from "./opencode-manager"
 import { initSettingsStore } from "./settings-store"
 import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
 import { registerConnectors } from "./connectors" // MCP connectors management
+import { registerSessionMcp } from "./session-mcp" // AI cross-session tools
 import { startExtensionBridge } from "./extension-bridge" // Chrome extension console relay
 import { registerGraphStore } from "./graph-store" // work-graph persistence (.hramble/graph)
 import { registerSleepMonitor } from "./sleep-monitor"
@@ -369,6 +370,7 @@ if (!gotLock) {
 		registerStore()
 		registerOllama()
 		registerConnectors()
+		registerSessionMcp()
 		registerGraphStore()
 		registerSleepMonitor()
 		startExtensionBridge()
