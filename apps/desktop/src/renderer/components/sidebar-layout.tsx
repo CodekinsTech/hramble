@@ -13,12 +13,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, PanelLeftIcon, RssIcon, SearchIcon, UsersIcon } from "lucide-react"
+import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, Minus, Maximize2, PanelLeftIcon, RssIcon, SearchIcon, UsersIcon, X } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
 import { browserPanelOpenAtom, browserPanelWidthAtom } from "../atoms/browser"
 import { communityPanelOpenAtom, communityPanelSettingsAtom, communityPanelTagAtom } from "../atoms/ui"
+import { activeBridgeAtom } from "../atoms/bridge"
+import { BridgePanel } from "./bridge-panel"
 import { BrowserPane } from "./browser-pane"
 import { CommunityPage } from "./community-page"
 import { useAgents, useProjectList, useSetCommandPaletteOpen } from "../hooks/use-agents"
@@ -90,6 +92,10 @@ const isElectronEnv = typeof window !== "undefined" && "hramble" in window
 
 /** Pixel offset from the left edge where window controls (toggle + new session) start */
 const WINDOW_CONTROLS_LEFT = isMac && isElectronEnv ? 93 : 8
+/** Vertical position of the custom toolbar buttons */
+const WINDOW_CONTROLS_TOP = isMac && isElectronEnv ? 8 : APP_BAR_HEIGHT + 9
+/** Right offset for TopRightControls */
+const WINDOW_CONTROLS_RIGHT = 12
 /** Total width reserved for traffic lights + window control buttons */
 const WINDOW_CONTROLS_INSET = isMac && isElectronEnv ? 160 : 72
 
@@ -151,7 +157,7 @@ function WindowControls() {
 		<div
 			className="absolute z-50 flex items-center gap-0.5"
 			style={{
-				top: 8,
+				top: WINDOW_CONTROLS_TOP,
 				left: WINDOW_CONTROLS_LEFT,
 				// @ts-expect-error -- vendor-prefixed CSS property
 				WebkitAppRegion: "no-drag",
@@ -223,7 +229,8 @@ function WindowControls() {
 
 /**
  * Top-right window control — mirrors WindowControls (top-left) but anchored
- * to the opposite corner. Currently just the Community entry point.
+ * to the opposite corner. Mac only (rendered absolutely over the layout).
+ * On Windows, WinTitleBar handles this instead.
  */
 function TopRightControls() {
 	const navigate = useNavigate()
@@ -232,8 +239,8 @@ function TopRightControls() {
 		<div
 			className="absolute z-50 flex items-center gap-0.5"
 			style={{
-				top: 8,
-				right: 12,
+				top: WINDOW_CONTROLS_TOP,
+				right: WINDOW_CONTROLS_RIGHT,
 				// @ts-expect-error -- vendor-prefixed CSS property
 				WebkitAppRegion: "no-drag",
 			}}
@@ -253,7 +260,6 @@ function TopRightControls() {
 				</TooltipTrigger>
 				<TooltipContent>Team Spaces — work on this together</TooltipContent>
 			</Tooltip>
-			{/* Community — kept last/outermost corner for now, per request. */}
 			<Tooltip>
 				<TooltipTrigger
 					render={
@@ -269,6 +275,87 @@ function TopRightControls() {
 				</TooltipTrigger>
 				<TooltipContent>Community — share what you built</TooltipContent>
 			</Tooltip>
+		</div>
+	)
+}
+
+/**
+ * Windows-only title bar buttons: Team, Community, then — □ ×.
+ * Sits in the AppBar's drag region (no-drag on the buttons themselves).
+ * Replaces the native titleBarOverlay entirely.
+ */
+function WinTitleBar() {
+	const navigate = useNavigate()
+
+	const minimize = () => window.hramble.minimizeWindow?.()
+	const maximize = () => window.hramble.maximizeWindow?.()
+	const close = () => window.hramble.closeWindow?.()
+
+	return (
+		<div
+			className="flex h-full items-center"
+			// @ts-expect-error -- vendor-prefixed CSS property
+			style={{ WebkitAppRegion: "no-drag" }}
+		>
+			{/* Team / Community nav */}
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/team" })}
+						/>
+					}
+				>
+					<UsersIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Team Spaces</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/community" })}
+						/>
+					}
+				>
+					<RssIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Community</TooltipContent>
+			</Tooltip>
+
+			{/* Window chrome — □ × */}
+			<div className="ml-1 flex h-full items-stretch">
+				<button
+					type="button"
+					onClick={minimize}
+					className="flex w-10 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+					aria-label="Minimize"
+				>
+					<Minus className="size-3.5" />
+				</button>
+				<button
+					type="button"
+					onClick={maximize}
+					className="flex w-10 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+					aria-label="Maximize"
+				>
+					<Maximize2 className="size-3" />
+				</button>
+				<button
+					type="button"
+					onClick={close}
+					className="flex w-10 items-center justify-center text-muted-foreground transition-colors hover:bg-destructive hover:text-destructive-foreground"
+					aria-label="Close"
+				>
+					<X className="size-3.5" />
+				</button>
+			</div>
 		</div>
 	)
 }
@@ -349,6 +436,7 @@ export function SidebarLayout() {
 	const activeServer = useAtomValue(activeServerConfigAtom)
 	// Browser panel is mounted at the app root so the agent's `browser` tool can
 	// drive it on any route (not only inside a session view).
+	const activeBridge = useAtomValue(activeBridgeAtom)
 	const browserPanelOpen = useAtomValue(browserPanelOpenAtom)
 	const browserPanelWidth = useAtomValue(browserPanelWidthAtom)
 	const setBrowserPanelWidth = useSetAtom(browserPanelWidthAtom)
@@ -467,7 +555,7 @@ export function SidebarLayout() {
 				</Sidebar>
 				<SidebarInset>
 					<UpdateBanner />
-					<AppBar />
+					<AppBar rightSlot={!isMac && isElectronEnv ? <WinTitleBar /> : undefined} />
 					{/* Flex-1 + min-h-0 wrapper: pages use h-full which would
 					    resolve to 100% of SidebarInset, ignoring AppBar height.
 					    This container takes remaining space after AppBar and
@@ -530,8 +618,13 @@ export function SidebarLayout() {
 				</SidebarInset>
 				{/* Rendered last so it paints on top of the sidebar and app bar,
 				    whose transition properties create stacking contexts. */}
+				{activeBridge && (
+					<div className="pointer-events-auto absolute right-0 top-0 z-40 h-full w-72 shrink-0 border-l border-border bg-background shadow-lg">
+						<BridgePanel />
+					</div>
+				)}
 				<WindowControls />
-				<TopRightControls />
+				{isMac && isElectronEnv && <TopRightControls />}
 			</SidebarProvider>
 			<AddProjectDialog
 				open={addProjectOpen}

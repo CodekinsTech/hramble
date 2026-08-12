@@ -94,8 +94,8 @@ export async function resolveWindowChrome(isOpaque: boolean): Promise<WindowChro
 		return {
 			tier: "opaque",
 			options: {
+				titleBarStyle: "hidden" as const,
 				...(isMac && {
-					titleBarStyle: "hiddenInset" as const,
 					trafficLightPosition: { x: 15, y: 15 },
 				}),
 			},
