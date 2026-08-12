@@ -93,7 +93,7 @@ const isElectronEnv = typeof window !== "undefined" && "hramble" in window
 /** Pixel offset from the left edge where window controls (toggle + new session) start */
 const WINDOW_CONTROLS_LEFT = isMac && isElectronEnv ? 93 : 8
 /** Vertical position of the custom toolbar buttons */
-const WINDOW_CONTROLS_TOP = isMac && isElectronEnv ? 8 : APP_BAR_HEIGHT + 9
+const WINDOW_CONTROLS_TOP = isMac && isElectronEnv ? 8 : 9
 /** Right offset for TopRightControls */
 const WINDOW_CONTROLS_RIGHT = 12
 /** Total width reserved for traffic lights + window control buttons */
