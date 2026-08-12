@@ -9,10 +9,12 @@ export function useWaitingIndicator() {
 	const hasWaiting = useAtomValue(hasWaitingAtom)
 
 	useEffect(() => {
-		document.title = hasWaiting ? "(!) Hramble code \u2014 Input needed" : "Hramble code"
+		// Header title removed for now \u2014 keep the waiting-for-input alert (it's
+		// functional, not just branding) but drop the "Hramble code" branding text.
+		document.title = hasWaiting ? "(!) Input needed" : ""
 
 		return () => {
-			document.title = "Hramble code"
+			document.title = ""
 		}
 	}, [hasWaiting])
 }

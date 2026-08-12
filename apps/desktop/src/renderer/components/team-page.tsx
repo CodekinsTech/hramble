@@ -24,6 +24,7 @@ import {
 	myPendingInvitesAtom,
 	refreshActiveTeamDetailAtom,
 	refreshTeamsAtom,
+	setMemberTrustAtom,
 	setProjectDirectoryAtom,
 	teamActivityAtom,
 	teamMembersAtom,
@@ -44,7 +45,7 @@ const STATUS_LABEL: Record<PieceStatus, string> = {
 	combined: "Combined",
 }
 
-function GateScreen() {
+export function GateScreen() {
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 
 	return (
@@ -69,7 +70,7 @@ function GateScreen() {
 	)
 }
 
-function CreateOrJoinTeam() {
+export function CreateOrJoinTeam() {
 	const [name, setName] = useState("")
 	const createTeam = useSetAtom(createTeamAtom)
 	const acceptInvite = useSetAtom(acceptInviteAtom)
@@ -132,11 +133,14 @@ function CreateOrJoinTeam() {
 	)
 }
 
-function MembersPanel({ teamId }: { teamId: string }) {
+function MembersPanel({ team }: { team: Team }) {
 	const members = useAtomValue(teamMembersAtom)
 	const inviteMember = useSetAtom(inviteMemberAtom)
+	const setMemberTrust = useSetAtom(setMemberTrustAtom)
+	const currentUser = useAtomValue(communityUserAtom)
 	const [email, setEmail] = useState("")
 	const [busy, setBusy] = useState(false)
+	const isOwner = currentUser?.email === team.ownerId
 
 	const submit = async () => {
 		if (!email.trim() || busy) return
@@ -154,7 +158,25 @@ function MembersPanel({ teamId }: { teamId: string }) {
 				{members.map((m) => (
 					<div key={m.userId} className="flex items-center justify-between text-sm">
 						<span>{m.userId}</span>
-						<span className="text-muted-foreground text-xs capitalize">{m.role}</span>
+						<div className="flex items-center gap-2.5">
+							<span className="text-muted-foreground text-xs capitalize">{m.role}</span>
+							{m.role !== "owner" &&
+								(isOwner ? (
+									<label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+										<input
+											type="checkbox"
+											checked={m.canCombine}
+											onChange={(e) => setMemberTrust({ userId: m.userId, canCombine: e.target.checked })}
+											className="size-3"
+										/>
+										Trusted to combine
+									</label>
+								) : (
+									m.canCombine && (
+										<span className="text-[11px] text-emerald-600 dark:text-emerald-400">Trusted to combine</span>
+									)
+								))}
+						</div>
 					</div>
 				))}
 			</div>
@@ -176,8 +198,9 @@ function MembersPanel({ teamId }: { teamId: string }) {
 					Invite
 				</Button>
 			</form>
-			<p className="text-[11px] text-muted-foreground/60" id={`team-${teamId}-invite-hint`}>
-				They need a Hramble account with this same email to accept.
+			<p className="text-[11px] text-muted-foreground/60" id={`team-${team.id}-invite-hint`}>
+				They need a Hramble account with this same email to accept. By default only the owner can combine a
+				member's piece — check "Trusted to combine" to let them do it themselves.
 			</p>
 		</div>
 	)
@@ -185,12 +208,18 @@ function MembersPanel({ teamId }: { teamId: string }) {
 
 function PieceRow({ piece }: { piece: TeamPiece }) {
 	const team = useAtomValue(activeTeamAtom)
+	const members = useAtomValue(teamMembersAtom)
+	const currentUser = useAtomValue(communityUserAtom)
 	const updateStatus = useSetAtom(updatePieceStatusAtom)
 	const combine = useSetAtom(combinePieceAtom)
 	const [branch, setBranch] = useState(piece.branchName ?? "")
 	const [combining, setCombining] = useState(false)
 
-	const canCombine = piece.status === "ready_to_combine" && !!piece.branchName && !!team?.projectDirectory
+	const myMembership = members.find((m) => m.userId === currentUser?.email)
+	// Owners can always combine; everyone else needs the owner to have checked "Trusted to combine" for them.
+	const canCombineDirectly = myMembership?.role === "owner" || !!myMembership?.canCombine
+	const ready = piece.status === "ready_to_combine" && !!piece.branchName && !!team?.projectDirectory
+	const canCombine = ready && canCombineDirectly
 
 	const runCombine = async () => {
 		setCombining(true)
@@ -232,6 +261,9 @@ function PieceRow({ piece }: { piece: TeamPiece }) {
 					{combining ? "Combining…" : "Combine"}
 				</Button>
 			</div>
+			{ready && !canCombineDirectly && (
+				<p className="text-[11px] text-muted-foreground">Ready — waiting for the owner to combine it</p>
+			)}
 			{piece.lastCombineError && <p className="text-[11px] text-red-500">{piece.lastCombineError}</p>}
 		</div>
 	)
@@ -346,6 +378,19 @@ function ProjectFolderRow({ team }: { team: Team }) {
 	)
 }
 
+/** The team body — folder, progress, members, pieces, activity. Shared by the standalone Team page and ProForge's Master Session. */
+export function TeamWorkspace({ team }: { team: Team }) {
+	return (
+		<>
+			<ProjectFolderRow team={team} />
+			<ProgressSummary />
+			<MembersPanel team={team} />
+			<PiecesBoard />
+			<ActivityFeed />
+		</>
+	)
+}
+
 function TeamDashboard() {
 	const team = useAtomValue(activeTeamAtom)
 	const teams = useAtomValue(teamsAtom)
@@ -371,16 +416,13 @@ function TeamDashboard() {
 					</NativeSelect>
 				)}
 			</div>
-			<ProjectFolderRow team={team} />
-			<ProgressSummary />
-			<MembersPanel teamId={team.id} />
-			<PiecesBoard />
-			<ActivityFeed />
+			<TeamWorkspace team={team} />
 		</div>
 	)
 }
 
-export function TeamPage() {
+/** Fetches/subscribes teams + active team detail. Shared by the standalone Team page and ProForge's Master Session. */
+export function useTeamSpaces() {
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const user = useAtomValue(communityUserAtom)
 	const teams = useAtomValue(teamsAtom)
@@ -411,6 +453,12 @@ export function TeamPage() {
 			unsubscribe?.()
 		}
 	}, [backendEnabled, user, activeTeamId, refreshDetail])
+
+	return { backendEnabled, user, teams }
+}
+
+export function TeamPage() {
+	const { backendEnabled, user, teams } = useTeamSpaces()
 
 	if (!backendEnabled || !user) return <GateScreen />
 	if (teams.length === 0) return <CreateOrJoinTeam />

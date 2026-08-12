@@ -18,6 +18,7 @@ import {
 	FolderTreeIcon,
 	GlobeIcon,
 	GitForkIcon,
+	LayoutTemplateIcon,
 	MoreHorizontalIcon,
 	PencilIcon,
 	RadioTowerIcon,
@@ -27,7 +28,8 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { OpenInTarget } from "../../preload/api"
-import { reviewPanelOpenAtom, reviewPanelSettingsAtom, sessionDiffStatsFamily } from "../atoms/ui"
+import { artifactsPanelOpenAtom, reviewPanelOpenAtom, reviewPanelSettingsAtom, sessionDiffStatsFamily } from "../atoms/ui"
+import { ArtifactsPanel } from "./artifacts-panel"
 import type {
 	ConfigData,
 	ModelRef,
@@ -49,10 +51,8 @@ import {
 	pickHtmlFile,
 	servePreviewFile,
 } from "../services/backend"
-import { messagesFamily } from "../atoms/messages"
 import { useSetAppBarContent } from "./app-bar-context"
 import { ChatView } from "./chat"
-import { HrambleWordmark } from "./hramble-wordmark"
 import { ReviewPanel } from "./review/review-panel"
 import { fileExplorerOpenAtom } from "../atoms/file-explorer"
 import { FileExplorer } from "./file-explorer"
@@ -166,9 +166,11 @@ export function AgentDetail({
 	const [fileExplorerOpen, setFileExplorerOpen] = useAtom(fileExplorerOpenAtom)
 	// Browser panel state (right side).
 	const [browserPanelOpen, setBrowserPanelOpen] = useAtom(browserPanelOpenAtom)
+	// Artifacts panel state (right side) — rendered gallery of the session's HTML/SVG/Markdown output.
+	const [artifactsPanelOpen, setArtifactsPanelOpen] = useAtom(artifactsPanelOpenAtom)
 
 	// Keyboard shortcut: Cmd+Shift+D toggles review; Cmd+Shift+E toggles files;
-	// Cmd+Shift+B toggles the browser.
+	// Cmd+Shift+B toggles the browser; Cmd+Shift+A toggles artifacts.
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "e") {
@@ -183,6 +185,10 @@ export function AgentDetail({
 				e.preventDefault()
 				setBrowserPanelOpen((prev) => !prev)
 			}
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "a") {
+				e.preventDefault()
+				setArtifactsPanelOpen((prev) => !prev)
+			}
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
 				e.preventDefault()
 				if (reviewPanelOpen) {
@@ -192,7 +198,14 @@ export function AgentDetail({
 		}
 		document.addEventListener("keydown", handleKeyDown)
 		return () => document.removeEventListener("keydown", handleKeyDown)
-	}, [setReviewPanelOpen, setReviewSettings, reviewPanelOpen, setFileExplorerOpen, setBrowserPanelOpen])
+	}, [
+		setReviewPanelOpen,
+		setReviewSettings,
+		reviewPanelOpen,
+		setFileExplorerOpen,
+		setBrowserPanelOpen,
+		setArtifactsPanelOpen,
+	])
 
 	// Close review panel when navigating to a session with no diffs
 	const prevSessionIdRef = useRef(agent.sessionId)
@@ -252,6 +265,8 @@ export function AgentDetail({
 				onToggleFileExplorer={() => setFileExplorerOpen((prev) => !prev)}
 					browserPanelOpen={browserPanelOpen}
 					onToggleBrowserPanel={() => setBrowserPanelOpen((prev) => !prev)}
+					artifactsPanelOpen={artifactsPanelOpen}
+					onToggleArtifactsPanel={() => setArtifactsPanelOpen((prev) => !prev)}
 			/>,
 		)
 
@@ -357,6 +372,16 @@ export function AgentDetail({
 				</div>
 			</div>
 
+			{/* Artifacts panel -- slides in/out from right */}
+			<div
+				className="shrink-0 overflow-hidden border-l border-border transition-[width] duration-250 ease-in-out"
+				style={{ width: artifactsPanelOpen ? "40%" : 0 }}
+			>
+				<div className="h-full" style={{ minWidth: "40vw" }}>
+					<ArtifactsPanel sessionId={agent.sessionId} directory={agent.directory} />
+				</div>
+			</div>
+
 		</div>
 	)
 }
@@ -382,6 +407,8 @@ function SessionAppBarContent({
 	onToggleFileExplorer,
 	browserPanelOpen,
 	onToggleBrowserPanel,
+	artifactsPanelOpen,
+	onToggleArtifactsPanel,
 }: {
 	agent: Agent
 	isEditingTitle: boolean
@@ -399,21 +426,15 @@ function SessionAppBarContent({
 	onToggleFileExplorer: () => void
 	browserPanelOpen: boolean
 	onToggleBrowserPanel: () => void
+	artifactsPanelOpen: boolean
+	onToggleArtifactsPanel: () => void
 }) {
 	const navigate = useNavigate()
 	const diffStats = useAtomValue(sessionDiffStatsFamily(agent.sessionId))
-	const messages = useAtomValue(messagesFamily(agent.sessionId))
-	const hasMessages = messages.length > 0
 
 	return (
 		<div className="flex h-full w-full min-w-0 items-center gap-2.5">
-			{/* App name — hidden once the session has messages */}
-			{!hasMessages && (
-				<>
-					<HrambleWordmark className="hidden h-[11px] w-auto shrink-0 text-muted-foreground/70 md:block" />
-					<div className="hidden h-3 w-px shrink-0 bg-border/60 md:block" />
-				</>
-			)}
+			{/* App name — removed from the header for now. */}
 
 			{/* Breadcrumb: project / [branch badge] / session name */}
 			<div
@@ -559,6 +580,29 @@ function SessionAppBarContent({
 					</TooltipTrigger>
 					<TooltipContent>
 						{browserPanelOpen ? "Hide browser" : "Show browser"} (Cmd+Shift+B)
+					</TooltipContent>
+				</Tooltip>
+
+				{/* Artifacts panel toggle */}
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<button
+								type="button"
+								onClick={onToggleArtifactsPanel}
+								className={cn(
+									"flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+									artifactsPanelOpen
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:bg-muted hover:text-foreground",
+								)}
+							/>
+						}
+					>
+						<LayoutTemplateIcon className="size-3.5" />
+					</TooltipTrigger>
+					<TooltipContent>
+						{artifactsPanelOpen ? "Hide artifacts" : "Show artifacts"} (Cmd+Shift+A)
 					</TooltipContent>
 				</Tooltip>
 

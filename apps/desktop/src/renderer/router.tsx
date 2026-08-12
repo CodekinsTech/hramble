@@ -15,6 +15,13 @@ import { ErrorPage } from "./components/error-page"
 import { HomeChat } from "./components/home-chat"
 import { NewChat } from "./components/new-chat"
 import { NotFoundPage } from "./components/not-found-page"
+import {
+	ProForgeDesignDeck,
+	ProForgeFanOut,
+	ProForgeMasterSession,
+	ProForgePage,
+	ProForgeSwarm,
+} from "./components/proforge-page"
 import { RootLayout } from "./components/root-layout"
 import { SessionRoute } from "./components/session-route"
 import { AboutSettings } from "./components/settings/about-settings"
@@ -182,6 +189,44 @@ const settingsAboutRoute = createRoute({
 	component: AboutSettings,
 })
 
+const proforgeRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "proforge",
+	component: ProForgePage,
+})
+
+const proforgeIndexRoute = createRoute({
+	getParentRoute: () => proforgeRoute,
+	path: "/",
+	beforeLoad: () => {
+		throw redirect({ to: "/proforge/master-session" })
+	},
+})
+
+const proforgeMasterSessionRoute = createRoute({
+	getParentRoute: () => proforgeRoute,
+	path: "master-session",
+	component: ProForgeMasterSession,
+})
+
+const proforgeDesignDeckRoute = createRoute({
+	getParentRoute: () => proforgeRoute,
+	path: "design-deck",
+	component: ProForgeDesignDeck,
+})
+
+const proforgeSwarmRoute = createRoute({
+	getParentRoute: () => proforgeRoute,
+	path: "swarm",
+	component: ProForgeSwarm,
+})
+
+const proforgeFanOutRoute = createRoute({
+	getParentRoute: () => proforgeRoute,
+	path: "fan-out",
+	component: ProForgeFanOut,
+})
+
 const automationsRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "automations",
@@ -237,6 +282,13 @@ const routeTree = rootRoute.addChildren([
 			settingsStoreRoute,
 			settingsSetupRoute,
 			settingsAboutRoute,
+		]),
+		proforgeRoute.addChildren([
+			proforgeIndexRoute,
+			proforgeMasterSessionRoute,
+			proforgeDesignDeckRoute,
+			proforgeSwarmRoute,
+			proforgeFanOutRoute,
 		]),
 	]),
 ])

@@ -21,6 +21,8 @@ export interface TeamMember {
 	teamId: string
 	userId: string
 	role: "owner" | "member"
+	/** Owner-granted — lets this member combine pieces directly, without the owner doing it for them. Owners can already combine anything regardless of this flag. */
+	canCombine: boolean
 	joinedAt: number
 }
 
@@ -66,8 +68,20 @@ function rowToTeam(r: { id: string; name: string; owner_id: string; created_at: 
 	}
 }
 
-function rowToMember(r: { team_id: string; user_id: string; role: "owner" | "member"; joined_at: string }): TeamMember {
-	return { teamId: r.team_id, userId: r.user_id, role: r.role, joinedAt: new Date(r.joined_at).getTime() }
+function rowToMember(r: {
+	team_id: string
+	user_id: string
+	role: "owner" | "member"
+	can_combine: boolean
+	joined_at: string
+}): TeamMember {
+	return {
+		teamId: r.team_id,
+		userId: r.user_id,
+		role: r.role,
+		canCombine: r.can_combine,
+		joinedAt: new Date(r.joined_at).getTime(),
+	}
 }
 
 function rowToInvite(r: {
@@ -214,6 +228,14 @@ export async function updatePiece(
 	const { data, error } = await c.from("team_pieces").update(update).eq("id", pieceId).select().single()
 	if (error || !data) return null
 	return rowToPiece(data)
+}
+
+/** Owner-only (enforced by the set_member_trust RPC): grants or revokes a member's ability to combine pieces directly. */
+export async function setMemberTrust(teamId: string, userId: string, canCombine: boolean): Promise<boolean> {
+	const c = await getClient()
+	if (!c) return false
+	const { error } = await c.rpc("set_member_trust", { p_team_id: teamId, p_user_id: userId, p_can_combine: canCombine })
+	return !error
 }
 
 /** Sets the local repo directory this team's pieces combine into. */

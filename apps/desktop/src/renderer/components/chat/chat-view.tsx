@@ -121,7 +121,7 @@ function AttachButton({ disabled }: { disabled?: boolean }) {
 			onClick={() => attachments.openFileDialog()}
 			disabled={disabled}
 		>
-			<PlusIcon className="size-4" />
+			<PlusIcon className="size-3.5" />
 		</PromptInputButton>
 	)
 }
@@ -2498,6 +2498,7 @@ function ChatInputSection({
 										placeholder={
 											isWorking ? "Send a follow-up message..." : "What would you like to do?"
 										}
+										className="min-h-14 py-2.5"
 									/>
 
 									{/* Toolbar inside the card — agent + model + variant selectors + submit */}
@@ -2511,7 +2512,7 @@ function ChatInputSection({
 												}
 												title="Hyperloop — 7 parallel agents, each on a separate step"
 											>
-												<InfinityIcon className="size-4" />
+												<InfinityIcon className="size-3.5" />
 											</PromptInputButton>
 										)}
 											<PromptInputButton
@@ -2519,7 +2520,7 @@ function ChatInputSection({
 												className={stepsOpen || hasSteps ? "text-primary" : ""}
 												title="Loop — queue up to 7 steps and run them in sequence"
 											>
-												<ListOrderedIcon className="size-4" />
+												<ListOrderedIcon className="size-3.5" />
 											</PromptInputButton>
 											<AttachButton disabled={!isConnected} />
 											<PromptToolbar

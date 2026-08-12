@@ -18,6 +18,7 @@ import {
 	inviteMember as inviteMemberRemote,
 	postTeamActivity,
 	type PieceStatus,
+	setMemberTrust,
 	setTeamProjectDirectory,
 	type Team,
 	type TeamActivityEntry,
@@ -37,6 +38,12 @@ export const teamMembersAtom = atom<TeamMember[]>([])
 export const teamPiecesAtom = atom<TeamPiece[]>([])
 export const teamActivityAtom = atom<TeamActivityEntry[]>([])
 export const myPendingInvitesAtom = atom<TeamInvite[]>([])
+
+/** Master Session's Canvas tab — the last-known shared dev-server URL per team, cached locally so it shows immediately before the live relay connection (lib/master-session-relay.ts) syncs. */
+export const masterSessionPreviewUrlAtom = atomWithStorage<Record<string, string>>(
+	"hramble:masterSessionPreviewUrl",
+	{},
+)
 
 export const activeTeamAtom = atom((get) => {
 	const id = get(activeTeamIdAtom)
@@ -132,6 +139,25 @@ export const updatePieceStatusAtom = atom(
 					args.assignedTo ? `"${piece.name}" assigned to ${args.assignedTo}` : `"${piece.name}" unassigned`,
 				)
 			}
+		}
+		await set(refreshActiveTeamDetailAtom)
+	},
+)
+
+export const setMemberTrustAtom = atom(
+	null,
+	async (get, set, args: { userId: string; canCombine: boolean }) => {
+		const team = get(activeTeamAtom)
+		if (!team) return
+		const user = get(communityUserAtom)
+		const ok = await setMemberTrust(team.id, args.userId, args.canCombine)
+		if (ok && user) {
+			await postTeamActivity(
+				team.id,
+				user.email,
+				"trust_changed",
+				args.canCombine ? `Trusted ${args.userId} to combine directly` : `Revoked ${args.userId}'s combine trust`,
+			)
 		}
 		await set(refreshActiveTeamDetailAtom)
 	},

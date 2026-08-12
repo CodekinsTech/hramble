@@ -83,6 +83,14 @@ export const colorSchemeAtom = atomWithStorage<ColorScheme>("hramble:colorScheme
 export const companionCollapsedAtom = atomWithStorage<boolean>("hramble:companionCollapsed", false)
 
 /**
+ * Whether the companion has ever been activated. Off by default — the
+ * companion box isn't mounted at all (no narration, no VRM, nothing) until
+ * the user activates it (Store page → "Get your AI assistant"). Once true,
+ * it stays true forever, and companionCollapsedAtom takes over from there.
+ */
+export const companionActivatedAtom = atomWithStorage<boolean>("hramble:companionActivated", false)
+
+/**
  * Whether the user prefers opaque (non-transparent) windows.
  * When true, the renderer uses solid backgrounds instead of semi-transparent.
  */

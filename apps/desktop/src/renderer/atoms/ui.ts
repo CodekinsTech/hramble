@@ -53,6 +53,19 @@ export const reviewPanelSettingsAtom = atomWithStorage<ReviewPanelSettings>(
 )
 
 // ============================================================
+// Artifacts Panel State
+// ============================================================
+
+/**
+ * Whether the Artifacts panel is open — a browsable, rendered gallery of the
+ * renderable files (HTML/SVG/Markdown) this session has written or changed,
+ * derived from the same diff data the Review panel uses. Unlike the Browser
+ * pane (one live URL at a time), this covers everything from the whole
+ * session, side by side in a list.
+ */
+export const artifactsPanelOpenAtom = atom(false)
+
+// ============================================================
 // Community Panel State (agent hub pages — website/browser-game only)
 // ============================================================
 

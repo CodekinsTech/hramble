@@ -174,7 +174,8 @@ if (isDev) {
 }
 
 async function createWindow(): Promise<BrowserWindow> {
-	const title = isDev ? "Hramble Coder (Dev)" : "Hramble Coder"
+	// Header title removed for now (was "Hramble Coder" / "Hramble Coder (Dev)").
+	const title = ""
 
 	const isMac = process.platform === "darwin"
 
@@ -255,13 +256,13 @@ async function createWindow(): Promise<BrowserWindow> {
 		return { action: "deny" }
 	})
 
-	// In dev mode, ensure the window title always shows "(Dev)" suffix
+	// In dev mode, ensure the window title always shows "(Dev)" suffix — skipped
+	// while the header title is blanked out (see `title` above).
 	if (isDev) {
 		win.on("page-title-updated", (event, pageTitle) => {
-			if (!pageTitle.includes("(Dev)")) {
-				event.preventDefault()
-				win.setTitle(`${pageTitle} (Dev)`)
-			}
+			if (!pageTitle || pageTitle.includes("(Dev)")) return
+			event.preventDefault()
+			win.setTitle(`${pageTitle} (Dev)`)
 		})
 	}
 

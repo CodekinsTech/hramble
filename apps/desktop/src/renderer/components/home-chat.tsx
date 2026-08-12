@@ -23,6 +23,7 @@ import { agentFamily } from "../atoms/derived/agents"
 import { workspaceModeAtom } from "../atoms/workspace"
 import { useAgentActions } from "../hooks/use-server"
 import { HomeConversation } from "./home-conversation"
+import { HrambleLogo } from "./hramble-logo"
 import { useSetSidebarSlot } from "./sidebar-slot-context"
 import { WorkspaceSwitcher } from "./sidebar-layout"
 
@@ -189,8 +190,11 @@ export function HomeChat() {
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-6 p-6">
 			<div className="text-center">
+				<div className="mb-4 flex justify-center">
+					<HrambleLogo subtitle="Chat" />
+				</div>
 				<h1 className="text-balance font-semibold text-2xl text-foreground">How can I help?</h1>
-				<p className="mt-1 text-muted-foreground text-sm">Ask me anything — a general chat, no code needed.</p>
+				<p className="mt-1 text-muted-foreground text-sm">Ask me anything — a general chat.</p>
 			</div>
 			<div className="w-full max-w-2xl">
 				<textarea

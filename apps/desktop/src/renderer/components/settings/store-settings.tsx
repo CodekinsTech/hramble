@@ -1,7 +1,7 @@
 import { SearchIcon, SparklesIcon } from "lucide-react"
 import { useSetAtom } from "jotai"
 import { useEffect, useMemo, useState } from "react"
-import { companionCollapsedAtom } from "../../atoms/preferences"
+import { companionActivatedAtom, companionCollapsedAtom } from "../../atoms/preferences"
 
 // The avatar catalog (id, name, price in gems, description, tags…) is served from
 // public/store-avatars.json; thumbnails live in public/store-images/<id>.png.
@@ -24,6 +24,7 @@ export function StoreSettings() {
 	const [error, setError] = useState(false)
 	const [query, setQuery] = useState("")
 	const setCompanionCollapsed = useSetAtom(companionCollapsedAtom)
+	const setCompanionActivated = useSetAtom(companionActivatedAtom)
 
 	useEffect(() => {
 		let alive = true
@@ -66,7 +67,10 @@ export function StoreSettings() {
 				</div>
 				<button
 					type="button"
-					onClick={() => setCompanionCollapsed(false)}
+					onClick={() => {
+						setCompanionActivated(true)
+						setCompanionCollapsed(false)
+					}}
 					title="Show the companion box"
 					className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 font-medium text-xs hover:bg-muted"
 				>

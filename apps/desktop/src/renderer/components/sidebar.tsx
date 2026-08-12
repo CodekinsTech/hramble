@@ -40,12 +40,14 @@ import {
 	MoreVerticalIcon,
 	PlusIcon,
 	SettingsIcon,
+	SparklesIcon,
 	TimerIcon,
 	TrashIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { activeServerConfigAtom } from "../atoms/connection"
+import { companionActivatedAtom } from "../atoms/preferences"
 import { automationsEnabledAtom } from "../atoms/feature-flags"
 import {
 	type HyperloopRun,
@@ -206,6 +208,7 @@ export function AppSidebarContent({
 	const automationsEnabled = useAtomValue(automationsEnabledAtom)
 	const activeServer = useAtomValue(activeServerConfigAtom)
 	const isLocalServer = activeServer.type === "local"
+	const companionActivated = useAtomValue(companionActivatedAtom)
 	// Each mode gets its OWN session history: Code shows normal sessions,
 	// Hyperloop shows only Hyperloop-tagged ones. (Same projects; separate lists.)
 	const workspaceMode = useAtomValue(workspaceModeAtom)
@@ -306,8 +309,9 @@ export function AppSidebarContent({
 					</div>
 				)}
 
-			{/* Avatar companion — docked here, click to pop out & drag anywhere */}
-			<HrambleAvatar />
+			{/* Avatar companion — docked here, click to pop out & drag anywhere.
+			    Not mounted at all until activated from Store → "Get your AI assistant". */}
+			{companionActivated && <HrambleAvatar />}
 
 			{/* New Session + Automations */}
 			<SidebarGroup>
@@ -452,6 +456,18 @@ export function AppSidebarContent({
 				)}
 						</SidebarContent>
 			<SidebarFooter className="space-y-0 p-2">
+				<SidebarMenu>
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="ProForge — Pro & company-level capabilities"
+							onClick={() => navigate({ to: "/proforge" })}
+							className="text-primary"
+						>
+							<SparklesIcon className="size-4" />
+							<span>ProForge</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				</SidebarMenu>
 				<ServerIndicator />
 				<SidebarMenu>
 					<SidebarMenuItem>

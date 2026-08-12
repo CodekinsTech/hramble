@@ -83,7 +83,6 @@ import { useSetAppBarContent } from "./app-bar-context"
 import { BranchPicker } from "./branch-picker"
 import { PromptAttachmentPreview } from "./chat/prompt-attachments"
 import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
-import { HrambleWordmark } from "./hramble-wordmark"
 import { HrambleLogo } from "./hramble-logo"
 import { GraphView } from "./graph-view"
 import { HyperloopSpinner } from "./hyperloop-spinner"
@@ -243,12 +242,10 @@ export function NewChat() {
 	const { createSession, sendPrompt } = useAgentActions()
 	const navigate = useNavigate()
 
-	// Inject app name into the AppBar
+	// App name in the AppBar — removed from the header for now.
 	const setAppBarContent = useSetAppBarContent()
 	useLayoutEffect(() => {
-		setAppBarContent(
-			<HrambleWordmark className="h-[11px] w-auto shrink-0 text-muted-foreground/70" />,
-		)
+		setAppBarContent(null)
 		return () => setAppBarContent(null)
 	}, [setAppBarContent])
 
@@ -1819,6 +1816,7 @@ export function NewChat() {
 								autoFocus
 								disabled={launching || badFolder || projects.length === 0}
 								onKeyDown={handleTextareaKeyDown}
+								className="min-h-14 py-2.5"
 							/>
 
 							{/* Toolbar inside the card — agent + model + variant selectors */}

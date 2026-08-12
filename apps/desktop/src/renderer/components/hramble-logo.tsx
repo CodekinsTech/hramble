@@ -5,7 +5,7 @@ import catUrl from "../hramble-cat.png"
  * cat (colour-cycles green → blue → amber → white, blinks, forehead glow),
  * "Hramble" wordmark (Quadrangle, colour-cycling) + grey "code".
  */
-export function HrambleLogo() {
+export function HrambleLogo({ subtitle = "Coder" }: { subtitle?: string }) {
 	return (
 		<div className="hramble-logo">
 			<div className="hramble-stage">
@@ -18,7 +18,7 @@ export function HrambleLogo() {
 			</div>
 			<div className="hramble-mark">
 				<span className="hramble-word">Hramble</span>
-				<span className="hramble-code">Coder</span>
+				<span className="hramble-code">{subtitle}</span>
 			</div>
 		</div>
 	)
