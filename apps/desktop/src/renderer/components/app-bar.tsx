@@ -1,3 +1,4 @@
+import type React from "react"
 import { useAppBarContent } from "./app-bar-context"
 
 // Height of the app bar in pixels — used as CSS variable
@@ -10,7 +11,7 @@ function isElectron(): boolean {
 	return typeof window !== "undefined" && "hramble" in window
 }
 
-export function AppBar() {
+export function AppBar({ rightSlot }: { rightSlot?: React.ReactNode }) {
 	const pageContent = useAppBarContent()
 
 	return (
@@ -26,6 +27,15 @@ export function AppBar() {
 		>
 			{/* ===== Page content (via portal) ===== */}
 			<div className="relative flex h-full min-w-0 flex-1 items-center">{pageContent}</div>
+			{rightSlot && (
+				<div
+					className="flex shrink-0 items-center gap-0.5"
+					// @ts-expect-error -- vendor-prefixed CSS property
+					style={{ WebkitAppRegion: "no-drag" }}
+				>
+					{rightSlot}
+				</div>
+			)}
 		</div>
 	)
 }

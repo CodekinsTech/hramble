@@ -10,8 +10,10 @@ import {
 	ArrowLeftIcon,
 	ArrowUpRightIcon,
 	CheckIcon,
+	ChevronLeftIcon,
 	CopyIcon,
 	ExternalLinkIcon,
+	LinkIcon,
 	FileDiffIcon,
 	FolderTreeIcon,
 	GlobeIcon,
@@ -19,6 +21,7 @@ import {
 	MoreHorizontalIcon,
 	PencilIcon,
 	RadioTowerIcon,
+	SendIcon,
 	TerminalIcon,
 	XIcon,
 } from "lucide-react"
@@ -32,8 +35,10 @@ import type {
 	SdkAgent,
 	VcsData,
 } from "../hooks/use-opencode-data"
-import { useServerConnection } from "../hooks/use-server"
+import { useAgents } from "../hooks/use-agents"
+import { useAgentActions, useServerConnection } from "../hooks/use-server"
 import { useSessionShare } from "../hooks/use-session-share"
+import { useSessionBridge } from "../hooks/use-session-bridge"
 import type { ChatTurn } from "../hooks/use-session-chat"
 import type { Agent, FileAttachment, QuestionAnswer } from "../lib/types"
 import {
@@ -563,6 +568,8 @@ function SessionAppBarContent({
 					shareDirectory={agent.directory}
 					openDirectory={agent.worktreePath ?? agent.directory}
 					sessionId={agent.sessionId}
+					agentName={agent.name}
+					project={agent.project}
 				/>
 
 					{/* Close button */}
@@ -649,15 +656,38 @@ function SessionMoreMenu({
 	shareDirectory,
 	openDirectory,
 	sessionId,
+	agentName,
+	project,
 }: {
 	shareDirectory: string
 	openDirectory: string
 	sessionId: string
+	agentName: string
+	project: string
 }) {
 	// --- Live Share ---
 	const { shareUrl, isSharing, start, stop } = useSessionShare(shareDirectory, sessionId)
 	const [shareCopied, setShareCopied] = useState(false)
 	const [shareError, setShareError] = useState<string | null>(null)
+
+	// --- Session Bridge ---
+	const { bridgeUrl, isBridging, start: startBridge, stop: stopBridge } = useSessionBridge(
+		shareDirectory, sessionId, agentName, project,
+	)
+	const [bridgeCopied, setBridgeCopied] = useState(false)
+	const [bridgeError, setBridgeError] = useState<string | null>(null)
+
+	const handleStartBridge = useCallback(() => {
+		const result = startBridge()
+		setBridgeError(result.ok ? null : result.error)
+	}, [startBridge])
+
+	const copyBridgeLink = useCallback(() => {
+		if (!bridgeUrl) return
+		navigator.clipboard.writeText(bridgeUrl)
+		setBridgeCopied(true)
+		setTimeout(() => setBridgeCopied(false), 1500)
+	}, [bridgeUrl])
 
 	const handleStartShare = useCallback(() => {
 		const result = start()
@@ -670,6 +700,31 @@ function SessionMoreMenu({
 		setShareCopied(true)
 		setTimeout(() => setShareCopied(false), 1500)
 	}, [shareUrl])
+
+	// --- Send to Session ---
+	const allAgents = useAgents()
+	const { sendPrompt } = useAgentActions()
+	const otherSessions = allAgents.filter((a) => a.sessionId !== sessionId)
+	const [targetSession, setTargetSession] = useState<(typeof allAgents)[0] | null>(null)
+	const [crossMsg, setCrossMsg] = useState("")
+	const [sending, setSending] = useState(false)
+
+	const handleSendToSession = useCallback(async () => {
+		if (!targetSession || !crossMsg.trim()) return
+		setSending(true)
+		try {
+			await sendPrompt(targetSession.directory, targetSession.sessionId, crossMsg.trim())
+			toast.success(`Message sent to "${targetSession.name}"`, {
+				description: "Switch to that session to see the response.",
+			})
+			setCrossMsg("")
+			setTargetSession(null)
+		} catch {
+			toast.error("Failed to send message")
+		} finally {
+			setSending(false)
+		}
+	}, [targetSession, crossMsg, sendPrompt])
 
 	// --- Open elsewhere (browser / editor / terminal) ---
 	const browserUrl = useAtomValue(browserUrlAtom)
@@ -788,6 +843,93 @@ function SessionMoreMenu({
 								<RadioTowerIcon className="size-3.5" />
 								Start Live Share
 							</Button>
+						</div>
+					)}
+				</div>
+
+				<div className="h-px bg-border" />
+
+				{/* Session Bridge */}
+				<div className="p-3">
+					<p className="font-medium text-sm">Session Bridge</p>
+					{isBridging ? (
+						<div className="mt-2 flex flex-col gap-2">
+							<div className="flex items-center gap-2">
+								<Input readOnly value={bridgeUrl ?? ""} className="text-xs" onFocus={(e) => e.target.select()} />
+								<Button size="sm" variant="outline" onClick={copyBridgeLink}>
+									{bridgeCopied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+								</Button>
+							</div>
+							<Button size="sm" variant="ghost" onClick={stopBridge} className="self-start text-muted-foreground">
+								Stop bridge
+							</Button>
+						</div>
+					) : (
+						<div className="mt-2 flex flex-col gap-2">
+							<p className="text-muted-foreground text-xs">
+								Generate a link so another Hramble instance can join and continue this session.
+							</p>
+							{bridgeError && <p className="text-red-500 text-xs">{bridgeError}</p>}
+							<Button size="sm" variant="outline" onClick={handleStartBridge} className="w-fit gap-1.5">
+								<LinkIcon className="size-3.5" />
+								Create Bridge Link
+							</Button>
+						</div>
+					)}
+				</div>
+
+				<div className="h-px bg-border" />
+
+				{/* Send to Session */}
+				<div className="p-3">
+					<p className="font-medium text-sm">Send to Session</p>
+					{otherSessions.length === 0 ? (
+						<p className="mt-1 text-muted-foreground text-xs">No other sessions open</p>
+					) : targetSession ? (
+						<div className="mt-2 flex flex-col gap-2">
+							<button
+								type="button"
+								onClick={() => setTargetSession(null)}
+								className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
+							>
+								<ChevronLeftIcon className="size-3" />
+								<span className="truncate max-w-[180px] font-medium text-foreground">{targetSession.name}</span>
+							</button>
+							<Input
+								autoFocus
+								value={crossMsg}
+								onChange={(e) => setCrossMsg(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendToSession() }
+								}}
+								placeholder="Message for that session…"
+								className="text-xs"
+								disabled={sending}
+							/>
+							<Button
+								size="sm"
+								variant="outline"
+								className="w-fit gap-1.5"
+								onClick={() => void handleSendToSession()}
+								disabled={!crossMsg.trim() || sending}
+							>
+								<SendIcon className="size-3.5" />
+								{sending ? "Sending…" : "Send"}
+							</Button>
+						</div>
+					) : (
+						<div className="mt-2 flex flex-col gap-0.5">
+							{otherSessions.map((s) => (
+								<button
+									key={s.sessionId}
+									type="button"
+									onClick={() => setTargetSession(s)}
+									className="flex flex-col items-start rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted"
+								>
+									<span className="text-xs font-medium leading-tight truncate max-w-full">{s.name}</span>
+									<span className="text-[10px] text-muted-foreground truncate max-w-full">{s.project}</span>
+								</button>
+							))}
 						</div>
 					)}
 				</div>

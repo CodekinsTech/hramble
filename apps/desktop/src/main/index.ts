@@ -206,6 +206,9 @@ async function createWindow(): Promise<BrowserWindow> {
 		// Don't show the window until the renderer has painted its first frame.
 		// Prevents a flash of transparent/empty content, especially on Wayland.
 		show: false,
+		// On Windows/Linux the menu bar renders inside the window (unlike macOS where
+		// it lives in the system menu bar). Hide it so the UI matches the Mac design.
+		autoHideMenuBar: !isMac,
 		// Three-tier window chrome — options from resolveWindowChrome()
 		...chrome.options,
 		// Window icon for Linux/Windows

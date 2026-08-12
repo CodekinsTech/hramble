@@ -530,6 +530,11 @@ export interface HrambleAPI {
 		sessions: (directory: string) => Promise<GraphSessionSummary[]>
 	}
 
+	// Custom window controls (Windows only — replaces titleBarOverlay)
+	minimizeWindow?: () => Promise<void>
+	maximizeWindow?: () => Promise<void>
+	closeWindow?: () => Promise<void>
+
 	// Window preferences (opaque windows / transparency)
 	/** Get the persisted opaque windows preference from the main process. */
 	getOpaqueWindows: () => Promise<boolean>

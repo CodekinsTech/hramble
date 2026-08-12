@@ -91,6 +91,11 @@ contextBridge.exposeInMainWorld("hramble", {
 		truncated: boolean
 	}> => ipcRenderer.invoke("repo:graph", directory),
 
+	/** Custom window controls for Windows (replaces titleBarOverlay). */
+	minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
+	maximizeWindow: () => ipcRenderer.invoke("window:maximize"),
+	closeWindow: () => ipcRenderer.invoke("window:close"),
+
 	/** Stops the managed OpenCode server. */
 	stopOpenCode: () => ipcRenderer.invoke("opencode:stop"),
 
