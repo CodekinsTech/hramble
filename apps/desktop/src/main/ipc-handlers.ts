@@ -496,6 +496,268 @@ export function registerIpcHandlers(): void {
 		},
 	)
 
+	// Remove one thing from the Brain — either a skill folder or a registry
+	// entry. For "skill" the id is the skill name; we slugify it the same way
+	// create_skill does and delete ~/.config/opencode/skills/<slug>. For
+	// "registry" we drop the entry whose id or name matches and rewrite the json.
+	// Guarded throughout — never throws across IPC.
+	ipcMain.handle(
+		"brain:remove-item",
+		async (
+			_e,
+			args: { kind: "skill" | "registry"; id: string },
+		): Promise<{ ok: boolean; error?: string }> => {
+			try {
+				const kind = args?.kind
+				const id = (args?.id || "").trim()
+				if (!id) return { ok: false, error: "No item id provided." }
+				const configDir = path.join(os.homedir(), ".config", "opencode")
+				if (kind === "skill") {
+					const slug =
+						id
+							.toLowerCase()
+							.replace(/[^a-z0-9]+/g, "-")
+							.replace(/^-+|-+$/g, "") || id
+					fs.rmSync(path.join(configDir, "skills", slug), { recursive: true, force: true })
+					return { ok: true }
+				}
+				if (kind === "registry") {
+					const registryPath = path.join(configDir, "brain-registry.json")
+					let registry: Array<{ id?: string; name?: string }> = []
+					try {
+						const parsed = JSON.parse(fs.readFileSync(registryPath, "utf8"))
+						if (Array.isArray(parsed)) registry = parsed
+					} catch {
+						return { ok: true } // No registry on disk — nothing to remove.
+					}
+					const next = registry.filter((e) => e && e.id !== id && e.name !== id)
+					fs.writeFileSync(registryPath, JSON.stringify(next, null, 2))
+					return { ok: true }
+				}
+				return { ok: false, error: "Unknown item kind." }
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
+	// Publish the selected Brain items to a private GitHub repo — the payoff of
+	// the Share Brain wizard. Assembles a fresh publish dir under userData with
+	// only the selected skill folders + a filtered registry, then writes a
+	// machine-readable manifest.json (tools' install commands, models' source
+	// links — NEVER any credentials/tokens) and a human BRAIN.md README, and
+	// pushes via the `gh` CLI (creating the repo on first run, plain push after).
+	ipcMain.handle(
+		"brain:publish-git",
+		async (
+			_e,
+			args: { items: Array<{ kind: "skill" | "registry"; id: string; name: string; type?: string }> },
+		): Promise<{ ok: boolean; url?: string; error?: string }> => {
+			try {
+				const items = Array.isArray(args?.items) ? args.items : []
+				if (items.length === 0) return { ok: false, error: "Nothing selected to publish." }
+
+				const configDir = path.join(os.homedir(), ".config", "opencode")
+				const srcSkillsDir = path.join(configDir, "skills")
+				const registryPath = path.join(configDir, "brain-registry.json")
+
+				// Full registry, read once — used to filter + to fill the manifest.
+				let registry: Array<Record<string, unknown>> = []
+				try {
+					const parsed = JSON.parse(fs.readFileSync(registryPath, "utf8"))
+					if (Array.isArray(parsed)) registry = parsed
+				} catch {
+					registry = []
+				}
+
+				const field = (content: string, key: string) => {
+					const raw = (content.match(new RegExp(`^${key}:\\s*(.*)$`, "m")) || [])[1]?.trim()
+					if (!raw) return undefined
+					if (
+						raw.length >= 2 &&
+						((raw[0] === '"' && raw.at(-1) === '"') || (raw[0] === "'" && raw.at(-1) === "'"))
+					) {
+						return raw.slice(1, -1)
+					}
+					return raw
+				}
+				const slugify = (s: string) =>
+					s
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, "-")
+						.replace(/^-+|-+$/g, "")
+
+				// Fresh publish dir, but keep any existing .git so re-runs push to
+				// the SAME repo. Only the generated content is cleared + rebuilt.
+				const publishDir = path.join(app.getPath("userData"), "brain-repo")
+				await mkdir(publishDir, { recursive: true })
+				for (const stale of ["skills", "brain-registry.json", "manifest.json", "BRAIN.md"]) {
+					fs.rmSync(path.join(publishDir, stale), { recursive: true, force: true })
+				}
+				const outSkillsDir = path.join(publishDir, "skills")
+				await mkdir(outSkillsDir, { recursive: true })
+
+				const manifest = {
+					generatedAt: new Date().toISOString(),
+					skills: [] as Array<{ name: string; description: string; type: string }>,
+					tools: [] as Array<{ name: string; command: string; source?: string }>,
+					models: [] as Array<{ name: string; source?: string }>,
+					connectors: [] as unknown[],
+				}
+				const keptRegistry: Array<Record<string, unknown>> = []
+
+				for (const item of items) {
+					if (item.kind === "skill") {
+						const slug = slugify(item.id) || item.id
+						const src = path.join(srcSkillsDir, slug)
+						let description = ""
+						let type = item.type || "skill"
+						try {
+							const content = fs.readFileSync(path.join(src, "SKILL.md"), "utf8")
+							description = field(content, "description") || ""
+							type = field(content, "type") || type
+						} catch {
+							// No SKILL.md — still copy whatever's there + list it.
+						}
+						try {
+							fs.cpSync(src, path.join(outSkillsDir, slug), { recursive: true })
+						} catch {
+							// Folder missing on disk — skip the copy, keep the manifest line.
+						}
+						manifest.skills.push({ name: item.name, description, type })
+					} else if (item.kind === "registry") {
+						const entry = registry.find(
+							(e) => e && (e.id === item.id || e.name === item.id || e.name === item.name),
+						)
+						if (!entry) continue
+						keptRegistry.push(entry)
+						const name = String(entry.name ?? item.name)
+						const command = String(entry.command ?? "")
+						const source = entry.source ? String(entry.source) : undefined
+						if (entry.kind === "model") manifest.models.push({ name, source })
+						else manifest.tools.push({ name, command, source })
+					}
+				}
+
+				fs.writeFileSync(
+					path.join(publishDir, "brain-registry.json"),
+					JSON.stringify(keptRegistry, null, 2),
+				)
+				fs.writeFileSync(path.join(publishDir, "manifest.json"), JSON.stringify(manifest, null, 2))
+
+				// Human README — what this is, a one-line count, and a rebuild guide
+				// with the tools/models as checklists.
+				const md: string[] = []
+				md.push("# Hramble Brain")
+				md.push("")
+				md.push(
+					"A shared, portable **Brain** for Hramble Coder — a bundle of reusable skills, CLI tools and local models taught on another machine.",
+				)
+				md.push("")
+				md.push(
+					`**Contents:** ${manifest.skills.length} skills · ${manifest.tools.length} tools · ${manifest.models.length} models`,
+				)
+				md.push("")
+				md.push("## To bring it live")
+				md.push("")
+				md.push(
+					"Import this repo into Hramble (Brain → Import), then run setup to install the listed tools, download the models, and reconnect any services. Nothing here contains secrets or tokens — you re-authenticate services yourself.",
+				)
+				md.push("")
+				if (manifest.skills.length > 0) {
+					md.push("## Skills")
+					md.push("")
+					for (const s of manifest.skills) md.push(`- **${s.name}** — ${s.description || s.type}`)
+					md.push("")
+				}
+				if (manifest.tools.length > 0) {
+					md.push("## Tools to install")
+					md.push("")
+					for (const t of manifest.tools) {
+						md.push(
+							`- [ ] **${t.name}**${t.command ? ` — \`${t.command}\`` : ""}${t.source ? ` (${t.source})` : ""}`,
+						)
+					}
+					md.push("")
+				}
+				if (manifest.models.length > 0) {
+					md.push("## Models to download")
+					md.push("")
+					for (const m of manifest.models) {
+						md.push(`- [ ] **${m.name}**${m.source ? ` — ${m.source}` : ""}`)
+					}
+					md.push("")
+				}
+				fs.writeFileSync(path.join(publishDir, "BRAIN.md"), md.join("\n"))
+
+				// --- Git + gh publish ---
+				const run = (cmd: string, cmdArgs: string[], timeout = 120000) =>
+					new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+						execFile(
+							cmd,
+							cmdArgs,
+							{ cwd: publishDir, timeout, maxBuffer: 8 * 1024 * 1024 },
+							(err, stdout, stderr) => {
+								const e = err as (Error & { code?: number | string }) | null
+								const code = e && typeof e.code === "number" ? e.code : e ? 1 : 0
+								resolve({ code, stdout: String(stdout), stderr: String(stderr) })
+							},
+						)
+					})
+
+				if (!fs.existsSync(path.join(publishDir, ".git"))) {
+					await run("git", ["init"])
+					await run("git", ["checkout", "-B", "main"])
+				}
+				await run("git", ["add", "-A"])
+				// Commit — a non-zero exit here just means "nothing changed", fine.
+				await run("git", ["commit", "-m", `Update brain ${new Date().toISOString()}`])
+
+				// gh must be present + authenticated for the push half.
+				const ghVersion = await run("gh", ["--version"], 15000)
+				if (ghVersion.code !== 0) {
+					return {
+						ok: false,
+						error: "GitHub CLI (gh) is not installed — install it, then run `gh auth login`.",
+					}
+				}
+				const auth = await run("gh", ["auth", "status"], 15000)
+				if (auth.code !== 0) {
+					return {
+						ok: false,
+						error: "GitHub CLI not authenticated — run `gh auth login` in a terminal first.",
+					}
+				}
+
+				// Already linked to a repo? → just push. Otherwise create + push.
+				const view = await run("gh", ["repo", "view", "--json", "url", "-q", ".url"], 30000)
+				if (view.code === 0 && view.stdout.trim()) {
+					const pushed = await run("git", ["push"], 120000)
+					if (pushed.code !== 0) {
+						const pushU = await run("git", ["push", "-u", "origin", "HEAD"], 120000)
+						if (pushU.code !== 0) {
+							return { ok: false, error: pushU.stderr.trim() || "git push failed." }
+						}
+					}
+					return { ok: true, url: view.stdout.trim() }
+				}
+
+				const created = await run(
+					"gh",
+					["repo", "create", "hramble-brain", "--private", "--source=.", "--push"],
+					120000,
+				)
+				if (created.code !== 0) {
+					return { ok: false, error: created.stderr.trim() || "Couldn't create the GitHub repo." }
+				}
+				const url = await run("gh", ["repo", "view", "--json", "url", "-q", ".url"], 30000)
+				return { ok: true, url: url.stdout.trim() || undefined }
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
 	// A fresh, isolated scratch directory for one Design Deck variant. Each
 	// (runId, index) pair gets its own folder under userData so parallel
 	// variant sessions never write over each other or the user's real projects.

@@ -382,7 +382,7 @@ function BrainArmCard({
 }
 
 /** The Vault — a browsable record of everything that's been added to the Brain. */
-function BrainVaultView() {
+function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	const [entries, setEntries] = useState<BrainVaultEntry[] | null>(null)
 	const [registry, setRegistry] = useState<BrainRegistryEntry[]>([])
 	const [filter, setFilter] = useState<"all" | BrainVaultEntry["type"]>("all")
@@ -395,6 +395,9 @@ function BrainVaultView() {
 	const [scanError, setScanError] = useState<string | null>(null)
 	const [report, setReport] = useState<Array<{ id: string; status: ScanStatus; detail: string }> | null>(null)
 	const [scanned, setScanned] = useState<ScanTarget[]>([])
+	// Save-to-GitHub state for the report step.
+	const [publishing, setPublishing] = useState(false)
+	const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
 	const user = useAtomValue(communityUserAtom)
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const setPosts = useSetAtom(communityPostsAtom)
@@ -552,6 +555,7 @@ function BrainVaultView() {
 		setChecked(init)
 		setReport(null)
 		setScanError(null)
+		setPublishedUrl(null)
 		setWizardStep("select")
 	}
 
@@ -568,6 +572,7 @@ function BrainVaultView() {
 		setScanned(selected)
 		setReport(null)
 		setScanError(null)
+		setPublishedUrl(null)
 		setWizardStep("report")
 		setScanning(true)
 		try {
@@ -584,6 +589,60 @@ function BrainVaultView() {
 			setScanError("Couldn't scan — try again.")
 		} finally {
 			setScanning(false)
+		}
+	}
+
+	// Removes one flagged item from the Brain (skill folder or registry entry),
+	// then drops its row from the report so the list reflects reality.
+	const removeRow = async (t: ScanTarget) => {
+		const kind = t.key.startsWith("reg:") ? "registry" : "skill"
+		try {
+			const res = await bridge()?.removeBrainItem?.(kind, t.item.id)
+			if (res?.ok) {
+				toast.success(`Removed ${t.name}`)
+				setScanned((prev) => prev.filter((x) => x.key !== t.key))
+				void refresh()
+			} else {
+				toast.error(res?.error || "Couldn't remove that item.")
+			}
+		} catch {
+			toast.error("Couldn't remove that item.")
+		}
+	}
+
+	// Publishes the scanned set to a private GitHub repo (skills + registry +
+	// manifest + BRAIN.md). Surfaces the repo URL on success, the error on fail.
+	const publish = async () => {
+		setPublishing(true)
+		setPublishedUrl(null)
+		try {
+			const items = scanned.map((t) => ({
+				kind: (t.key.startsWith("reg:") ? "registry" : "skill") as "skill" | "registry",
+				id: t.item.id,
+				name: t.name,
+				type: t.metaType,
+			}))
+			const res = await bridge()?.publishBrainToGit?.(items)
+			if (res?.ok) {
+				setPublishedUrl(res.url ?? null)
+				toast.success("Brain published to GitHub")
+			} else {
+				toast.error(res?.error || "Couldn't publish the Brain.")
+			}
+		} catch {
+			toast.error("Couldn't publish the Brain.")
+		} finally {
+			setPublishing(false)
+		}
+	}
+
+	const copyUrl = async () => {
+		if (!publishedUrl) return
+		try {
+			await navigator.clipboard.writeText(publishedUrl)
+			toast.success("Link copied")
+		} catch {
+			toast.error("Couldn't copy the link.")
 		}
 	}
 
@@ -739,6 +798,26 @@ function BrainVaultView() {
 		const warnCount = scanned.filter((t, i) => statusFor(i, t.item.id).status === "warn").length
 		const deadCount = scanned.filter((t, i) => statusFor(i, t.item.id).status === "dead").length
 
+		// Repair/publish are only meaningful once a real report is in.
+		const canAct = !scanning && !scanError && !!report
+		const anyFlagged = canAct && warnCount + deadCount > 0
+		const anyDead = canAct && deadCount > 0
+
+		// One instruction that lists every flagged item + its issue, handed to a
+		// Brain session to actually fix (update the real skill/registry entries).
+		const buildRepairPrompt = () => {
+			const flagged = scanned
+				.map((t, i) => ({ t, r: statusFor(i, t.item.id) }))
+				.filter((x) => x.r.status !== "ok")
+			const list = flagged
+				.map(({ t, r }) => {
+					const where = t.item.source || t.item.command || ""
+					return `- ${t.name} (${t.metaType}${where ? `, ${where}` : ""}): ${r.status === "dead" ? "DEAD" : "needs repair"} — ${r.detail}`
+				})
+				.join("\n")
+			return `Some items in my Brain failed a health check. Work through each one and fix it:\n\n${list}\n\nFor each item: find the doc/tool's new location or URL if it moved, refresh a changed or missing install command, or otherwise re-verify it works. Update the ACTUAL skill files and registry entries — call create_skill (for skills/docs/repos/software) or register_brain_tool (for tools/models) with the corrected source/command, and mark verified: true ONLY after you actually confirm it works. If something genuinely can't be fixed (permanently gone), say so plainly and leave it unverified — do NOT invent success or claim you fixed something you didn't. When done, tell me what you fixed and what you couldn't.`
+		}
+
 		return (
 			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
 				<div className="flex flex-col gap-1">
@@ -775,13 +854,54 @@ function BrainVaultView() {
 										)}
 									</div>
 									{pill(r.status)}
+									{r.status !== "ok" && (
+										<button
+											type="button"
+											title="Remove from Brain"
+											onClick={() => void removeRow(t)}
+											className="shrink-0 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-600 dark:hover:text-red-400"
+										>
+											Remove
+										</button>
+									)}
 								</div>
 							)
 						})}
 					</div>
 				)}
 
-				<div className="flex items-center justify-between gap-2">
+				{publishedUrl && (
+					<div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+						<span className="shrink-0 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
+							Published
+						</span>
+						<code className="min-w-0 flex-1 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+							{publishedUrl}
+						</code>
+						<button
+							type="button"
+							onClick={() => void copyUrl()}
+							className="shrink-0 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] text-foreground transition-colors hover:border-primary/40"
+						>
+							Copy
+						</button>
+						<button
+							type="button"
+							onClick={() => void bridge()?.openExternal?.(publishedUrl)}
+							className="shrink-0 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] text-foreground transition-colors hover:border-primary/40"
+						>
+							Open
+						</button>
+					</div>
+				)}
+
+				{anyDead && !publishedUrl && (
+					<p className="text-[11px] text-amber-600 dark:text-amber-400">
+						Some items are dead — remove or repair them first?
+					</p>
+				)}
+
+				<div className="flex items-start justify-between gap-2">
 					<button
 						type="button"
 						onClick={() => setWizardStep("select")}
@@ -789,16 +909,28 @@ function BrainVaultView() {
 					>
 						Back
 					</button>
-					<div className="flex items-center gap-2">
-						<span className="text-[11px] text-muted-foreground/70">(repair + publish coming next)</span>
-						<button
-							type="button"
-							disabled
-							title="Coming in the next update"
-							className="flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground opacity-40"
-						>
-							Repair &amp; Save to Git
-						</button>
+					<div className="flex flex-col items-end gap-1">
+						<div className="flex items-center gap-2">
+							<button
+								type="button"
+								onClick={() => onTeach(buildRepairPrompt())}
+								disabled={!anyFlagged}
+								className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40 disabled:opacity-40"
+							>
+								Repair flagged
+							</button>
+							<button
+								type="button"
+								onClick={() => void publish()}
+								disabled={publishing || !canAct}
+								className="flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-60"
+							>
+								{publishing ? "Publishing…" : "Save to GitHub"}
+							</button>
+						</div>
+						<span className="max-w-xs text-right text-[11px] text-muted-foreground/60">
+							Opens a Brain session to fix the flagged items; re-scan after to confirm.
+						</span>
 					</div>
 				</div>
 			</div>
@@ -1082,7 +1214,7 @@ export function BrainPage() {
 			</div>
 
 			{tab === "vault" ? (
-				<BrainVaultView />
+				<BrainVaultView onTeach={(p) => void start(p)} />
 			) : (
 				<div className="flex w-full flex-1 flex-col items-center justify-center gap-8">
 					<div className="text-center">

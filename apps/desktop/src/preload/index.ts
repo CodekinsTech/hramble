@@ -58,6 +58,16 @@ contextBridge.exposeInMainWorld("hramble", {
 		}>,
 	): Promise<Array<{ id: string; status: "ok" | "warn" | "dead"; detail: string }>> =>
 		ipcRenderer.invoke("brain:scan", items),
+	/** Removes one Brain item — deletes a skill folder ("skill") or drops a registry entry ("registry"). */
+	removeBrainItem: (
+		kind: "skill" | "registry",
+		id: string,
+	): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("brain:remove-item", { kind, id }),
+	/** Publishes the selected Brain items to a private GitHub repo (skills + filtered registry + manifest + BRAIN.md, no secrets). */
+	publishBrainToGit: (
+		items: Array<{ kind: "skill" | "registry"; id: string; name: string; type?: string }>,
+	): Promise<{ ok: boolean; url?: string; error?: string }> =>
+		ipcRenderer.invoke("brain:publish-git", { items }),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),
