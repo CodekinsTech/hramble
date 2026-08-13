@@ -14,6 +14,17 @@ contextBridge.exposeInMainWorld("hramble", {
 	getAppInfo: () => ipcRenderer.invoke("app:info"),
 	getHomeDir: (): Promise<string> => ipcRenderer.invoke("home:dir"),
 	getBrainDir: (): Promise<string> => ipcRenderer.invoke("brain:dir"),
+	/** Everything that's been added to the Brain (skills/repos/software/models), with verify status. */
+	getBrainVault: (): Promise<
+		Array<{
+			name: string
+			description: string
+			type: "skill" | "repo" | "software" | "model"
+			verified: boolean
+			source?: string
+			addedAt: number
+		}>
+	> => ipcRenderer.invoke("brain:vault"),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),

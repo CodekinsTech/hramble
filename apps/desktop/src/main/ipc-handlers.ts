@@ -1,4 +1,6 @@
+import fs from "node:fs"
 import { mkdir } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, shell, systemPreferences } from "electron"
@@ -194,6 +196,59 @@ export function registerIpcHandlers(): void {
 		const dir = path.join(app.getPath("userData"), "brain-chat")
 		await mkdir(dir, { recursive: true })
 		return dir
+	})
+
+	// Everything that's been added to the Brain — one entry per skill folder
+	// under ~/.config/opencode/skills (same place create_skill writes). Reads
+	// the SKILL.md frontmatter, including the newer verify-before-trust fields
+	// (type / verified / source), so the Brain Vault can show what's been
+	// taught and whether it was actually tested.
+	ipcMain.handle("brain:vault", () => {
+		const skillsDir = path.join(os.homedir(), ".config", "opencode", "skills")
+		let entries: fs.Dirent[]
+		try {
+			entries = fs.readdirSync(skillsDir, { withFileTypes: true })
+		} catch {
+			return []
+		}
+		const field = (content: string, key: string) => {
+			const raw = (content.match(new RegExp(`^${key}:\\s*(.*)$`, "m")) || [])[1]?.trim()
+			if (!raw) return undefined
+			if (
+				raw.length >= 2 &&
+				((raw[0] === '"' && raw.at(-1) === '"') || (raw[0] === "'" && raw.at(-1) === "'"))
+			) {
+				return raw.slice(1, -1)
+			}
+			return raw
+		}
+		const vault: {
+			name: string
+			description: string
+			type: string
+			verified: boolean
+			source?: string
+			addedAt: number
+		}[] = []
+		for (const entry of entries) {
+			if (!entry.isDirectory()) continue
+			try {
+				const skillMdPath = path.join(skillsDir, entry.name, "SKILL.md")
+				const content = fs.readFileSync(skillMdPath, "utf8")
+				const type = field(content, "type") || "skill"
+				vault.push({
+					name: field(content, "name") || entry.name,
+					description: field(content, "description") || "",
+					type: ["skill", "repo", "software", "model"].includes(type) ? type : "skill",
+					verified: field(content, "verified") === "true",
+					source: field(content, "source"),
+					addedAt: fs.statSync(skillMdPath).mtimeMs,
+				})
+			} catch {
+				// No SKILL.md / malformed frontmatter — skip, never crash the list.
+			}
+		}
+		return vault
 	})
 
 	// A fresh, isolated scratch directory for one Design Deck variant. Each

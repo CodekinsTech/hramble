@@ -116,6 +116,30 @@ function BrainSidebarContent() {
 	)
 }
 
+/** One thing that's been added to the Brain (mirrors the brain:vault IPC shape). */
+export type BrainVaultEntry = {
+	name: string
+	description: string
+	type: "skill" | "repo" | "software" | "model"
+	verified: boolean
+	source?: string
+	addedAt: number
+}
+
+// Per-type presentation for the Vault — icon + accent colour + how it's counted
+// in the summary strip. Reuses the same lucide icons as the arm cards.
+const VAULT_TYPE_META: Record<
+	BrainVaultEntry["type"],
+	{ label: string; plural: string; icon: typeof PlusIcon; color: string }
+> = {
+	skill: { label: "Skills", plural: "skills", icon: SparklesIcon, color: "text-blue-500" },
+	repo: { label: "Repos", plural: "repos", icon: GitBranchIcon, color: "text-green-500" },
+	software: { label: "Software", plural: "tools", icon: PackageIcon, color: "text-purple-500" },
+	model: { label: "Models", plural: "models", icon: CpuIcon, color: "text-amber-500" },
+}
+
+const VAULT_TYPE_ORDER: BrainVaultEntry["type"][] = ["skill", "repo", "software", "model"]
+
 // The four "arms" of the Brain — each a distinct way to feed it, each taking a
 // pasted link/path and turning it into a Brain session with the right instruction.
 type BrainArm = {
@@ -132,7 +156,8 @@ const BRAIN_ARMS: BrainArm[] = [
 		name: "Skill",
 		icon: SparklesIcon,
 		placeholder: "Paste a skill link…",
-		prompt: (l) => `Add this skill to your local library, then tell me in one line what it does: ${l}`,
+		prompt: (l) =>
+			`Add this skill to your local library: ${l}\n\nThen actually try it once on a small test to confirm it genuinely works. Only if the test passes, call create_skill with type: "skill", source: "${l}", and verified: true. If the test fails, tell me exactly what went wrong and save it with verified: false (or not at all) — do not claim success. Finally, tell me in one line what it does.`,
 	},
 	{
 		id: "repo",
@@ -140,21 +165,23 @@ const BRAIN_ARMS: BrainArm[] = [
 		icon: GitBranchIcon,
 		placeholder: "Paste a repo URL…",
 		prompt: (l) =>
-			`Absorb this git repo — read it, then turn it into a reusable skill or a callable tool (whichever fits), and confirm what you saved: ${l}`,
+			`Absorb this git repo — read it and set it up as a reusable skill or callable tool (whichever fits): ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "repo", source: "${l}", and verified: true. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success. Then confirm what you saved.`,
 	},
 	{
 		id: "software",
 		name: "Software",
 		icon: PackageIcon,
 		placeholder: "Paste an app/tool link…",
-		prompt: (l) => `Learn to use this software/tool, then save how to use it as a skill: ${l}`,
+		prompt: (l) =>
+			`Learn to use this software/tool and set it up: ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "software", source: "${l}", and verified: true, saving how to use it. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
 	},
 	{
 		id: "model",
 		name: "Model",
 		icon: CpuIcon,
 		placeholder: "Paste a model link…",
-		prompt: (l) => `Set up this local model as a capability I can call, and save how to use it: ${l}`,
+		prompt: (l) =>
+			`Set up this local model as a capability I can call: ${l}\n\nThen actually call it once on a small test prompt to confirm it genuinely works. Only if that passes, call create_skill with type: "model", source: "${l}", and verified: true, saving how to use it. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
 	},
 ]
 
@@ -212,6 +239,138 @@ function BrainArmCard({
 	)
 }
 
+/** The Vault — a browsable record of everything that's been added to the Brain. */
+function BrainVaultView() {
+	const [entries, setEntries] = useState<BrainVaultEntry[] | null>(null)
+	const [filter, setFilter] = useState<"all" | BrainVaultEntry["type"]>("all")
+
+	useEffect(() => {
+		let cancelled = false
+		void (async () => {
+			try {
+				const list = (await bridge()?.getBrainVault?.()) as BrainVaultEntry[] | undefined
+				if (!cancelled) setEntries(list ?? [])
+			} catch {
+				// No Electron bridge (e.g. dev:web preview) or IPC failure — show
+				// the empty state rather than spinning on "Loading…" forever.
+				if (!cancelled) setEntries([])
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [])
+
+	if (!entries) {
+		return <p className="py-10 text-center text-muted-foreground text-sm">Loading the vault…</p>
+	}
+
+	if (entries.length === 0) {
+		return (
+			<p className="py-10 text-center text-muted-foreground text-sm">
+				Nothing in the vault yet — add something from the Teach tab.
+			</p>
+		)
+	}
+
+	// Summary strip — counts per type, only types that actually have entries.
+	const counts = VAULT_TYPE_ORDER.map((t) => ({
+		type: t,
+		count: entries.filter((e) => e.type === t).length,
+	})).filter((c) => c.count > 0)
+	const summary = counts
+		.map((c) => `${c.count} ${VAULT_TYPE_META[c.type].plural}`)
+		.join(" · ")
+
+	const filtered = filter === "all" ? entries : entries.filter((e) => e.type === filter)
+
+	// Group by month, newest first.
+	const sorted = [...filtered].sort((a, b) => b.addedAt - a.addedAt)
+	const groups: { key: string; label: string; items: BrainVaultEntry[] }[] = []
+	for (const entry of sorted) {
+		const d = new Date(entry.addedAt)
+		const key = `${d.getFullYear()}-${d.getMonth()}`
+		const label = d.toLocaleString("en-US", { month: "long", year: "numeric" }).toUpperCase()
+		const group = groups.find((g) => g.key === key)
+		if (group) group.items.push(entry)
+		else groups.push({ key, label, items: [entry] })
+	}
+
+	const chips: { id: "all" | BrainVaultEntry["type"]; label: string }[] = [
+		{ id: "all", label: "All" },
+		...VAULT_TYPE_ORDER.map((t) => ({ id: t, label: VAULT_TYPE_META[t].label })),
+	]
+
+	return (
+		<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+			<p className="text-muted-foreground text-sm">{summary}</p>
+
+			<div className="flex flex-wrap items-center gap-1.5">
+				{chips.map((chip) => {
+					const active = filter === chip.id
+					return (
+						<button
+							key={chip.id}
+							type="button"
+							onClick={() => setFilter(chip.id)}
+							className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+								active
+									? "border-primary text-primary"
+									: "border-border text-muted-foreground hover:text-foreground"
+							}`}
+						>
+							{chip.label}
+						</button>
+					)
+				})}
+			</div>
+
+			<div className="flex flex-col gap-5">
+				{groups.map((group) => (
+					<div key={group.key} className="flex flex-col gap-2">
+						<h2 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">
+							{group.label}
+						</h2>
+						<div className="flex flex-col gap-2">
+							{group.items.map((entry, i) => {
+								const meta = VAULT_TYPE_META[entry.type]
+								const Icon = meta.icon
+								return (
+									<div
+										key={`${entry.name}-${i}`}
+										className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+									>
+										<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+											<Icon className={`size-4 ${meta.color}`} />
+										</div>
+										<div className="min-w-0 flex-1">
+											<div className="truncate font-medium text-foreground text-sm">{entry.name}</div>
+											{entry.description && (
+												<div className="truncate text-muted-foreground text-xs">
+													{entry.description}
+												</div>
+											)}
+										</div>
+										{entry.verified ? (
+											<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
+												✓ verified
+											</span>
+										) : (
+											<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+												unverified
+											</span>
+										)}
+									</div>
+								)
+							})}
+						</div>
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
 export function BrainPage() {
 	const [brainSession, setBrainSession] = useAtom(brainSessionAtom)
 	const [, setBrainSessionIds] = useAtom(brainSessionIdsAtom)
@@ -228,6 +387,7 @@ export function BrainPage() {
 	}, [setContent, setFooter])
 	const [input, setInput] = useState("")
 	const [starting, setStarting] = useState(false)
+	const [tab, setTab] = useState<"teach" | "vault">("teach")
 
 	const start = async (text: string) => {
 		const t = text.trim()
@@ -276,42 +436,70 @@ export function BrainPage() {
 	}
 
 	return (
-		<div className="flex h-full flex-col items-center justify-center gap-8 overflow-y-auto p-6">
-			<div className="text-center">
-				<h1 className="text-balance font-semibold text-2xl text-foreground">Teach your Brain</h1>
-				<p className="mt-1 text-muted-foreground text-sm">
-					A growing local library of skills and tools — private to this machine.
-				</p>
+		<div className="flex h-full flex-col items-center gap-8 overflow-y-auto p-6">
+			{/* Teach (the four arms) vs Vault (what's already been added). */}
+			<div className="flex items-center gap-1 rounded-lg bg-muted/50 p-1">
+				<button
+					type="button"
+					onClick={() => setTab("teach")}
+					className={`rounded-md px-3 py-1 font-medium text-xs transition-colors ${
+						tab === "teach" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+					}`}
+				>
+					Teach
+				</button>
+				<button
+					type="button"
+					onClick={() => setTab("vault")}
+					className={`rounded-md px-3 py-1 font-medium text-xs transition-colors ${
+						tab === "vault" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+					}`}
+				>
+					Vault
+				</button>
 			</div>
 
-			{/* Brain at the centre, four arm-cards around it in a plus/cross layout. */}
-			<div className="grid grid-cols-[1fr_auto_1fr] items-center justify-items-center gap-4">
-				<div className="col-start-2 row-start-1">{armCard("skill", "")}</div>
-				<div className="col-start-1 row-start-2">{armCard("repo", "")}</div>
-				<div className="col-start-2 row-start-2 flex size-48 items-center justify-center rounded-3xl border border-border bg-card">
-					<BrainTracedIcon className="h-40 w-40" />
+			{tab === "vault" ? (
+				<BrainVaultView />
+			) : (
+				<div className="flex w-full flex-1 flex-col items-center justify-center gap-8">
+					<div className="text-center">
+						<h1 className="text-balance font-semibold text-2xl text-foreground">Teach your Brain</h1>
+						<p className="mt-1 text-muted-foreground text-sm">
+							A growing local library of skills and tools — private to this machine.
+						</p>
+					</div>
+
+					{/* Brain at the centre, four arm-cards around it in a plus/cross layout. */}
+					<div className="grid grid-cols-[1fr_auto_1fr] items-center justify-items-center gap-4">
+						<div className="col-start-2 row-start-1">{armCard("skill", "")}</div>
+						<div className="col-start-1 row-start-2">{armCard("repo", "")}</div>
+						<div className="col-start-2 row-start-2 flex size-48 items-center justify-center rounded-3xl border border-border bg-card">
+							<BrainTracedIcon className="h-40 w-40" />
+						</div>
+						<div className="col-start-3 row-start-2">{armCard("software", "")}</div>
+						<div className="col-start-2 row-start-3">{armCard("model", "")}</div>
+					</div>
+
+					{/* Still allow free-form teaching by chat, secondary to the cards. */}
+					<div className="w-full max-w-xl">
+						<textarea
+							value={input}
+							onChange={(e) => setInput(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" && !e.shiftKey) {
+									e.preventDefault()
+									void start(input)
+								}
+							}}
+							rows={2}
+							disabled={starting}
+							placeholder="…or just teach the Brain something in your own words"
+							className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+						/>
+					</div>
 				</div>
-				<div className="col-start-3 row-start-2">{armCard("software", "")}</div>
-				<div className="col-start-2 row-start-3">{armCard("model", "")}</div>
-			</div>
-
-			{/* Still allow free-form teaching by chat, secondary to the cards. */}
-			<div className="w-full max-w-xl">
-				<textarea
-					value={input}
-					onChange={(e) => setInput(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter" && !e.shiftKey) {
-							e.preventDefault()
-							void start(input)
-						}
-					}}
-					rows={2}
-					disabled={starting}
-					placeholder="…or just teach the Brain something in your own words"
-					className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
-				/>
-			</div>
+			)}
 		</div>
 	)
 }
