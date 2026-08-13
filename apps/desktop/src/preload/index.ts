@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld("hramble", {
 		Array<{
 			name: string
 			description: string
-			type: "skill" | "repo" | "software" | "model"
+			type: "skill" | "repo" | "software" | "docs" | "model"
 			verified: boolean
 			source?: string
 			addedAt: number

@@ -90,7 +90,7 @@ export default async () => {
 							"The actual step-by-step how-to, in full — as much detail as a competent engineer would need to repeat this without re-deriving it",
 						),
 					type: z
-						.enum(["skill", "repo", "software", "model"])
+						.enum(["skill", "repo", "software", "docs", "model"])
 						.optional()
 						.describe("What kind of thing this is. Defaults to 'skill'."),
 					verified: z

@@ -15,7 +15,19 @@ import {
 } from "@hramble/ui/components/sidebar"
 import { useNavigate } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { ArrowRightIcon, CpuIcon, GitBranchIcon, PackageIcon, PlusIcon, SettingsIcon, SparklesIcon } from "lucide-react"
+import {
+	ArrowRightIcon,
+	BookOpenIcon,
+	CpuIcon,
+	FolderIcon,
+	GitBranchIcon,
+	ListChecksIcon,
+	PackageIcon,
+	PlugIcon,
+	PlusIcon,
+	SettingsIcon,
+	SparklesIcon,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 import { agentFamily } from "../atoms/derived/agents"
 import { brainSessionAtom, brainSessionIdsAtom } from "../atoms/brain"
@@ -120,7 +132,7 @@ function BrainSidebarContent() {
 export type BrainVaultEntry = {
 	name: string
 	description: string
-	type: "skill" | "repo" | "software" | "model"
+	type: "skill" | "repo" | "software" | "docs" | "model"
 	verified: boolean
 	source?: string
 	addedAt: number
@@ -134,11 +146,12 @@ const VAULT_TYPE_META: Record<
 > = {
 	skill: { label: "Skills", plural: "skills", icon: SparklesIcon, color: "text-blue-500" },
 	repo: { label: "Repos", plural: "repos", icon: GitBranchIcon, color: "text-green-500" },
-	software: { label: "Software", plural: "tools", icon: PackageIcon, color: "text-purple-500" },
+	software: { label: "Tools", plural: "tools", icon: PackageIcon, color: "text-purple-500" },
+	docs: { label: "Docs", plural: "docs", icon: BookOpenIcon, color: "text-sky-500" },
 	model: { label: "Models", plural: "models", icon: CpuIcon, color: "text-amber-500" },
 }
 
-const VAULT_TYPE_ORDER: BrainVaultEntry["type"][] = ["skill", "repo", "software", "model"]
+const VAULT_TYPE_ORDER: BrainVaultEntry["type"][] = ["skill", "repo", "software", "docs", "model"]
 
 /** One entry in the Brain's tool/model registry (mirrors the brain:registry IPC shape). */
 export type BrainRegistryEntry = {
@@ -158,11 +171,17 @@ type BrainArm = {
 	id: string
 	name: string
 	icon: typeof PlusIcon
-	placeholder: string
-	prompt: (link: string) => string
+	// Input arms: a text/link field + prompt. Action arms: a button that runs
+	// an app-side action (folder-pick / navigate), no free-text input.
+	placeholder?: string
+	prompt?: (value: string) => string
 	// Optional async work run BEFORE the session starts (e.g. cloning a repo),
-	// returning the final prompt. Falls back to `prompt(link)` when absent.
-	preprocess?: (link: string) => Promise<string>
+	// returning the final prompt. Falls back to `prompt(value)` when absent.
+	preprocess?: (value: string) => Promise<string>
+	// Present on action arms — the card renders as a button with this label,
+	// handled by id in the Brain page (Connect navigates, Files picks a folder).
+	action?: "connect" | "files"
+	actionLabel?: string
 }
 
 const BRAIN_ARMS: BrainArm[] = [
@@ -191,20 +210,42 @@ const BRAIN_ARMS: BrainArm[] = [
 		},
 	},
 	{
-		id: "software",
-		name: "Software",
+		id: "tool",
+		name: "Tool",
 		icon: PackageIcon,
-		placeholder: "Paste an app/tool link…",
-		prompt: (l) =>
-			`Learn to use this software/tool and set it up: ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "software", source: "${l}", and verified: true, saving how to use it — AND also call register_brain_tool with kind: "tool" and the real invocation command (e.g. how you actually ran it). If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
+		placeholder: "Name a CLI tool (e.g. ffmpeg)…",
+		prompt: (v) =>
+			`Install the command-line tool "${v}" using whatever package manager fits this machine (brew, npm, cargo, pip, etc.). Then actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "software", source: "${v}", and verified: true, saving how to use it — AND also call register_brain_tool with kind: "tool" and the real invocation command (e.g. how you actually ran it). If you can't install it or the test fails, tell me exactly what went wrong and don't claim success.`,
 	},
 	{
-		id: "model",
-		name: "Model",
-		icon: CpuIcon,
-		placeholder: "Paste a model link…",
+		id: "docs",
+		name: "Docs",
+		icon: BookOpenIcon,
+		placeholder: "Paste a doc / API / page URL…",
 		prompt: (l) =>
-			`Set up this local model as a capability I can call: ${l}\n\nThen actually call it once on a small test prompt to confirm it genuinely works. Only if that passes, call create_skill with type: "model", source: "${l}", and verified: true, saving how to use it — AND also call register_brain_tool with kind: "model" and the real invocation command (e.g. how you actually call it). If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
+			`Read the documentation / reference at ${l} and extract the key, reusable knowledge from it (how the API/tool/library actually works, the important endpoints/options/gotchas). Save it with create_skill using type: "docs" and source: "${l}", so future sessions can use it without guessing. Then tell me in one line what it covers.`,
+	},
+	{
+		id: "connect",
+		name: "Connect",
+		icon: PlugIcon,
+		action: "connect",
+		actionLabel: "Add a connector",
+	},
+	{
+		id: "files",
+		name: "Files",
+		icon: FolderIcon,
+		action: "files",
+		actionLabel: "Pick a folder",
+	},
+	{
+		id: "rules",
+		name: "Rules",
+		icon: ListChecksIcon,
+		placeholder: "Type a standing rule…",
+		prompt: (v) =>
+			`Save this as a standing rule you always follow from now on: "${v}". Store it with create_skill (type: "skill", named like a rule) so it's applied in future sessions, then confirm it's saved.`,
 	},
 ]
 
@@ -212,11 +253,13 @@ function BrainArmCard({
 	arm,
 	disabled,
 	onSubmit,
+	onAction,
 	className,
 }: {
 	arm: BrainArm
 	disabled: boolean
 	onSubmit: (prompt: string) => void
+	onAction?: () => void | Promise<void>
 	className?: string
 }) {
 	const [val, setVal] = useState("")
@@ -228,9 +271,18 @@ function BrainArmCard({
 		if (!t || isDisabled) return
 		setBusy(true)
 		try {
-			const prompt = arm.preprocess ? await arm.preprocess(t) : arm.prompt(t)
+			const prompt = arm.preprocess ? await arm.preprocess(t) : (arm.prompt?.(t) ?? t)
 			onSubmit(prompt)
 			setVal("")
+		} finally {
+			setBusy(false)
+		}
+	}
+	const runAction = async () => {
+		if (isDisabled || !onAction) return
+		setBusy(true)
+		try {
+			await onAction()
 		} finally {
 			setBusy(false)
 		}
@@ -243,29 +295,41 @@ function BrainArmCard({
 				</div>
 				<span className="font-medium text-foreground text-xs">{arm.name}</span>
 			</div>
-			<div className="flex gap-1">
-				<input
-					value={val}
-					onChange={(e) => setVal(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") {
-							e.preventDefault()
-							void submit()
-						}
-					}}
-					disabled={isDisabled}
-					placeholder={arm.placeholder}
-					className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
-				/>
+			{arm.action ? (
 				<button
 					type="button"
-					onClick={() => void submit()}
-					disabled={isDisabled || !val.trim()}
-					className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+					onClick={() => void runAction()}
+					disabled={isDisabled}
+					className="flex h-7 items-center justify-center gap-1 rounded-md border border-border bg-background text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
 				>
-					<ArrowRightIcon className="size-3.5" />
+					{arm.actionLabel}
+					<ArrowRightIcon className="size-3" />
 				</button>
-			</div>
+			) : (
+				<div className="flex gap-1">
+					<input
+						value={val}
+						onChange={(e) => setVal(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault()
+								void submit()
+							}
+						}}
+						disabled={isDisabled}
+						placeholder={arm.placeholder}
+						className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+					/>
+					<button
+						type="button"
+						onClick={() => void submit()}
+						disabled={isDisabled || !val.trim()}
+						className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+					>
+						<ArrowRightIcon className="size-3.5" />
+					</button>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -450,6 +514,7 @@ export function BrainPage() {
 	const [, setBrainSessionIds] = useAtom(brainSessionIdsAtom)
 	const { createSession, sendPrompt } = useAgentActions()
 	const { setContent, setFooter } = useSetSidebarSlot()
+	const navigate = useNavigate()
 
 	useEffect(() => {
 		setContent(<BrainSidebarContent />)
@@ -501,12 +566,32 @@ export function BrainPage() {
 		)
 	}
 
-	// Opening screen — the brain in a box, with four "arms" (input cards)
-	// branching off it, one per way of feeding it (skill / repo / software / model).
-	const armCard = (id: string, className: string) => {
+	// The app-side action for an "action" arm (button cards, no free-text input).
+	const runArmAction = async (action: "connect" | "files") => {
+		if (action === "connect") {
+			navigate({ to: "/settings/connectors" })
+			return
+		}
+		// Files — pick a local folder for the Brain to learn the user's style from.
+		const dir = await bridge().pickDirectory()
+		if (!dir) return
+		await start(
+			`Look through the files in ${dir} to learn my coding style, conventions, and patterns. Save what you learn with create_skill (type: "skill", named like a style guide) so future sessions match how I write. Then summarise in one line what you picked up.`,
+		)
+	}
+
+	// Opening screen — the brain in a box with its "arms" (feed cards) flanking it.
+	const armCard = (id: string) => {
 		const arm = BRAIN_ARMS.find((a) => a.id === id)
 		if (!arm) return null
-		return <BrainArmCard arm={arm} disabled={starting} onSubmit={(p) => void start(p)} className={className} />
+		return (
+			<BrainArmCard
+				arm={arm}
+				disabled={starting}
+				onSubmit={(p) => void start(p)}
+				onAction={arm.action ? () => runArmAction(arm.action as "connect" | "files") : undefined}
+			/>
+		)
 	}
 
 	return (
@@ -540,19 +625,26 @@ export function BrainPage() {
 					<div className="text-center">
 						<h1 className="text-balance font-semibold text-2xl text-foreground">Teach your Brain</h1>
 						<p className="mt-1 text-muted-foreground text-sm">
-							A growing local library of skills and tools — private to this machine.
+							A growing local library of skills, tools and connections — private to this machine.
 						</p>
 					</div>
 
-					{/* Brain at the centre, four arm-cards around it in a plus/cross layout. */}
-					<div className="grid grid-cols-[1fr_auto_1fr] items-center justify-items-center gap-4">
-						<div className="col-start-2 row-start-1">{armCard("skill", "")}</div>
-						<div className="col-start-1 row-start-2">{armCard("repo", "")}</div>
-						<div className="col-start-2 row-start-2 flex size-48 items-center justify-center rounded-3xl border border-border bg-card">
+					{/* Brain at the centre with its feed-arms flanking both sides. */}
+					<div className="flex flex-wrap items-center justify-center gap-5">
+						<div className="flex flex-col gap-4">
+							{armCard("skill")}
+							{armCard("tool")}
+							{armCard("rules")}
+							{armCard("files")}
+						</div>
+						<div className="flex size-48 items-center justify-center rounded-3xl border border-border bg-card">
 							<BrainTracedIcon className="h-40 w-40" />
 						</div>
-						<div className="col-start-3 row-start-2">{armCard("software", "")}</div>
-						<div className="col-start-2 row-start-3">{armCard("model", "")}</div>
+						<div className="flex flex-col gap-4">
+							{armCard("repo")}
+							{armCard("docs")}
+							{armCard("connect")}
+						</div>
 					</div>
 
 					{/* Still allow free-form teaching by chat, secondary to the cards. */}
