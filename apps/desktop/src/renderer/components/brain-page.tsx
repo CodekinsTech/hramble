@@ -178,6 +178,40 @@ export type BrainRegistryEntry = {
 	addedAt: number
 }
 
+// --- Share Brain wizard types ---
+type ScanStatus = "ok" | "warn" | "dead"
+
+// One selectable/scannable thing in the wizard — a vault entry OR a registry
+// entry, normalised to a common shape. `item` is exactly what's sent to
+// `brain:scan`; `metaType` drives the icon/colour (registry tools → "tool").
+type ScanTarget = {
+	key: string
+	name: string
+	metaType: BrainVaultEntry["type"] | "tool"
+	item: {
+		id: string
+		kind: "skill" | "repo" | "software" | "docs" | "model" | "tool"
+		source?: string
+		command?: string
+	}
+}
+
+// Icon/colour for a wizard row — reuses VAULT_TYPE_META, with a "tool" fallback
+// that matches the software accent so registry tools read consistently.
+const scanMeta = (t: BrainVaultEntry["type"] | "tool") =>
+	t === "tool"
+		? { label: "Tools", plural: "tools", icon: PackageIcon, color: "text-purple-500" }
+		: VAULT_TYPE_META[t]
+
+const SCAN_TYPE_ORDER: (BrainVaultEntry["type"] | "tool")[] = [
+	"skill",
+	"repo",
+	"software",
+	"docs",
+	"model",
+	"tool",
+]
+
 // The four "arms" of the Brain — each a distinct way to feed it, each taking a
 // pasted link/path and turning it into a Brain session with the right instruction.
 type BrainArm = {
@@ -353,6 +387,14 @@ function BrainVaultView() {
 	const [registry, setRegistry] = useState<BrainRegistryEntry[]>([])
 	const [filter, setFilter] = useState<"all" | BrainVaultEntry["type"]>("all")
 	const [busy, setBusy] = useState(false)
+	// Share Brain wizard — a two-step (Select → Report) flow that replaces the
+	// vault list inline. null = not open. See renderWizard below.
+	const [wizardStep, setWizardStep] = useState<null | "select" | "report">(null)
+	const [checked, setChecked] = useState<Record<string, boolean>>({})
+	const [scanning, setScanning] = useState(false)
+	const [scanError, setScanError] = useState<string | null>(null)
+	const [report, setReport] = useState<Array<{ id: string; status: ScanStatus; detail: string }> | null>(null)
+	const [scanned, setScanned] = useState<ScanTarget[]>([])
 	const user = useAtomValue(communityUserAtom)
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const setPosts = useSetAtom(communityPostsAtom)
@@ -466,10 +508,97 @@ function BrainVaultView() {
 		}
 	}
 
+	// Flattens the vault + registry into one list of selectable/scannable
+	// targets. Software vault entries store the tool name in `source`, so we pass
+	// it as a `command` (unless it's a URL) to get a real `which` binary check.
+	const buildTargets = useCallback((): ScanTarget[] => {
+		const targets: ScanTarget[] = []
+		for (const e of entries ?? []) {
+			const isHttp = !!e.source && /^https?:\/\//i.test(e.source)
+			targets.push({
+				key: `vault:${e.name}`,
+				name: e.name,
+				metaType: e.type,
+				item: {
+					id: e.name,
+					kind: e.type,
+					source: e.source,
+					command: e.type === "software" && e.source && !isHttp ? e.source : undefined,
+				},
+			})
+		}
+		for (const r of registry) {
+			targets.push({
+				key: `reg:${r.id}`,
+				name: r.name,
+				metaType: r.kind === "model" ? "model" : "tool",
+				item: {
+					id: r.id,
+					kind: r.kind === "model" ? "model" : "tool",
+					source: r.source,
+					command: r.command,
+				},
+			})
+		}
+		return targets
+	}, [entries, registry])
+
+	const targets = buildTargets()
+	const anyChecked = targets.some((t) => checked[t.key])
+
+	const openWizard = () => {
+		const init: Record<string, boolean> = {}
+		for (const t of buildTargets()) init[t.key] = true
+		setChecked(init)
+		setReport(null)
+		setScanError(null)
+		setWizardStep("select")
+	}
+
+	const closeWizard = () => {
+		setWizardStep(null)
+		setReport(null)
+		setScanError(null)
+	}
+
+	// Runs the deterministic scan over the checked targets and moves to the
+	// report step. Results are aligned to `scanned` by array order.
+	const startScan = async () => {
+		const selected = buildTargets().filter((t) => checked[t.key])
+		setScanned(selected)
+		setReport(null)
+		setScanError(null)
+		setWizardStep("report")
+		setScanning(true)
+		try {
+			const fn = bridge()?.scanBrain
+			if (typeof fn !== "function") {
+				setScanError("Scanning isn't available here (needs the desktop app).")
+				return
+			}
+			const res = (await fn(selected.map((t) => t.item))) as
+				| Array<{ id: string; status: ScanStatus; detail: string }>
+				| undefined
+			setReport(Array.isArray(res) ? res : [])
+		} catch {
+			setScanError("Couldn't scan — try again.")
+		} finally {
+			setScanning(false)
+		}
+	}
+
 	// Export/Import controls — shown above the vault (and in the empty state so
 	// a fresh machine can still import a Brain).
 	const actions = (
 		<div className="flex items-center gap-2">
+			<button
+				type="button"
+				onClick={openWizard}
+				disabled={busy}
+				className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+			>
+				<Share2Icon className="size-3.5" /> Share Brain
+			</button>
 			<button
 				type="button"
 				onClick={() => void exportBrain()}
@@ -489,8 +618,200 @@ function BrainVaultView() {
 		</div>
 	)
 
+	// --- Share Brain wizard (inline, replaces the vault list) ---
+	const renderWizard = () => {
+		// Group the targets by type for the Select step, in a stable order.
+		const groups = SCAN_TYPE_ORDER.map((t) => ({
+			type: t,
+			items: targets.filter((x) => x.metaType === t),
+		})).filter((g) => g.items.length > 0)
+
+		if (wizardStep === "select") {
+			return (
+				<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+					<div className="flex flex-col gap-1">
+						<h2 className="font-semibold text-foreground text-lg">Share your Brain</h2>
+						<p className="text-muted-foreground text-sm">
+							Choose what to include — untick anything you don't want to share.
+						</p>
+					</div>
+
+					{targets.length === 0 ? (
+						<p className="py-6 text-center text-muted-foreground text-sm">
+							Nothing in the Brain to share yet.
+						</p>
+					) : (
+						<div className="flex flex-col gap-5">
+							{groups.map((group) => {
+								const meta = scanMeta(group.type)
+								const Icon = meta.icon
+								return (
+									<div key={group.type} className="flex flex-col gap-2">
+										<h3 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">
+											{meta.label.toUpperCase()}
+										</h3>
+										<div className="flex flex-col gap-2">
+											{group.items.map((t) => (
+												<label
+													key={t.key}
+													className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3"
+												>
+													<input
+														type="checkbox"
+														checked={!!checked[t.key]}
+														onChange={() =>
+															setChecked((prev) => ({ ...prev, [t.key]: !prev[t.key] }))
+														}
+														className="size-4 shrink-0 accent-primary"
+													/>
+													<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+														<Icon className={`size-4 ${meta.color}`} />
+													</div>
+													<div className="min-w-0 flex-1">
+														<div className="truncate font-medium text-foreground text-sm">
+															{t.name}
+														</div>
+														{t.item.source && (
+															<div className="truncate text-muted-foreground text-xs">
+																{t.item.source}
+															</div>
+														)}
+													</div>
+												</label>
+											))}
+										</div>
+									</div>
+								)
+							})}
+						</div>
+					)}
+
+					<div className="flex items-center justify-end gap-2">
+						<button
+							type="button"
+							onClick={closeWizard}
+							className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onClick={() => void startScan()}
+							disabled={!anyChecked}
+							className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-40"
+						>
+							Scan selected <ArrowRightIcon className="size-3.5" />
+						</button>
+					</div>
+				</div>
+			)
+		}
+
+		// Report step.
+		const pill = (status: ScanStatus) => {
+			if (status === "ok")
+				return (
+					<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
+						✅ Working
+					</span>
+				)
+			if (status === "warn")
+				return (
+					<span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 font-medium text-[11px] text-amber-600 dark:text-amber-400">
+						⚠️ Needs repair
+					</span>
+				)
+			return (
+				<span className="shrink-0 rounded-full bg-red-500/10 px-2 py-0.5 font-medium text-[11px] text-red-600 dark:text-red-400">
+					❌ Dead
+				</span>
+			)
+		}
+
+		const statusFor = (i: number, id: string): { status: ScanStatus; detail: string } => {
+			const byIndex = report?.[i]
+			if (byIndex) return byIndex
+			const byId = report?.find((r) => r.id === id)
+			return byId ?? { status: "warn", detail: "could not check" }
+		}
+
+		const okCount = scanned.filter((t, i) => statusFor(i, t.item.id).status === "ok").length
+		const warnCount = scanned.filter((t, i) => statusFor(i, t.item.id).status === "warn").length
+		const deadCount = scanned.filter((t, i) => statusFor(i, t.item.id).status === "dead").length
+
+		return (
+			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+				<div className="flex flex-col gap-1">
+					<h2 className="font-semibold text-foreground text-lg">Brain health report</h2>
+					{scanning ? (
+						<p className="text-muted-foreground text-sm">Scanning…</p>
+					) : scanError ? (
+						<p className="text-muted-foreground text-sm">{scanError}</p>
+					) : (
+						<p className="text-muted-foreground text-sm">
+							{okCount} working · {warnCount} need repair · {deadCount} dead
+						</p>
+					)}
+				</div>
+
+				{!scanning && !scanError && (
+					<div className="flex flex-col gap-2">
+						{scanned.map((t, i) => {
+							const meta = scanMeta(t.metaType)
+							const Icon = meta.icon
+							const r = statusFor(i, t.item.id)
+							return (
+								<div
+									key={t.key}
+									className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+								>
+									<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+										<Icon className={`size-4 ${meta.color}`} />
+									</div>
+									<div className="min-w-0 flex-1">
+										<div className="truncate font-medium text-foreground text-sm">{t.name}</div>
+										{r.status !== "ok" && r.detail && (
+											<div className="truncate text-muted-foreground text-xs">{r.detail}</div>
+										)}
+									</div>
+									{pill(r.status)}
+								</div>
+							)
+						})}
+					</div>
+				)}
+
+				<div className="flex items-center justify-between gap-2">
+					<button
+						type="button"
+						onClick={() => setWizardStep("select")}
+						className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+					>
+						Back
+					</button>
+					<div className="flex items-center gap-2">
+						<span className="text-[11px] text-muted-foreground/70">(repair + publish coming next)</span>
+						<button
+							type="button"
+							disabled
+							title="Coming in the next update"
+							className="flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground opacity-40"
+						>
+							Repair &amp; Save to Git
+						</button>
+					</div>
+				</div>
+			</div>
+		)
+	}
+
 	if (!entries) {
 		return <p className="py-10 text-center text-muted-foreground text-sm">Loading the vault…</p>
+	}
+
+	// Share Brain wizard takes over the whole vault surface while open.
+	if (wizardStep) {
+		return renderWizard()
 	}
 
 	if (entries.length === 0) {

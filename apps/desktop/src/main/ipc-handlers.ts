@@ -375,6 +375,127 @@ export function registerIpcHandlers(): void {
 		}
 	})
 
+	// Deterministic health check for a set of Brain items — NO agent, NO AI.
+	// Each item is checked with a fast, objective probe based on what it is:
+	//   • has a URL source (docs/repo/model/skill/software) → net.fetch HEAD,
+	//     status < 400 = ok, 404/410 = dead, anything else / timeout = warn.
+	//   • repo with a git URL → `git ls-remote`, success = ok, failure = dead.
+	//   • tool / software with a command → `which <exe>`, found = ok else warn.
+	//   • nothing external to check → ok (a local rule can't rot).
+	// Never throws across IPC — the whole thing is guarded, and any total
+	// failure returns every item as "warn" so the wizard still renders.
+	ipcMain.handle(
+		"brain:scan",
+		async (
+			_e,
+			items: Array<{
+				id: string
+				kind: "skill" | "repo" | "software" | "docs" | "model" | "tool"
+				source?: string
+				command?: string
+			}>,
+		): Promise<Array<{ id: string; status: "ok" | "warn" | "dead"; detail: string }>> => {
+			const list = Array.isArray(items) ? items : []
+
+			// HEAD the source URL; on 405/other HEAD-refusals fall back to a GET.
+			const checkUrl = async (
+				url: string,
+			): Promise<{ status: "ok" | "warn" | "dead"; detail: string }> => {
+				const once = async (method: "HEAD" | "GET") => {
+					const controller = new AbortController()
+					const timer = setTimeout(() => controller.abort(), 8000)
+					try {
+						const res = await net.fetch(url, { method, signal: controller.signal })
+						return res
+					} finally {
+						clearTimeout(timer)
+					}
+				}
+				try {
+					let res = await once("HEAD")
+					if (res.status === 405 || res.status === 501) res = await once("GET")
+					if (res.status === 404 || res.status === 410) {
+						return { status: "dead", detail: `${res.status} ${res.statusText || "Not Found"}` }
+					}
+					if (res.status < 400) return { status: "ok", detail: `${res.status} OK` }
+					return { status: "warn", detail: `${res.status} ${res.statusText || "error"}` }
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : String(err)
+					return { status: "warn", detail: msg.includes("abort") ? "timed out" : "unreachable" }
+				}
+			}
+
+			// `git ls-remote <url>` — a live git URL lists refs, a dead one errors.
+			const checkGitRemote = (url: string) =>
+				new Promise<{ status: "ok" | "warn" | "dead"; detail: string }>((resolve) => {
+					execFile("git", ["ls-remote", url], { timeout: 12000 }, (err) => {
+						if (err) resolve({ status: "dead", detail: "repo unreachable" })
+						else resolve({ status: "ok", detail: "repo reachable" })
+					})
+				})
+
+			// `which <exe>` — is the executable on this machine's PATH?
+			const checkCommand = (command: string, fallbackName: string) =>
+				new Promise<{ status: "ok" | "warn" | "dead"; detail: string }>((resolve) => {
+					const exe = ((command || "").trim().split(/\s+/)[0] || fallbackName || "").trim()
+					if (!exe) {
+						resolve({ status: "ok", detail: "nothing to check" })
+						return
+					}
+					execFile("which", [exe], { timeout: 5000 }, (err) => {
+						if (err) resolve({ status: "warn", detail: `${exe} not installed` })
+						else resolve({ status: "ok", detail: `${exe} installed` })
+					})
+				})
+
+			const isHttp = (s?: string): s is string => !!s && /^https?:\/\//i.test(s.trim())
+			const isGitUrl = (s?: string): s is string =>
+				!!s && (/^(git@|ssh:\/\/|git:\/\/)/i.test(s.trim()) || /\.git$/i.test(s.trim()))
+
+			const results = await Promise.all(
+				list.map(async (item) => {
+					try {
+						// Repos: prefer a git-native probe, else fall back to a URL check.
+						if (item.kind === "repo" && item.source) {
+							if (isGitUrl(item.source)) {
+								const r = await checkGitRemote(item.source)
+								return { id: item.id, ...r }
+							}
+							if (isHttp(item.source)) {
+								const r = await checkUrl(item.source)
+								return { id: item.id, ...r }
+							}
+						}
+						// Tools / software with a command: is the binary present?
+						if ((item.kind === "tool" || item.kind === "software") && item.command) {
+							const r = await checkCommand(item.command, item.id)
+							return { id: item.id, ...r }
+						}
+						// Anything with an http(s) source: HEAD it.
+						if (isHttp(item.source)) {
+							const r = await checkUrl(item.source)
+							return { id: item.id, ...r }
+						}
+						// A git URL living in source without kind "repo".
+						if (isGitUrl(item.source)) {
+							const r = await checkGitRemote(item.source)
+							return { id: item.id, ...r }
+						}
+						// Nothing external to check — a local skill/rule can't rot.
+						return {
+							id: item.id,
+							status: "ok" as const,
+							detail: "nothing external to check",
+						}
+					} catch {
+						return { id: item.id, status: "warn" as const, detail: "could not check" }
+					}
+				}),
+			)
+			return results
+		},
+	)
+
 	// A fresh, isolated scratch directory for one Design Deck variant. Each
 	// (runId, index) pair gets its own folder under userData so parallel
 	// variant sessions never write over each other or the user's real projects.

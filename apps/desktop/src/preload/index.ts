@@ -48,6 +48,16 @@ contextBridge.exposeInMainWorld("hramble", {
 			addedAt: number
 		}>
 	> => ipcRenderer.invoke("brain:registry"),
+	/** Deterministic health check (no AI) for a set of Brain items — URL reachability, git ls-remote, or `which <exe>`. */
+	scanBrain: (
+		items: Array<{
+			id: string
+			kind: "skill" | "repo" | "software" | "docs" | "model" | "tool"
+			source?: string
+			command?: string
+		}>,
+	): Promise<Array<{ id: string; status: "ok" | "warn" | "dead"; detail: string }>> =>
+		ipcRenderer.invoke("brain:scan", items),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),
