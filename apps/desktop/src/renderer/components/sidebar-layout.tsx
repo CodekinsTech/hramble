@@ -13,7 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
 import { Outlet, useNavigate } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, Minus, Maximize2, PanelLeftIcon, RssIcon, SearchIcon, UsersIcon, X } from "lucide-react"
+import { BrainIcon, CodeIcon, HomeIcon, InfinityIcon, LayoutGridIcon, Minus, Maximize2, PanelLeftIcon, RssIcon, SearchIcon, UsersIcon, X } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { activeServerConfigAtom, serverConnectedAtom } from "../atoms/connection"
 import { hyperloopSessionSetAtom, workspaceModeAtom } from "../atoms/workspace"
@@ -192,6 +192,21 @@ function WindowControls() {
 					<HomeIcon className="size-3.5" />
 				</TooltipTrigger>
 				<TooltipContent>Home</TooltipContent>
+			</Tooltip>
+			<Tooltip>
+				<TooltipTrigger
+					render={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-7 shrink-0"
+							onClick={() => navigate({ to: "/brain" })}
+						/>
+					}
+				>
+					<BrainIcon className="size-3.5" />
+				</TooltipTrigger>
+				<TooltipContent>Brain</TooltipContent>
 			</Tooltip>
 			<Tooltip>
 				<TooltipTrigger

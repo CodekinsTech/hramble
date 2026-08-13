@@ -30,6 +30,7 @@ import {
 	UsersIcon,
 } from "lucide-react"
 import { type ReactNode, useEffect, useRef, useState } from "react"
+import proforgeIconUrl from "../proforge-icon.svg"
 import { CHAT_MODES } from "../atoms/chat-mode"
 import { communityAccessTokenAtom } from "../atoms/community"
 import { activeTeamAtom, activeTeamIdAtom, masterSessionPreviewUrlAtom } from "../atoms/team"
@@ -122,7 +123,7 @@ function ProForgeSidebarContent() {
 					</div>
 					<div className="px-2 pt-2 pb-1">
 						<div className="flex items-center gap-1.5 font-medium text-primary text-xs uppercase tracking-wide">
-							<SparklesIcon className="size-3.5" />
+							<img src={proforgeIconUrl} alt="" className="size-3.5" />
 							ProForge
 						</div>
 					</div>

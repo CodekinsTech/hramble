@@ -187,6 +187,15 @@ export function registerIpcHandlers(): void {
 		return dir
 	})
 
+	// Working directory for the Brain page — same idea as home:dir (a stable
+	// folder under userData, not tied to any project), but this is where taught
+	// skills/context live going forward, kept separate from Home chat.
+	ipcMain.handle("brain:dir", async () => {
+		const dir = path.join(app.getPath("userData"), "brain-chat")
+		await mkdir(dir, { recursive: true })
+		return dir
+	})
+
 	// A fresh, isolated scratch directory for one Design Deck variant. Each
 	// (runId, index) pair gets its own folder under userData so parallel
 	// variant sessions never write over each other or the user's real projects.

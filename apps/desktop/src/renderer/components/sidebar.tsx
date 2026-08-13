@@ -40,12 +40,12 @@ import {
 	MoreVerticalIcon,
 	PlusIcon,
 	SettingsIcon,
-	SparklesIcon,
 	TimerIcon,
 	TrashIcon,
 } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
+import proforgeIconUrl from "../proforge-icon.svg"
 import { activeServerConfigAtom } from "../atoms/connection"
 import { companionActivatedAtom } from "../atoms/preferences"
 import { automationsEnabledAtom } from "../atoms/feature-flags"
@@ -166,11 +166,11 @@ function SessionSortButton() {
 					<button
 						type="button"
 						title="Sort sessions"
-						className={`text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors ${mode !== "default" ? "text-primary" : ""}`}
+						className={`text-muted-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors ${mode !== "default" ? "text-primary" : ""}`}
 					/>
 				}
 			>
-				<ArrowDownUpIcon className="size-4 shrink-0" />
+				<ArrowDownUpIcon className="size-3.5 shrink-0" />
 				<span className="sr-only">Sort sessions</span>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
@@ -365,11 +365,11 @@ export function AppSidebarContent({
 										<button
 											type="button"
 											onClick={onOpenCommandPalette}
-											className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors"
+											className="text-muted-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors"
 										/>
 									}
 								>
-									<CommandIcon className="size-4 shrink-0" />
+									<CommandIcon className="size-3.5 shrink-0" />
 									<span className="sr-only">Command palette</span>
 								</TooltipTrigger>
 								<TooltipContent side="bottom">Command palette (&#8984;K)</TooltipContent>
@@ -381,11 +381,11 @@ export function AppSidebarContent({
 											<button
 												type="button"
 												onClick={onAddProject}
-												className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors"
+												className="text-muted-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 shrink-0 items-center justify-center rounded-md p-0 transition-colors"
 											/>
 										}
 									>
-										<PlusIcon className="size-4 shrink-0" />
+										<PlusIcon className="size-3.5 shrink-0" />
 										<span className="sr-only">Add folder</span>
 									</TooltipTrigger>
 									<TooltipContent side="bottom">Add folder</TooltipContent>
@@ -463,7 +463,7 @@ export function AppSidebarContent({
 							onClick={() => navigate({ to: "/proforge" })}
 							className="text-primary"
 						>
-							<SparklesIcon className="size-4" />
+							<img src={proforgeIconUrl} alt="" className="size-4" />
 							<span>ProForge</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>

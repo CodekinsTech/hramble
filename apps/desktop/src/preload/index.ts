@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("hramble", {
 	/** Returns app version and dev/production mode. */
 	getAppInfo: () => ipcRenderer.invoke("app:info"),
 	getHomeDir: (): Promise<string> => ipcRenderer.invoke("home:dir"),
+	getBrainDir: (): Promise<string> => ipcRenderer.invoke("brain:dir"),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),

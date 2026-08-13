@@ -10,6 +10,7 @@ import { AutomationDetail } from "./components/automations/automation-detail"
 import { AutomationRunDetail } from "./components/automations/automation-run-detail"
 import { AutomationsPage } from "./components/automations/automations-page"
 import { InboxEmptyState } from "./components/automations/inbox-empty-state"
+import { BrainPage } from "./components/brain-page"
 import { CommunityPage } from "./components/community-page"
 import { ErrorPage } from "./components/error-page"
 import { HomeChat } from "./components/home-chat"
@@ -67,6 +68,12 @@ const homeRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "home",
 	component: HomeChat,
+})
+
+const brainRoute = createRoute({
+	getParentRoute: () => sidebarLayout,
+	path: "brain",
+	component: BrainPage,
 })
 
 const templatesRoute = createRoute({
@@ -267,6 +274,7 @@ const routeTree = rootRoute.addChildren([
 	sidebarLayout.addChildren([
 		indexRoute,
 		homeRoute,
+		brainRoute,
 		templatesRoute,
 		agentHubRoute,
 		communityRoute,
