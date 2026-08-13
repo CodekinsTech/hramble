@@ -57,33 +57,72 @@ function ChipMascotIcon({ className }: { className?: string }) {
 	)
 }
 
+
+function TransparentVideo({ src, width, height }: { src: string; width: number; height: number }) {
+	const canvasRef = useRef<HTMLCanvasElement>(null)
+	const videoRef = useRef<HTMLVideoElement>(null)
+	useEffect(() => {
+		const video = videoRef.current
+		const canvas = canvasRef.current
+		if (!video || !canvas) return
+		const ctx = canvas.getContext("2d", { willReadFrequently: true })
+		if (!ctx) return
+		let animId: number
+		function draw() {
+			if (!video || !canvas || !ctx) return
+			if (!video.videoWidth || !video.videoHeight) { animId = requestAnimationFrame(draw); return }
+			ctx.clearRect(0, 0, canvas.width, canvas.height)
+			const vr = video.videoWidth / video.videoHeight
+			const cr = canvas.width / canvas.height
+			let dx = 0, dy = 0, dw = canvas.width, dh = canvas.height
+			if (vr > cr) { dh = canvas.width / vr; dy = (canvas.height - dh) / 2 }
+			else { dw = canvas.height * vr; dx = (canvas.width - dw) / 2 }
+			ctx.drawImage(video, dx, dy, dw, dh)
+			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+			const d = imageData.data
+			for (let i = 0; i < d.length; i += 4) {
+				const r = d[i], g = d[i + 1], b = d[i + 2]
+				const avg = (r + g + b) / 3
+				const sat = Math.max(r, g, b) - Math.min(r, g, b)
+				if (sat < 18 && avg > 130) d[i + 3] = 0
+			}
+			ctx.putImageData(imageData, 0, 0)
+			animId = requestAnimationFrame(draw)
+		}
+		const onPlay = () => { animId = requestAnimationFrame(draw) }
+		video.addEventListener("play", onPlay)
+		video.addEventListener("loadedmetadata", () => video.play().catch(() => {}))
+		return () => {
+			video.removeEventListener("play", onPlay)
+			cancelAnimationFrame(animId)
+		}
+	}, [])
+	return (
+		<>
+			<video ref={videoRef} src={src} loop muted playsInline style={{ display: "none" }} />
+			<canvas ref={canvasRef} width={width} height={height} style={{ width: "100%", height: "100%" }} />
+		</>
+	)
+}
+
 function LoginGate() {
 	const setUser = useSetAtom(communityUserAtom)
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const [name, setName] = useState("")
 	const [email, setEmail] = useState("")
-
 	const submit = () => {
 		if (!email.trim()) return
 		setUser({ email: email.trim(), name: name.trim() || email.split("@")[0] })
 	}
 
 	return (
-		<div className="flex h-full flex-col items-center justify-start gap-4 px-6 pt-10 text-center">
-			<div style={{ width: 200, height: 120 }}>
-				<video
-					src="community-hero.mp4"
-					autoPlay
-					loop
-					muted
-					playsInline
-					className="h-full w-full object-cover"
-					style={{ mixBlendMode: "multiply" }}
-				/>
+		<div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center" style={{ transform: "translateY(-220px)" }}>
+			<div style={{ width: 160, height: 180, marginBottom: -67 }}>
+				<TransparentVideo src="community-hero.mp4" width={320} height={360} />
 			</div>
 			<div>
-				<div style={{ background: "rgba(30, 64, 175, 0.65)", borderRadius: 8, padding: "6px 16px", display: "inline-block" }}>
-					<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
+				<div style={{ background: "rgba(10, 30, 120, 0.88)", borderRadius: 8, padding: "6px 16px", display: "inline-block" }}>
+					<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>The Grid</h1>
 				</div>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
 					Share what you built — a thumbnail, your GitHub repo, a demo — and message other builders about
@@ -664,8 +703,8 @@ export function CommunityPage({
 			<div className={embedded ? "w-full flex-1 px-4 py-4" : "mx-auto w-full max-w-lg flex-1 px-4 py-6"}>
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-2">
-						<div style={{ background: "rgba(30, 64, 175, 0.65)", borderRadius: 8, padding: "4px 12px", display: "inline-block" }}>
-						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
+						<div style={{ background: "rgba(10, 30, 120, 0.88)", borderRadius: 8, padding: "4px 12px", display: "inline-block" }}>
+						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>The Grid</h1>
 					</div>
 						{filterTag && (
 							<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
