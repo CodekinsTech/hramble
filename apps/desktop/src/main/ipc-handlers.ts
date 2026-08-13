@@ -551,7 +551,10 @@ export function registerIpcHandlers(): void {
 		"brain:publish-git",
 		async (
 			_e,
-			args: { items: Array<{ kind: "skill" | "registry"; id: string; name: string; type?: string }> },
+			args: {
+				items: Array<{ kind: "skill" | "registry"; id: string; name: string; type?: string }>
+				report?: string
+			},
 		): Promise<{ ok: boolean; url?: string; error?: string }> => {
 			try {
 				const items = Array.isArray(args?.items) ? args.items : []
@@ -591,7 +594,7 @@ export function registerIpcHandlers(): void {
 				// the SAME repo. Only the generated content is cleared + rebuilt.
 				const publishDir = path.join(app.getPath("userData"), "brain-repo")
 				await mkdir(publishDir, { recursive: true })
-				for (const stale of ["skills", "brain-registry.json", "manifest.json", "BRAIN.md"]) {
+				for (const stale of ["skills", "brain-registry.json", "manifest.json", "BRAIN.md", "HEALTH.md"]) {
 					fs.rmSync(path.join(publishDir, stale), { recursive: true, force: true })
 				}
 				const outSkillsDir = path.join(publishDir, "skills")
@@ -689,6 +692,12 @@ export function registerIpcHandlers(): void {
 					md.push("")
 				}
 				fs.writeFileSync(path.join(publishDir, "BRAIN.md"), md.join("\n"))
+
+				// Ship the health report alongside the brain, so an incomplete brain
+				// arrives with a clear "here's what still needs work" checklist.
+				if (typeof args?.report === "string" && args.report.trim()) {
+					fs.writeFileSync(path.join(publishDir, "HEALTH.md"), args.report)
+				}
 
 				// --- Git + gh publish ---
 				const run = (cmd: string, cmdArgs: string[], timeout = 120000) =>

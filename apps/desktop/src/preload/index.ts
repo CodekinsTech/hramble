@@ -66,8 +66,9 @@ contextBridge.exposeInMainWorld("hramble", {
 	/** Publishes the selected Brain items to a private GitHub repo (skills + filtered registry + manifest + BRAIN.md, no secrets). */
 	publishBrainToGit: (
 		items: Array<{ kind: "skill" | "registry"; id: string; name: string; type?: string }>,
+		report?: string,
 	): Promise<{ ok: boolean; url?: string; error?: string }> =>
-		ipcRenderer.invoke("brain:publish-git", { items }),
+		ipcRenderer.invoke("brain:publish-git", { items, report }),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),

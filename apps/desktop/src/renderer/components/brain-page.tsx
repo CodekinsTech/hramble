@@ -612,7 +612,7 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 
 	// Publishes the scanned set to a private GitHub repo (skills + registry +
 	// manifest + BRAIN.md). Surfaces the repo URL on success, the error on fail.
-	const publish = async () => {
+	const publish = async (reportMarkdown?: string) => {
 		setPublishing(true)
 		setPublishedUrl(null)
 		try {
@@ -622,7 +622,7 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 				name: t.name,
 				type: t.metaType,
 			}))
-			const res = await bridge()?.publishBrainToGit?.(items)
+			const res = await bridge()?.publishBrainToGit?.(items, reportMarkdown)
 			if (res?.ok) {
 				setPublishedUrl(res.url ?? null)
 				toast.success("Brain published to GitHub")
@@ -818,6 +818,45 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 			return `Some items in my Brain failed a health check. Work through each one and fix it:\n\n${list}\n\nFor each item: find the doc/tool's new location or URL if it moved, refresh a changed or missing install command, or otherwise re-verify it works. Update the ACTUAL skill files and registry entries — call create_skill (for skills/docs/repos/software) or register_brain_tool (for tools/models) with the corrected source/command, and mark verified: true ONLY after you actually confirm it works. If something genuinely can't be fixed (permanently gone), say so plainly and leave it unverified — do NOT invent success or claim you fixed something you didn't. When done, tell me what you fixed and what you couldn't.`
 		}
 
+		// A shareable, plain-English health report — what works, what needs repair,
+		// and what's dead. Sent alongside an incomplete Brain so the recipient knows
+		// exactly what to finish. Also written into the published repo as HEALTH.md.
+		const buildReportMarkdown = () => {
+			const lines = [
+				"# Brain Health Report",
+				"",
+				`Generated ${new Date().toISOString().slice(0, 10)}`,
+				"",
+				`**${okCount} working · ${warnCount} need repair · ${deadCount} dead**`,
+				"",
+			]
+			const section = (title: string, statuses: ScanStatus[]) => {
+				const rows = scanned
+					.map((t, i) => ({ t, r: statusFor(i, t.item.id) }))
+					.filter((x) => statuses.includes(x.r.status))
+				if (rows.length === 0) return
+				lines.push(`## ${title}`, "")
+				for (const { t, r } of rows) {
+					const where = t.item.source || t.item.command || ""
+					lines.push(`- **${t.name}** (${t.metaType}${where ? `, \`${where}\`` : ""})${r.detail ? ` — ${r.detail}` : ""}`)
+				}
+				lines.push("")
+			}
+			section("❌ Dead — needs removing or replacing", ["dead"])
+			section("⚠️ Needs repair", ["warn"])
+			section("✅ Working", ["ok"])
+			return lines.join("\n")
+		}
+
+		const shareReport = async () => {
+			try {
+				await navigator.clipboard.writeText(buildReportMarkdown())
+				toast.success("Report copied — paste it anywhere to share")
+			} catch {
+				toast.error("Couldn't copy the report")
+			}
+		}
+
 		return (
 			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
 				<div className="flex flex-col gap-1">
@@ -902,13 +941,24 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 				)}
 
 				<div className="flex items-start justify-between gap-2">
-					<button
-						type="button"
-						onClick={() => setWizardStep("select")}
-						className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
-					>
-						Back
-					</button>
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={() => setWizardStep("select")}
+							className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+						>
+							Back
+						</button>
+						<button
+							type="button"
+							onClick={() => void shareReport()}
+							disabled={!canAct}
+							className="flex h-8 items-center gap-1 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40 disabled:opacity-40"
+						>
+							<Share2Icon className="size-3.5" />
+							Share report
+						</button>
+					</div>
 					<div className="flex flex-col items-end gap-1">
 						<div className="flex items-center gap-2">
 							<button
@@ -921,7 +971,7 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 							</button>
 							<button
 								type="button"
-								onClick={() => void publish()}
+								onClick={() => void publish(buildReportMarkdown())}
 								disabled={publishing || !canAct}
 								className="flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-60"
 							>
