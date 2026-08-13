@@ -23,8 +23,15 @@ contextBridge.exposeInMainWorld("hramble", {
 			verified: boolean
 			source?: string
 			addedAt: number
+			instructions: string
 		}>
 	> => ipcRenderer.invoke("brain:vault"),
+	/** Zips the Brain (skills + registry) to a user-chosen .zip location. */
+	exportBrain: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
+		ipcRenderer.invoke("brain:export"),
+	/** Unpacks a Brain export .zip back into the local skills folder, merging into existing skills. */
+	importBrain: (): Promise<{ ok: boolean; imported?: number; error?: string }> =>
+		ipcRenderer.invoke("brain:import"),
 	/** Clones a git repo locally for the Brain's Git Repo arm, returning its on-disk path. */
 	cloneBrainRepo: (url: string): Promise<{ ok: boolean; path?: string; error?: string }> =>
 		ipcRenderer.invoke("brain:clone-repo", url),

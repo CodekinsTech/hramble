@@ -19,6 +19,7 @@ import {
 	ArrowRightIcon,
 	BookOpenIcon,
 	CpuIcon,
+	DownloadIcon,
 	FolderIcon,
 	GitBranchIcon,
 	ListChecksIcon,
@@ -26,12 +27,22 @@ import {
 	PlugIcon,
 	PlusIcon,
 	SettingsIcon,
+	Share2Icon,
 	SparklesIcon,
+	UploadIcon,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { agentFamily } from "../atoms/derived/agents"
 import { brainSessionAtom, brainSessionIdsAtom } from "../atoms/brain"
+import {
+	communityBackendEnabledAtom,
+	type CommunityPost,
+	communityPostsAtom,
+	communityUserAtom,
+} from "../atoms/community"
 import { workspaceModeAtom } from "../atoms/workspace"
+import { createCommunityPost } from "../lib/community-client"
 import { BrainTracedIcon } from "./brain-traced-icon"
 import { useAgentActions } from "../hooks/use-server"
 import { HomeConversation } from "./home-conversation"
@@ -136,6 +147,8 @@ export type BrainVaultEntry = {
 	verified: boolean
 	source?: string
 	addedAt: number
+	/** The skill's full body (everything after the frontmatter) — what gets shared to the Community feed. */
+	instructions: string
 }
 
 // Per-type presentation for the Vault — icon + accent colour + how it's counted
@@ -339,29 +352,142 @@ function BrainVaultView() {
 	const [entries, setEntries] = useState<BrainVaultEntry[] | null>(null)
 	const [registry, setRegistry] = useState<BrainRegistryEntry[]>([])
 	const [filter, setFilter] = useState<"all" | BrainVaultEntry["type"]>("all")
+	const [busy, setBusy] = useState(false)
+	const user = useAtomValue(communityUserAtom)
+	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
+	const setPosts = useSetAtom(communityPostsAtom)
 
-	useEffect(() => {
-		let cancelled = false
-		void (async () => {
-			try {
-				const list = (await bridge()?.getBrainVault?.()) as BrainVaultEntry[] | undefined
-				if (!cancelled) setEntries(list ?? [])
-			} catch {
-				// No Electron bridge (e.g. dev:web preview) or IPC failure — show
-				// the empty state rather than spinning on "Loading…" forever.
-				if (!cancelled) setEntries([])
-			}
-			try {
-				const list = (await bridge()?.getBrainRegistry?.()) as BrainRegistryEntry[] | undefined
-				if (!cancelled) setRegistry(list ?? [])
-			} catch {
-				if (!cancelled) setRegistry([])
-			}
-		})()
-		return () => {
-			cancelled = true
+	// Reloads the vault + registry from the main process. Reused after an
+	// import so newly-restored skills appear without a page switch.
+	const refresh = useCallback(async () => {
+		try {
+			const list = (await bridge()?.getBrainVault?.()) as BrainVaultEntry[] | undefined
+			setEntries(list ?? [])
+		} catch {
+			// No Electron bridge (e.g. dev:web preview) or IPC failure — show
+			// the empty state rather than spinning on "Loading…" forever.
+			setEntries([])
+		}
+		try {
+			const list = (await bridge()?.getBrainRegistry?.()) as BrainRegistryEntry[] | undefined
+			setRegistry(list ?? [])
+		} catch {
+			setRegistry([])
 		}
 	}, [])
+
+	useEffect(() => {
+		void refresh()
+	}, [refresh])
+
+	// Shares one skill to the Community feed, reusing the exact flow the
+	// Community page's composer uses (createCommunityPost when the backend is
+	// live, otherwise the local mock feed). Needs a signed-in user either way.
+	const shareSkill = async (entry: BrainVaultEntry) => {
+		if (!user) {
+			toast("Sign in on the Community page to share skills.")
+			return
+		}
+		const skill = {
+			name: entry.name,
+			description: entry.description,
+			instructions: entry.instructions,
+		}
+		try {
+			if (backendEnabled) {
+				const created = await createCommunityPost({
+					author: user,
+					type: "skill",
+					caption: "",
+					img: null,
+					repoUrl: null,
+					tags: [],
+					skill,
+				})
+				if (!created) {
+					toast.error("Couldn't share to Community — try again.")
+					return
+				}
+				setPosts((prev) => [created, ...prev])
+			} else {
+				const newPost: CommunityPost = {
+					id: crypto.randomUUID(),
+					author: user,
+					type: "skill",
+					caption: "",
+					thumbnailDataUrl: null,
+					repoUrl: null,
+					createdAt: Date.now(),
+					likedByMe: false,
+					likeCount: 0,
+					tags: [],
+					skill,
+				}
+				setPosts((prev) => [newPost, ...prev])
+			}
+			toast.success("Shared to Community")
+		} catch {
+			toast.error("Couldn't share to Community — try again.")
+		}
+	}
+
+	const exportBrain = async () => {
+		setBusy(true)
+		try {
+			const res = await bridge()?.exportBrain?.()
+			if (res?.ok) toast.success("Brain exported")
+			else if (res?.error) toast.error(res.error)
+			// res undefined (no bridge) or a cancelled dialog — stay quiet.
+		} catch {
+			toast.error("Couldn't export the Brain.")
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	const importBrain = async () => {
+		setBusy(true)
+		try {
+			const res = await bridge()?.importBrain?.()
+			if (res?.ok) {
+				toast.success(
+					typeof res.imported === "number"
+						? `Brain imported — ${res.imported} skills now available`
+						: "Brain imported",
+				)
+				await refresh()
+			} else if (res?.error) {
+				toast.error(res.error)
+			}
+		} catch {
+			toast.error("Couldn't import a Brain.")
+		} finally {
+			setBusy(false)
+		}
+	}
+
+	// Export/Import controls — shown above the vault (and in the empty state so
+	// a fresh machine can still import a Brain).
+	const actions = (
+		<div className="flex items-center gap-2">
+			<button
+				type="button"
+				onClick={() => void exportBrain()}
+				disabled={busy}
+				className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+			>
+				<DownloadIcon className="size-3.5" /> Export Brain
+			</button>
+			<button
+				type="button"
+				onClick={() => void importBrain()}
+				disabled={busy}
+				className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+			>
+				<UploadIcon className="size-3.5" /> Import Brain
+			</button>
+		</div>
+	)
 
 	if (!entries) {
 		return <p className="py-10 text-center text-muted-foreground text-sm">Loading the vault…</p>
@@ -369,9 +495,12 @@ function BrainVaultView() {
 
 	if (entries.length === 0) {
 		return (
-			<p className="py-10 text-center text-muted-foreground text-sm">
-				Nothing in the vault yet — add something from the Teach tab.
-			</p>
+			<div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4">
+				{actions}
+				<p className="py-6 text-center text-muted-foreground text-sm">
+					Nothing in the vault yet — add something from the Teach tab.
+				</p>
+			</div>
 		)
 	}
 
@@ -405,7 +534,10 @@ function BrainVaultView() {
 
 	return (
 		<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-			<p className="text-muted-foreground text-sm">{summary}</p>
+			<div className="flex items-center justify-between gap-2">
+				<p className="text-muted-foreground text-sm">{summary}</p>
+				{actions}
+			</div>
 
 			<div className="flex flex-wrap items-center gap-1.5">
 				{chips.map((chip) => {
@@ -453,6 +585,16 @@ function BrainVaultView() {
 												</div>
 											)}
 										</div>
+										{entry.type === "skill" && (
+											<button
+												type="button"
+												title="Share to Community"
+												onClick={() => void shareSkill(entry)}
+												className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+											>
+												<Share2Icon className="size-4" />
+											</button>
+										)}
 										{entry.verified ? (
 											<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
 												✓ verified

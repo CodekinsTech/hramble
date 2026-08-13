@@ -230,6 +230,7 @@ export function registerIpcHandlers(): void {
 			verified: boolean
 			source?: string
 			addedAt: number
+			instructions: string
 		}[] = []
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue
@@ -237,6 +238,12 @@ export function registerIpcHandlers(): void {
 				const skillMdPath = path.join(skillsDir, entry.name, "SKILL.md")
 				const content = fs.readFileSync(skillMdPath, "utf8")
 				const type = field(content, "type") || "skill"
+				// Body = everything after the closing frontmatter "---" line, same
+				// extraction as community-skills.ts — the skill's actual content, so
+				// the Vault can share a whole skill to the Community feed.
+				const frontmatterEnd = content.indexOf("\n---", content.indexOf("---") + 3)
+				const instructions =
+					frontmatterEnd >= 0 ? content.slice(frontmatterEnd + 4).trim() : content.trim()
 				vault.push({
 					name: field(content, "name") || entry.name,
 					description: field(content, "description") || "",
@@ -244,6 +251,7 @@ export function registerIpcHandlers(): void {
 					verified: field(content, "verified") === "true",
 					source: field(content, "source"),
 					addedAt: fs.statSync(skillMdPath).mtimeMs,
+					instructions,
 				})
 			} catch {
 				// No SKILL.md / malformed frontmatter — skip, never crash the list.
@@ -288,6 +296,82 @@ export function registerIpcHandlers(): void {
 			return Array.isArray(parsed) ? parsed : []
 		} catch {
 			return []
+		}
+	})
+
+	// Export the whole Brain — the skills dir + the registry json — as one .zip
+	// the user picks a location for. Lets a Brain be backed up or moved to
+	// another machine, restored via brain:import below.
+	// NOTE: uses the system `zip` (present on the Mac we target); a Windows
+	// build would need a JS zip lib (e.g. jszip/archiver) as a follow-up.
+	ipcMain.handle("brain:export", async () => {
+		try {
+			const configDir = path.join(os.homedir(), ".config", "opencode")
+			const skillsDir = path.join(configDir, "skills")
+			const registryPath = path.join(configDir, "brain-registry.json")
+			const hasSkills = fs.existsSync(skillsDir)
+			const hasRegistry = fs.existsSync(registryPath)
+			if (!hasSkills && !hasRegistry) {
+				return { ok: false, error: "Nothing in the Brain to export yet." }
+			}
+			const result = await dialog.showSaveDialog({
+				title: "Export Brain",
+				defaultPath: "brain-export.zip",
+				filters: [{ name: "Zip archive", extensions: ["zip"] }],
+			})
+			if (result.canceled || !result.filePath) return { ok: false }
+			const dest = result.filePath
+			// Remove any stale file at dest so `zip` writes a fresh archive instead
+			// of appending into an existing one.
+			try {
+				fs.rmSync(dest)
+			} catch {
+				// Nothing there yet — fine.
+			}
+			// Paths are relative to the opencode config dir so they restore to the
+			// same place on import.
+			const args = ["-r", dest]
+			if (hasSkills) args.push("skills")
+			if (hasRegistry) args.push("brain-registry.json")
+			await new Promise<void>((resolve, reject) => {
+				execFile("zip", args, { cwd: configDir }, (err) => (err ? reject(err) : resolve()))
+			})
+			return { ok: true, path: dest }
+		} catch (err) {
+			return { ok: false, error: err instanceof Error ? err.message : String(err) }
+		}
+	})
+
+	// Import a Brain export .zip — unpacks it back into ~/.config/opencode,
+	// MERGING into whatever skills already exist (colliding files overwrite, the
+	// rest are left alone) and restoring brain-registry.json if the archive has
+	// one. Returns how many skills exist afterwards.
+	// NOTE: uses the system `unzip`; a Windows build would need a JS zip lib.
+	ipcMain.handle("brain:import", async () => {
+		try {
+			const result = await dialog.showOpenDialog({
+				title: "Import Brain",
+				properties: ["openFile"],
+				filters: [{ name: "Zip archive", extensions: ["zip"] }],
+			})
+			if (result.canceled || result.filePaths.length === 0) return { ok: false }
+			const src = result.filePaths[0]
+			const configDir = path.join(os.homedir(), ".config", "opencode")
+			await mkdir(path.join(configDir, "skills"), { recursive: true })
+			await new Promise<void>((resolve, reject) => {
+				execFile("unzip", ["-o", src, "-d", configDir], (err) => (err ? reject(err) : resolve()))
+			})
+			let imported = 0
+			try {
+				imported = fs
+					.readdirSync(path.join(configDir, "skills"), { withFileTypes: true })
+					.filter((e) => e.isDirectory()).length
+			} catch {
+				// Skills dir unreadable after import — leave the count at 0.
+			}
+			return { ok: true, imported }
+		} catch (err) {
+			return { ok: false, error: err instanceof Error ? err.message : String(err) }
 		}
 	})
 
