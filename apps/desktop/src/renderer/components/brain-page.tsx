@@ -1539,13 +1539,24 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 // SVG lines drawn from the brain's edge to each card. Positions are measured
 // from the real DOM (and re-measured on resize), so the lines stay attached
 // however the layout wraps.
-function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNode }) {
+type BrainLine = { d: string; cx: number; cy: number }
+
+function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => React.ReactNode; pulse?: number }) {
 	const clusterRef = useRef<HTMLDivElement>(null)
 	const brainRef = useRef<HTMLDivElement>(null)
 	const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
-	const [paths, setPaths] = useState<string[]>([])
+	const [lines, setLines] = useState<BrainLine[]>([])
+	const [flowing, setFlowing] = useState(true)
 	const left = ["skill", "tool", "rules", "files"]
 	const right = ["repo", "docs", "connect"]
+
+	// Fan the cards: the further a card sits from its column's middle, the
+	// further it's nudged out horizontally, so each column bows toward the brain
+	// instead of standing as a flat stack.
+	const offsetFor = (col: string[], i: number, dir: 1 | -1) => {
+		const center = (col.length - 1) / 2
+		return dir * (10 + Math.abs(i - center) * 20)
+	}
 
 	useEffect(() => {
 		const compute = () => {
@@ -1556,7 +1567,7 @@ function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNod
 			const b = brain.getBoundingClientRect()
 			const brainMidX = b.left + b.width / 2
 			const brainY = b.top + b.height / 2 - c.top
-			const next: string[] = []
+			const next: BrainLine[] = []
 			for (const id of [...left, ...right]) {
 				const el = cardRefs.current[id]
 				if (!el) continue
@@ -1565,29 +1576,28 @@ function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNod
 				const brainX = (isLeft ? b.left : b.right) - c.left
 				const cardX = (isLeft ? r.right : r.left) - c.left
 				const cardY = r.top + r.height / 2 - c.top
-				// Simple elbow: straight out from the brain, one rounded corner at the
-				// bend, straight into the card — not a wavy full-length curve.
+				// Elbow: straight out from the brain, one rounded corner, straight in.
 				const mx = (brainX + cardX) / 2
+				let d: string
 				if (Math.abs(cardY - brainY) < 3) {
-					next.push(`M ${brainX.toFixed(1)} ${brainY.toFixed(1)} L ${cardX.toFixed(1)} ${cardY.toFixed(1)}`)
+					d = `M ${brainX.toFixed(1)} ${brainY.toFixed(1)} L ${cardX.toFixed(1)} ${cardY.toFixed(1)}`
 				} else {
 					const hdir = Math.sign(mx - brainX) || 1
 					const hdir2 = Math.sign(cardX - mx) || 1
 					const vdir = Math.sign(cardY - brainY)
-					const rr = Math.min(10, Math.abs(cardY - brainY) / 2, Math.abs(mx - brainX), Math.abs(cardX - mx))
-					next.push(
-						[
-							`M ${brainX.toFixed(1)} ${brainY.toFixed(1)}`,
-							`H ${(mx - hdir * rr).toFixed(1)}`,
-							`Q ${mx.toFixed(1)} ${brainY.toFixed(1)} ${mx.toFixed(1)} ${(brainY + vdir * rr).toFixed(1)}`,
-							`V ${(cardY - vdir * rr).toFixed(1)}`,
-							`Q ${mx.toFixed(1)} ${cardY.toFixed(1)} ${(mx + hdir2 * rr).toFixed(1)} ${cardY.toFixed(1)}`,
-							`H ${cardX.toFixed(1)}`,
-						].join(" "),
-					)
+					const rr = Math.min(12, Math.abs(cardY - brainY) / 2, Math.abs(mx - brainX), Math.abs(cardX - mx))
+					d = [
+						`M ${brainX.toFixed(1)} ${brainY.toFixed(1)}`,
+						`H ${(mx - hdir * rr).toFixed(1)}`,
+						`Q ${mx.toFixed(1)} ${brainY.toFixed(1)} ${mx.toFixed(1)} ${(brainY + vdir * rr).toFixed(1)}`,
+						`V ${(cardY - vdir * rr).toFixed(1)}`,
+						`Q ${mx.toFixed(1)} ${cardY.toFixed(1)} ${(mx + hdir2 * rr).toFixed(1)} ${cardY.toFixed(1)}`,
+						`H ${cardX.toFixed(1)}`,
+					].join(" ")
 				}
+				next.push({ d, cx: cardX, cy: cardY })
 			}
-			setPaths(next)
+			setLines(next)
 		}
 		const raf = requestAnimationFrame(compute)
 		const ro = new ResizeObserver(compute)
@@ -1600,56 +1610,69 @@ function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNod
 		}
 	}, [])
 
+	// Pulse the "current" on mount and every time the brain is fed, then settle.
+	useEffect(() => {
+		setFlowing(true)
+		const t = setTimeout(() => setFlowing(false), 5000)
+		return () => clearTimeout(t)
+	}, [pulse])
+
+	const col = (ids: string[], dir: 1 | -1) => (
+		<div className="relative z-10 flex flex-col gap-6">
+			{ids.map((id, i) => (
+				<div
+					key={id}
+					ref={(el) => {
+						cardRefs.current[id] = el
+					}}
+					style={{ transform: `translateX(${offsetFor(ids, i, dir)}px)` }}
+				>
+					{renderArm(id)}
+				</div>
+			))}
+		</div>
+	)
+
 	return (
-		<div ref={clusterRef} className="relative flex flex-wrap items-center justify-center gap-5">
-			<svg
-				aria-hidden="true"
-				className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible"
-			>
+		<div ref={clusterRef} className="relative flex flex-wrap items-center justify-center gap-12">
+			<svg aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible">
 				<title>Brain connections</title>
-				{paths.map((d, i) => (
-					<path
-						key={i}
-						d={d}
-						fill="none"
-						stroke="#2B6CFF"
-						strokeWidth={1.5}
-						strokeOpacity={0.6}
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
+				<defs>
+					<linearGradient id="brain-line" x1="0" y1="0" x2="1" y2="0">
+						<stop offset="0%" stopColor="#2B6CFF" stopOpacity={0.15} />
+						<stop offset="50%" stopColor="#2B6CFF" stopOpacity={0.55} />
+						<stop offset="100%" stopColor="#2B6CFF" stopOpacity={0.15} />
+					</linearGradient>
+				</defs>
+				{/* soft glow underlay */}
+				{lines.map((l, i) => (
+					<path key={`g${i}`} d={l.d} fill="none" stroke="#2B6CFF" strokeWidth={6} strokeOpacity={0.06} strokeLinecap="round" strokeLinejoin="round" />
+				))}
+				{/* base line */}
+				{lines.map((l, i) => (
+					<path key={`b${i}`} d={l.d} fill="none" stroke="url(#brain-line)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+				))}
+				{/* flowing current — a bright dash travelling toward the brain, only while active */}
+				{flowing &&
+					lines.map((l, i) => (
+						<path key={`c${i}`} d={l.d} fill="none" stroke="#2B6CFF" strokeWidth={2.5} strokeLinecap="round" strokeDasharray="5 260">
+							<animate attributeName="stroke-dashoffset" from={0} to={265} dur="1.4s" repeatCount="indefinite" />
+							<animate attributeName="stroke-opacity" values="0;0.9;0" dur="1.4s" repeatCount="indefinite" />
+						</path>
+					))}
+				{/* connection dots at each card */}
+				{lines.map((l, i) => (
+					<circle key={`d${i}`} cx={l.cx} cy={l.cy} r={2.5} fill="#2B6CFF" fillOpacity={0.7} />
 				))}
 			</svg>
-			<div className="relative z-10 flex flex-col gap-4">
-				{left.map((id) => (
-					<div
-						key={id}
-						ref={(el) => {
-							cardRefs.current[id] = el
-						}}
-					>
-						{renderArm(id)}
-					</div>
-				))}
-			</div>
+			{col(left, -1)}
 			<div
 				ref={brainRef}
-				className="relative z-10 flex size-48 items-center justify-center rounded-3xl border border-border bg-card"
+				className="relative z-10 flex size-48 items-center justify-center rounded-3xl border border-primary/20 bg-card shadow-[0_0_40px_-12px_rgba(43,109,255,0.35)] ring-1 ring-primary/5"
 			>
 				<BrainTracedIcon className="h-40 w-40" />
 			</div>
-			<div className="relative z-10 flex flex-col gap-4">
-				{right.map((id) => (
-					<div
-						key={id}
-						ref={(el) => {
-							cardRefs.current[id] = el
-						}}
-					>
-						{renderArm(id)}
-					</div>
-				))}
-			</div>
+			{col(right, 1)}
 		</div>
 	)
 }
@@ -1672,10 +1695,13 @@ export function BrainPage() {
 	const [input, setInput] = useState("")
 	const [starting, setStarting] = useState(false)
 	const [tab, setTab] = useState<"teach" | "vault">("teach")
+	// Bumped whenever the brain is fed, so the connector "current" pulses.
+	const [feedPulse, setFeedPulse] = useState(0)
 
 	const start = async (text: string) => {
 		const t = text.trim()
 		if (!t || starting) return
+		setFeedPulse((p) => p + 1)
 		setStarting(true)
 		try {
 			const dir = await bridge().getBrainDir()
@@ -1783,7 +1809,7 @@ export function BrainPage() {
 					</div>
 
 					{/* Brain at the centre, connected to its feed-arms by curved lines. */}
-					<BrainCluster renderArm={armCard} />
+					<BrainCluster renderArm={armCard} pulse={feedPulse} />
 
 					{/* Still allow free-form teaching by chat, secondary to the cards. */}
 					<div className="w-full max-w-xl">
