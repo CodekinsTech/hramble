@@ -82,7 +82,7 @@ function LoginGate() {
 				/>
 			</div>
 			<div>
-				<div style={{ background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, padding: "6px 16px", display: "inline-block" }}>
+				<div style={{ background: "rgba(30, 64, 175, 0.65)", borderRadius: 8, padding: "6px 16px", display: "inline-block" }}>
 					<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
 				</div>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
@@ -664,7 +664,7 @@ export function CommunityPage({
 			<div className={embedded ? "w-full flex-1 px-4 py-4" : "mx-auto w-full max-w-lg flex-1 px-4 py-6"}>
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-2">
-						<div style={{ background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, padding: "4px 12px", display: "inline-block" }}>
+						<div style={{ background: "rgba(30, 64, 175, 0.65)", borderRadius: 8, padding: "4px 12px", display: "inline-block" }}>
 						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
 					</div>
 						{filterTag && (
