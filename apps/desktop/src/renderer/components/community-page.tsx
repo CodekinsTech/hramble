@@ -69,10 +69,22 @@ function LoginGate() {
 	}
 
 	return (
-		<div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-			<ChipMascotIcon className="size-16 text-ring" />
+		<div className="flex h-full flex-col items-center justify-start gap-4 px-6 pt-10 text-center">
+			<div style={{ width: 200, height: 120 }}>
+				<video
+					src="community-hero.mp4"
+					autoPlay
+					loop
+					muted
+					playsInline
+					className="h-full w-full object-cover"
+					style={{ mixBlendMode: "multiply" }}
+				/>
+			</div>
 			<div>
-				<h1 className="font-semibold text-foreground text-xl">Community</h1>
+				<div style={{ background: "rgba(30, 64, 175, 0.65)", borderRadius: 8, padding: "6px 16px", display: "inline-block" }}>
+					<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
+				</div>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
 					Share what you built — a thumbnail, your GitHub repo, a demo — and message other builders about
 					their work.
@@ -652,7 +664,9 @@ export function CommunityPage({
 			<div className={embedded ? "w-full flex-1 px-4 py-4" : "mx-auto w-full max-w-lg flex-1 px-4 py-6"}>
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-2">
-						<h1 className="font-semibold text-foreground text-lg">Community</h1>
+						<div style={{ background: "rgba(30, 64, 175, 0.65)", borderRadius: 8, padding: "4px 12px", display: "inline-block" }}>
+						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
+					</div>
 						{filterTag && (
 							<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
 								#{filterTag}
