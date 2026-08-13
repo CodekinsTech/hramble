@@ -25,6 +25,22 @@ contextBridge.exposeInMainWorld("hramble", {
 			addedAt: number
 		}>
 	> => ipcRenderer.invoke("brain:vault"),
+	/** Clones a git repo locally for the Brain's Git Repo arm, returning its on-disk path. */
+	cloneBrainRepo: (url: string): Promise<{ ok: boolean; path?: string; error?: string }> =>
+		ipcRenderer.invoke("brain:clone-repo", url),
+	/** The Brain's registry of real CLI tools / local models it has set up. */
+	getBrainRegistry: (): Promise<
+		Array<{
+			id: string
+			kind: "tool" | "model"
+			name: string
+			command: string
+			description: string
+			verified: boolean
+			source?: string
+			addedAt: number
+		}>
+	> => ipcRenderer.invoke("brain:registry"),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),

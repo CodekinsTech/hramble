@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process"
 import fs from "node:fs"
 import { mkdir } from "node:fs/promises"
 import os from "node:os"
@@ -249,6 +250,45 @@ export function registerIpcHandlers(): void {
 			}
 		}
 		return vault
+	})
+
+	// Clones a git repo for the Brain's "Git Repo" arm, so the agent reads a
+	// real local checkout instead of hoping it clones the URL itself. Shallow
+	// clone into userData; if the destination already exists, treat it as done.
+	ipcMain.handle("brain:clone-repo", async (_e, url: string) => {
+		try {
+			const trimmed = (url || "").trim()
+			if (!trimmed) return { ok: false, error: "No repo URL provided." }
+			const last = trimmed.replace(/\/+$/, "").split("/").pop() || "repo"
+			const name = last.replace(/\.git$/i, "").toLowerCase().replace(/[^a-z0-9-_]/g, "-") || "repo"
+			const dest = path.join(app.getPath("userData"), "brain-chat", "repos", name)
+			if (fs.existsSync(dest)) return { ok: true, path: dest }
+			await mkdir(path.dirname(dest), { recursive: true })
+			await new Promise<void>((resolve, reject) => {
+				execFile(
+					"git",
+					["clone", "--depth", "1", trimmed, dest],
+					{ timeout: 120000 },
+					(err) => (err ? reject(err) : resolve()),
+				)
+			})
+			return { ok: true, path: dest }
+		} catch (err) {
+			return { ok: false, error: err instanceof Error ? err.message : String(err) }
+		}
+	})
+
+	// The Brain's tool/model registry — real CLI tools and local models the
+	// agent has set up (written by the register_brain_tool plugin tool). Reads
+	// the same brain-registry.json both sides compute from os.homedir().
+	ipcMain.handle("brain:registry", () => {
+		try {
+			const registryPath = path.join(os.homedir(), ".config", "opencode", "brain-registry.json")
+			const parsed = JSON.parse(fs.readFileSync(registryPath, "utf8"))
+			return Array.isArray(parsed) ? parsed : []
+		} catch {
+			return []
+		}
 	})
 
 	// A fresh, isolated scratch directory for one Design Deck variant. Each

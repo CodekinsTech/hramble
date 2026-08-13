@@ -140,6 +140,18 @@ const VAULT_TYPE_META: Record<
 
 const VAULT_TYPE_ORDER: BrainVaultEntry["type"][] = ["skill", "repo", "software", "model"]
 
+/** One entry in the Brain's tool/model registry (mirrors the brain:registry IPC shape). */
+export type BrainRegistryEntry = {
+	id: string
+	kind: "tool" | "model"
+	name: string
+	command: string
+	description: string
+	verified: boolean
+	source?: string
+	addedAt: number
+}
+
 // The four "arms" of the Brain — each a distinct way to feed it, each taking a
 // pasted link/path and turning it into a Brain session with the right instruction.
 type BrainArm = {
@@ -148,6 +160,9 @@ type BrainArm = {
 	icon: typeof PlusIcon
 	placeholder: string
 	prompt: (link: string) => string
+	// Optional async work run BEFORE the session starts (e.g. cloning a repo),
+	// returning the final prompt. Falls back to `prompt(link)` when absent.
+	preprocess?: (link: string) => Promise<string>
 }
 
 const BRAIN_ARMS: BrainArm[] = [
@@ -166,6 +181,14 @@ const BRAIN_ARMS: BrainArm[] = [
 		placeholder: "Paste a repo URL…",
 		prompt: (l) =>
 			`Absorb this git repo — read it and set it up as a reusable skill or callable tool (whichever fits): ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "repo", source: "${l}", and verified: true. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success. Then confirm what you saved.`,
+		preprocess: async (l) => {
+			const res = await bridge()?.cloneBrainRepo?.(l)
+			if (res?.ok && res.path) {
+				return `The repo is already cloned locally at ${res.path} — read it there, set it up as a reusable skill or callable tool (whichever fits), then actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "repo", source: "${l}", and verified: true, AND — if it's a runnable tool — also call register_brain_tool (kind: "tool") with the real invocation command. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success. Then confirm what you saved.`
+			}
+			// Clone failed (or no bridge) — fall back to letting the agent clone it.
+			return `Absorb this git repo — read it and set it up as a reusable skill or callable tool (whichever fits): ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "repo", source: "${l}", and verified: true. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success. Then confirm what you saved.`
+		},
 	},
 	{
 		id: "software",
@@ -173,7 +196,7 @@ const BRAIN_ARMS: BrainArm[] = [
 		icon: PackageIcon,
 		placeholder: "Paste an app/tool link…",
 		prompt: (l) =>
-			`Learn to use this software/tool and set it up: ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "software", source: "${l}", and verified: true, saving how to use it. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
+			`Learn to use this software/tool and set it up: ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "software", source: "${l}", and verified: true, saving how to use it — AND also call register_brain_tool with kind: "tool" and the real invocation command (e.g. how you actually ran it). If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
 	},
 	{
 		id: "model",
@@ -181,7 +204,7 @@ const BRAIN_ARMS: BrainArm[] = [
 		icon: CpuIcon,
 		placeholder: "Paste a model link…",
 		prompt: (l) =>
-			`Set up this local model as a capability I can call: ${l}\n\nThen actually call it once on a small test prompt to confirm it genuinely works. Only if that passes, call create_skill with type: "model", source: "${l}", and verified: true, saving how to use it. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
+			`Set up this local model as a capability I can call: ${l}\n\nThen actually call it once on a small test prompt to confirm it genuinely works. Only if that passes, call create_skill with type: "model", source: "${l}", and verified: true, saving how to use it — AND also call register_brain_tool with kind: "model" and the real invocation command (e.g. how you actually call it). If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success.`,
 	},
 ]
 
@@ -197,12 +220,20 @@ function BrainArmCard({
 	className?: string
 }) {
 	const [val, setVal] = useState("")
+	const [busy, setBusy] = useState(false)
 	const Icon = arm.icon
-	const submit = () => {
+	const isDisabled = disabled || busy
+	const submit = async () => {
 		const t = val.trim()
-		if (!t || disabled) return
-		onSubmit(arm.prompt(t))
-		setVal("")
+		if (!t || isDisabled) return
+		setBusy(true)
+		try {
+			const prompt = arm.preprocess ? await arm.preprocess(t) : arm.prompt(t)
+			onSubmit(prompt)
+			setVal("")
+		} finally {
+			setBusy(false)
+		}
 	}
 	return (
 		<div className={`flex w-48 flex-col gap-2 rounded-xl border border-border bg-card p-3 ${className ?? ""}`}>
@@ -219,17 +250,17 @@ function BrainArmCard({
 					onKeyDown={(e) => {
 						if (e.key === "Enter") {
 							e.preventDefault()
-							submit()
+							void submit()
 						}
 					}}
-					disabled={disabled}
+					disabled={isDisabled}
 					placeholder={arm.placeholder}
 					className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
 				/>
 				<button
 					type="button"
-					onClick={submit}
-					disabled={disabled || !val.trim()}
+					onClick={() => void submit()}
+					disabled={isDisabled || !val.trim()}
 					className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
 				>
 					<ArrowRightIcon className="size-3.5" />
@@ -242,6 +273,7 @@ function BrainArmCard({
 /** The Vault — a browsable record of everything that's been added to the Brain. */
 function BrainVaultView() {
 	const [entries, setEntries] = useState<BrainVaultEntry[] | null>(null)
+	const [registry, setRegistry] = useState<BrainRegistryEntry[]>([])
 	const [filter, setFilter] = useState<"all" | BrainVaultEntry["type"]>("all")
 
 	useEffect(() => {
@@ -254,6 +286,12 @@ function BrainVaultView() {
 				// No Electron bridge (e.g. dev:web preview) or IPC failure — show
 				// the empty state rather than spinning on "Loading…" forever.
 				if (!cancelled) setEntries([])
+			}
+			try {
+				const list = (await bridge()?.getBrainRegistry?.()) as BrainRegistryEntry[] | undefined
+				if (!cancelled) setRegistry(list ?? [])
+			} catch {
+				if (!cancelled) setRegistry([])
 			}
 		})()
 		return () => {
@@ -367,6 +405,42 @@ function BrainVaultView() {
 					</div>
 				))}
 			</div>
+
+			{registry.length > 0 && (
+				<div className="flex flex-col gap-2">
+					<h2 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">TOOLS & MODELS</h2>
+					<div className="flex flex-col gap-2">
+						{registry.map((entry) => {
+							const Icon = entry.kind === "model" ? CpuIcon : PackageIcon
+							return (
+								<div
+									key={entry.id}
+									className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+								>
+									<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+										<Icon className="size-4 text-primary" />
+									</div>
+									<div className="min-w-0 flex-1">
+										<div className="truncate font-medium text-foreground text-sm">{entry.name}</div>
+										<code className="mt-0.5 inline-block max-w-full truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+											{entry.command}
+										</code>
+									</div>
+									{entry.verified ? (
+										<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
+											✓ verified
+										</span>
+									) : (
+										<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+											unverified
+										</span>
+									)}
+								</div>
+							)
+						})}
+					</div>
+				</div>
+			)}
 		</div>
 	)
 }
