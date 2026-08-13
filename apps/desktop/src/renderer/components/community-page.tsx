@@ -81,7 +81,7 @@ function LoginGate() {
 				/>
 			</div>
 			<div>
-				<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(59, 130, 246, 0.75)" }}>Wired Jack</h1>
+				<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(168, 85, 247, 0.85)" }}>Wired Jack</h1>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
 					Share what you built — a thumbnail, your GitHub repo, a demo — and message other builders about
 					their work.
@@ -661,7 +661,7 @@ export function CommunityPage({
 			<div className={embedded ? "w-full flex-1 px-4 py-4" : "mx-auto w-full max-w-lg flex-1 px-4 py-6"}>
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-2">
-						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(59, 130, 246, 0.75)" }}>Wired Jack</h1>
+						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(168, 85, 247, 0.85)" }}>Wired Jack</h1>
 						{filterTag && (
 							<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
 								#{filterTag}
