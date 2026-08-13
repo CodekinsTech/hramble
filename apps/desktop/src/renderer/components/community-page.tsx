@@ -69,7 +69,7 @@ function LoginGate() {
 	}
 
 	return (
-		<div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+		<div className="flex h-full flex-col items-center justify-start gap-4 px-6 pt-10 text-center">
 			<div className="overflow-hidden rounded-xl border border-border shadow-md" style={{ width: 200, height: 120 }}>
 				<video
 					src="community-hero.mp4"
