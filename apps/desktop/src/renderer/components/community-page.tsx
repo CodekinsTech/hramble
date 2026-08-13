@@ -69,7 +69,7 @@ function LoginGate() {
 	}
 
 	return (
-		<div className="flex h-full flex-col items-center justify-start gap-4 px-6 pt-10 text-center">
+		<div className="flex h-full flex-col items-center justify-start gap-4 px-6 pt-10 text-center" style={{ background: "#1a1a1a" }}>
 			<div className="overflow-hidden rounded-xl border border-border shadow-md" style={{ width: 200, height: 120 }}>
 				<video
 					src="community-hero.mp4"
@@ -657,7 +657,7 @@ export function CommunityPage({
 	const displayedPosts = filterTag ? posts.filter((p) => p.tags.includes(filterTag)) : posts
 
 	return (
-		<div className="flex h-full flex-col overflow-y-auto">
+		<div className="flex h-full flex-col overflow-y-auto" style={{ background: "#1a1a1a" }}>
 			<div className={embedded ? "w-full flex-1 px-4 py-4" : "mx-auto w-full max-w-lg flex-1 px-4 py-6"}>
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-2">
