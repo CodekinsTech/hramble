@@ -31,7 +31,7 @@ import {
 	SparklesIcon,
 	UploadIcon,
 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { agentFamily } from "../atoms/derived/agents"
 import { brainSessionAtom, brainSessionIdsAtom } from "../atoms/brain"
@@ -1154,6 +1154,105 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	)
 }
 
+// The brain at the centre with feed-cards flanking both sides, joined by curved
+// SVG lines drawn from the brain's edge to each card. Positions are measured
+// from the real DOM (and re-measured on resize), so the lines stay attached
+// however the layout wraps.
+function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNode }) {
+	const clusterRef = useRef<HTMLDivElement>(null)
+	const brainRef = useRef<HTMLDivElement>(null)
+	const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+	const [paths, setPaths] = useState<string[]>([])
+	const left = ["skill", "tool", "rules", "files"]
+	const right = ["repo", "docs", "connect"]
+
+	useEffect(() => {
+		const compute = () => {
+			const cluster = clusterRef.current
+			const brain = brainRef.current
+			if (!cluster || !brain) return
+			const c = cluster.getBoundingClientRect()
+			const b = brain.getBoundingClientRect()
+			const brainMidX = b.left + b.width / 2
+			const brainY = b.top + b.height / 2 - c.top
+			const next: string[] = []
+			for (const id of [...left, ...right]) {
+				const el = cardRefs.current[id]
+				if (!el) continue
+				const r = el.getBoundingClientRect()
+				const isLeft = r.left + r.width / 2 < brainMidX
+				const brainX = (isLeft ? b.left : b.right) - c.left
+				const cardX = (isLeft ? r.right : r.left) - c.left
+				const cardY = r.top + r.height / 2 - c.top
+				const dx = Math.max(24, Math.abs(cardX - brainX) * 0.5)
+				const c1x = isLeft ? brainX - dx : brainX + dx
+				const c2x = isLeft ? cardX + dx : cardX - dx
+				next.push(
+					`M ${brainX.toFixed(1)} ${brainY.toFixed(1)} C ${c1x.toFixed(1)} ${brainY.toFixed(1)}, ${c2x.toFixed(1)} ${cardY.toFixed(1)}, ${cardX.toFixed(1)} ${cardY.toFixed(1)}`,
+				)
+			}
+			setPaths(next)
+		}
+		const raf = requestAnimationFrame(compute)
+		const ro = new ResizeObserver(compute)
+		if (clusterRef.current) ro.observe(clusterRef.current)
+		window.addEventListener("resize", compute)
+		return () => {
+			cancelAnimationFrame(raf)
+			ro.disconnect()
+			window.removeEventListener("resize", compute)
+		}
+	}, [])
+
+	return (
+		<div ref={clusterRef} className="relative flex flex-wrap items-center justify-center gap-5">
+			<svg
+				aria-hidden="true"
+				className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible text-primary"
+			>
+				<title>Brain connections</title>
+				{/* soft glow underlay */}
+				{paths.map((d, i) => (
+					<path key={`g${i}`} d={d} fill="none" stroke="currentColor" strokeWidth={5} strokeOpacity={0.1} strokeLinecap="round" />
+				))}
+				{paths.map((d, i) => (
+					<path key={`l${i}`} d={d} fill="none" stroke="currentColor" strokeWidth={1.5} strokeOpacity={0.45} strokeLinecap="round" />
+				))}
+			</svg>
+			<div className="relative z-10 flex flex-col gap-4">
+				{left.map((id) => (
+					<div
+						key={id}
+						ref={(el) => {
+							cardRefs.current[id] = el
+						}}
+					>
+						{renderArm(id)}
+					</div>
+				))}
+			</div>
+			<div
+				ref={brainRef}
+				className="relative z-10 flex size-48 items-center justify-center rounded-3xl border border-border bg-card"
+			>
+				<BrainTracedIcon className="h-40 w-40" />
+			</div>
+			<div className="relative z-10 flex flex-col gap-4">
+				{right.map((id) => (
+					<div
+						key={id}
+						ref={(el) => {
+							cardRefs.current[id] = el
+						}}
+					>
+						{renderArm(id)}
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
 export function BrainPage() {
 	const [brainSession, setBrainSession] = useAtom(brainSessionAtom)
 	const [, setBrainSessionIds] = useAtom(brainSessionIdsAtom)
@@ -1274,23 +1373,8 @@ export function BrainPage() {
 						</p>
 					</div>
 
-					{/* Brain at the centre with its feed-arms flanking both sides. */}
-					<div className="flex flex-wrap items-center justify-center gap-5">
-						<div className="flex flex-col gap-4">
-							{armCard("skill")}
-							{armCard("tool")}
-							{armCard("rules")}
-							{armCard("files")}
-						</div>
-						<div className="flex size-48 items-center justify-center rounded-3xl border border-border bg-card">
-							<BrainTracedIcon className="h-40 w-40" />
-						</div>
-						<div className="flex flex-col gap-4">
-							{armCard("repo")}
-							{armCard("docs")}
-							{armCard("connect")}
-						</div>
-					</div>
+					{/* Brain at the centre, connected to its feed-arms by curved lines. */}
+					<BrainCluster renderArm={armCard} />
 
 					{/* Still allow free-form teaching by chat, secondary to the cards. */}
 					<div className="w-full max-w-xl">
