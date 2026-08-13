@@ -70,7 +70,16 @@ function LoginGate() {
 
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-			<ChipMascotIcon className="size-16 text-ring" />
+			<div className="overflow-hidden rounded-xl border border-border shadow-md" style={{ width: 200, height: 120 }}>
+				<video
+					src="community-hero.mp4"
+					autoPlay
+					loop
+					muted
+					playsInline
+					className="h-full w-full object-cover"
+				/>
+			</div>
 			<div>
 				<h1 className="font-semibold text-foreground text-xl">Community</h1>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
