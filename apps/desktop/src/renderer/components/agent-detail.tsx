@@ -10,7 +10,7 @@ import {
 	ArrowLeftIcon,
 	ArrowUpRightIcon,
 	CheckIcon,
-	ChevronLeftIcon,
+
 	CopyIcon,
 	ExternalLinkIcon,
 	LinkIcon,
@@ -22,7 +22,7 @@ import {
 	MoreHorizontalIcon,
 	PencilIcon,
 	RadioTowerIcon,
-	SendIcon,
+
 	TerminalIcon,
 	XIcon,
 } from "lucide-react"
@@ -37,8 +37,7 @@ import type {
 	SdkAgent,
 	VcsData,
 } from "../hooks/use-opencode-data"
-import { useAgents } from "../hooks/use-agents"
-import { useAgentActions, useServerConnection } from "../hooks/use-server"
+import { useServerConnection } from "../hooks/use-server"
 import { useSessionShare } from "../hooks/use-session-share"
 import { useSessionBridge } from "../hooks/use-session-bridge"
 import type { ChatTurn } from "../hooks/use-session-chat"
@@ -745,31 +744,6 @@ function SessionMoreMenu({
 		setTimeout(() => setShareCopied(false), 1500)
 	}, [shareUrl])
 
-	// --- Send to Session ---
-	const allAgents = useAgents()
-	const { sendPrompt } = useAgentActions()
-	const otherSessions = allAgents.filter((a) => a.sessionId !== sessionId)
-	const [targetSession, setTargetSession] = useState<(typeof allAgents)[0] | null>(null)
-	const [crossMsg, setCrossMsg] = useState("")
-	const [sending, setSending] = useState(false)
-
-	const handleSendToSession = useCallback(async () => {
-		if (!targetSession || !crossMsg.trim()) return
-		setSending(true)
-		try {
-			await sendPrompt(targetSession.directory, targetSession.sessionId, crossMsg.trim())
-			toast.success(`Message sent to "${targetSession.name}"`, {
-				description: "Switch to that session to see the response.",
-			})
-			setCrossMsg("")
-			setTargetSession(null)
-		} catch {
-			toast.error("Failed to send message")
-		} finally {
-			setSending(false)
-		}
-	}, [targetSession, crossMsg, sendPrompt])
-
 	// --- Open elsewhere (browser / editor / terminal) ---
 	const browserUrl = useAtomValue(browserUrlAtom)
 	const { url: serverUrl } = useServerConnection()
@@ -918,62 +892,6 @@ function SessionMoreMenu({
 								<LinkIcon className="size-3.5" />
 								Create Bridge Link
 							</Button>
-						</div>
-					)}
-				</div>
-
-				<div className="h-px bg-border" />
-
-				{/* Send to Session */}
-				<div className="p-3">
-					<p className="font-medium text-sm">Send to Session</p>
-					{otherSessions.length === 0 ? (
-						<p className="mt-1 text-muted-foreground text-xs">No other sessions open</p>
-					) : targetSession ? (
-						<div className="mt-2 flex flex-col gap-2">
-							<button
-								type="button"
-								onClick={() => setTargetSession(null)}
-								className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-fit"
-							>
-								<ChevronLeftIcon className="size-3" />
-								<span className="truncate max-w-[180px] font-medium text-foreground">{targetSession.name}</span>
-							</button>
-							<Input
-								autoFocus
-								value={crossMsg}
-								onChange={(e) => setCrossMsg(e.target.value)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendToSession() }
-								}}
-								placeholder="Message for that session…"
-								className="text-xs"
-								disabled={sending}
-							/>
-							<Button
-								size="sm"
-								variant="outline"
-								className="w-fit gap-1.5"
-								onClick={() => void handleSendToSession()}
-								disabled={!crossMsg.trim() || sending}
-							>
-								<SendIcon className="size-3.5" />
-								{sending ? "Sending…" : "Send"}
-							</Button>
-						</div>
-					) : (
-						<div className="mt-2 flex flex-col gap-0.5">
-							{otherSessions.map((s) => (
-								<button
-									key={s.sessionId}
-									type="button"
-									onClick={() => setTargetSession(s)}
-									className="flex flex-col items-start rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted"
-								>
-									<span className="text-xs font-medium leading-tight truncate max-w-full">{s.name}</span>
-									<span className="text-[10px] text-muted-foreground truncate max-w-full">{s.project}</span>
-								</button>
-							))}
 						</div>
 					)}
 				</div>
