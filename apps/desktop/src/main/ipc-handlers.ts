@@ -187,6 +187,15 @@ export function registerIpcHandlers(): void {
 		return dir
 	})
 
+	// A fresh, isolated scratch directory for one Design Deck variant. Each
+	// (runId, index) pair gets its own folder under userData so parallel
+	// variant sessions never write over each other or the user's real projects.
+	ipcMain.handle("design-deck:variant-dir", async (_e, runId: string, index: number) => {
+		const dir = path.join(app.getPath("userData"), "design-deck", runId, `variant-${index}`)
+		await mkdir(dir, { recursive: true })
+		return dir
+	})
+
 	// --- Objective shell run (for Step List verification gates) ---
 	// Runs a command in a project directory and returns its real exit code +
 	// output. Unlike agent tool calls, this is a plain process, so a step's
