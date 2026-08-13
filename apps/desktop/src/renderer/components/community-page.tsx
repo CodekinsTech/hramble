@@ -81,7 +81,7 @@ function LoginGate() {
 				/>
 			</div>
 			<div>
-				<h1 className="text-xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(59, 130, 246, 0.75)" }}>Wired Jack</h1>
+				<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(59, 130, 246, 0.75)" }}>Wired Jack</h1>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
 					Share what you built — a thumbnail, your GitHub repo, a demo — and message other builders about
 					their work.
