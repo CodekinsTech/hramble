@@ -375,6 +375,180 @@ export function registerIpcHandlers(): void {
 		}
 	})
 
+	// Import a Brain straight from a GitHub URL — the recipient side of "Share
+	// Brain". Shallow-clones the repo into a temp dir under userData, MERGES its
+	// skills/ folders into the local skills dir (overwrite same-name, keep the
+	// rest), appends any new brain-registry.json entries, and returns the repo's
+	// machine-readable manifest.json + HEALTH.md so the UI can drive a
+	// "Bring it Live" setup screen. NEVER runs any of the manifest's commands —
+	// that stays human-in-the-loop in the renderer. Guarded end to end.
+	ipcMain.handle(
+		"brain:import-git",
+		async (
+			_e,
+			args: { url: string },
+		): Promise<{
+			ok: boolean
+			imported?: number
+			manifest?: {
+				generatedAt?: string
+				skills?: Array<{ name: string; description?: string; type?: string }>
+				tools?: Array<{ name: string; command?: string; source?: string }>
+				models?: Array<{ name: string; source?: string }>
+				connectors?: Array<{ name?: string; source?: string }>
+			} | null
+			health?: string | null
+			error?: string
+		}> => {
+			try {
+				const url = (args?.url || "").trim()
+				if (!url) return { ok: false, error: "No repo URL provided." }
+
+				// Sanitized folder name, same slug approach as brain:clone-repo.
+				const last = url.replace(/\/+$/, "").split("/").pop() || "brain"
+				const name =
+					last.replace(/\.git$/i, "").toLowerCase().replace(/[^a-z0-9-_]/g, "-") || "brain"
+				const dest = path.join(app.getPath("userData"), "brain-import", name)
+
+				// Clear any stale checkout so the shallow clone lands in a fresh dir.
+				fs.rmSync(dest, { recursive: true, force: true })
+				await mkdir(path.dirname(dest), { recursive: true })
+				await new Promise<void>((resolve, reject) => {
+					execFile(
+						"git",
+						["clone", "--depth", "1", url, dest],
+						{ timeout: 120000 },
+						(err) => (err ? reject(err) : resolve()),
+					)
+				})
+
+				const configDir = path.join(os.homedir(), ".config", "opencode")
+				const localSkillsDir = path.join(configDir, "skills")
+				await mkdir(localSkillsDir, { recursive: true })
+
+				// Merge skills — copy each incoming skill folder over the top of the
+				// local one (same-name overwrites, everything else is left alone).
+				const repoSkillsDir = path.join(dest, "skills")
+				try {
+					const skillEntries = fs.readdirSync(repoSkillsDir, { withFileTypes: true })
+					for (const entry of skillEntries) {
+						if (!entry.isDirectory()) continue
+						try {
+							fs.cpSync(
+								path.join(repoSkillsDir, entry.name),
+								path.join(localSkillsDir, entry.name),
+								{ recursive: true, force: true },
+							)
+						} catch {
+							// One bad skill folder shouldn't abort the whole import.
+						}
+					}
+				} catch {
+					// No skills/ in the repo — nothing to merge.
+				}
+
+				// Merge registry — append incoming entries whose id/name aren't
+				// already present locally, leaving existing entries untouched.
+				try {
+					const incoming = JSON.parse(
+						fs.readFileSync(path.join(dest, "brain-registry.json"), "utf8"),
+					)
+					if (Array.isArray(incoming) && incoming.length > 0) {
+						const registryPath = path.join(configDir, "brain-registry.json")
+						let local: Array<{ id?: string; name?: string }> = []
+						try {
+							const parsed = JSON.parse(fs.readFileSync(registryPath, "utf8"))
+							if (Array.isArray(parsed)) local = parsed
+						} catch {
+							local = []
+						}
+						const has = (e: { id?: string; name?: string }) =>
+							local.some((x) => (e.id && x.id === e.id) || (e.name && x.name === e.name))
+						for (const e of incoming) {
+							if (e && typeof e === "object" && !has(e)) local.push(e)
+						}
+						fs.writeFileSync(registryPath, JSON.stringify(local, null, 2))
+					}
+				} catch {
+					// No brain-registry.json in the repo, or it's malformed — skip.
+				}
+
+				// Parse the machine-readable manifest, if the repo shipped one.
+				let manifest: {
+					generatedAt?: string
+					skills?: Array<{ name: string; description?: string; type?: string }>
+					tools?: Array<{ name: string; command?: string; source?: string }>
+					models?: Array<{ name: string; source?: string }>
+					connectors?: Array<{ name?: string; source?: string }>
+				} | null = null
+				try {
+					const parsed = JSON.parse(fs.readFileSync(path.join(dest, "manifest.json"), "utf8"))
+					if (parsed && typeof parsed === "object") manifest = parsed
+				} catch {
+					manifest = null
+				}
+
+				// The incoming health report, if present, so the UI can show what
+				// still needs work.
+				let health: string | null = null
+				try {
+					health = fs.readFileSync(path.join(dest, "HEALTH.md"), "utf8")
+				} catch {
+					health = null
+				}
+
+				let imported = 0
+				try {
+					imported = fs
+						.readdirSync(localSkillsDir, { withFileTypes: true })
+						.filter((e) => e.isDirectory()).length
+				} catch {
+					// Skills dir unreadable after merge — leave the count at 0.
+				}
+
+				return { ok: true, imported, manifest, health }
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
+	// Run ONE setup command from an imported Brain's manifest — the installer half
+	// of "Bring it Live". Called ONLY from the renderer AFTER the user has seen the
+	// exact command on screen and chosen to run it (never auto-run on import). The
+	// command came from someone else's Brain, so keeping it human-in-the-loop is
+	// the whole security model. Returns the real exit code + output; never throws.
+	ipcMain.handle(
+		"brain:run-command",
+		async (
+			_e,
+			args: { command: string },
+		): Promise<{ ok: boolean; code: number; stdout: string; stderr: string }> => {
+			const command = (args?.command || "").trim()
+			if (!command) {
+				return { ok: false, code: 1, stdout: "", stderr: "No command provided." }
+			}
+			return await new Promise((resolve) => {
+				execFile(
+					"/bin/sh",
+					["-c", command],
+					{ timeout: 300000, maxBuffer: 8 * 1024 * 1024, env: process.env },
+					(err, stdout, stderr) => {
+						const e = err as (Error & { code?: number | string; killed?: boolean }) | null
+						const code =
+							e && typeof e.code === "number" ? e.code : e?.killed ? 124 : e ? 1 : 0
+						resolve({
+							ok: code === 0,
+							code,
+							stdout: String(stdout).slice(-8000),
+							stderr: String(stderr).slice(-8000),
+						})
+					},
+				)
+			})
+		},
+	)
+
 	// Deterministic health check for a set of Brain items — NO agent, NO AI.
 	// Each item is checked with a fast, objective probe based on what it is:
 	//   • has a URL source (docs/repo/model/skill/software) → net.fetch HEAD,
@@ -976,6 +1150,21 @@ export function registerIpcHandlers(): void {
 				properties: ["openFile"],
 				title: "Choose a page to preview",
 				filters: [{ name: "Web pages", extensions: ["html", "htm", "svg"] }],
+			})
+			if (result.canceled || result.filePaths.length === 0) return null
+			return result.filePaths[0]
+		}),
+	)
+
+	// Pick a local document for the Brain's Docs arm (PDF / text / markdown /
+	// Word). Returns the chosen file's path, or null if cancelled.
+	ipcMain.handle(
+		"dialog:open-doc-file",
+		withLogging("dialog:open-doc-file", async () => {
+			const result = await dialog.showOpenDialog({
+				properties: ["openFile"],
+				title: "Choose a document for the Brain to read",
+				filters: [{ name: "Documents", extensions: ["pdf", "txt", "md", "markdown", "docx", "rtf"] }],
 			})
 			if (result.canceled || result.filePaths.length === 0) return null
 			return result.filePaths[0]

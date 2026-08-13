@@ -18,11 +18,16 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	ArrowRightIcon,
 	BookOpenIcon,
+	CheckIcon,
+	ChevronDownIcon,
 	CpuIcon,
 	DownloadIcon,
+	ExternalLinkIcon,
 	FolderIcon,
 	GitBranchIcon,
+	GithubIcon,
 	ListChecksIcon,
+	Loader2Icon,
 	PackageIcon,
 	PlugIcon,
 	PlusIcon,
@@ -30,6 +35,7 @@ import {
 	Share2Icon,
 	SparklesIcon,
 	UploadIcon,
+	XIcon,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -229,6 +235,11 @@ type BrainArm = {
 	// handled by id in the Brain page (Connect navigates, Files picks a folder).
 	action?: "connect" | "files"
 	actionLabel?: string
+	// Input arms may also offer a "browse for a local file" affordance (e.g. Docs
+	// can take a pasted URL OR a local pdf/txt/md file). `filePrompt` builds the
+	// session prompt from the picked file path.
+	browseFile?: boolean
+	filePrompt?: (filePath: string) => string
 }
 
 const BRAIN_ARMS: BrainArm[] = [
@@ -268,9 +279,12 @@ const BRAIN_ARMS: BrainArm[] = [
 		id: "docs",
 		name: "Docs",
 		icon: BookOpenIcon,
-		placeholder: "Paste a doc / API / page URL…",
+		placeholder: "Paste a URL — or pick a file →",
 		prompt: (l) =>
 			`Read the documentation / reference at ${l} and extract the key, reusable knowledge from it (how the API/tool/library actually works, the important endpoints/options/gotchas). Save it with create_skill using type: "docs" and source: "${l}", so future sessions can use it without guessing. Then tell me in one line what it covers.`,
+		browseFile: true,
+		filePrompt: (p) =>
+			`Read the document at ${p} (a local PDF / text / markdown file) and extract the key, reusable knowledge from it. Save it with create_skill using type: "docs" and source: "${p}", so future sessions can use it without re-reading the whole file. Then tell me in one line what it covers.`,
 	},
 	{
 		id: "connect",
@@ -301,18 +315,29 @@ function BrainArmCard({
 	disabled,
 	onSubmit,
 	onAction,
+	onBrowse,
 	className,
 }: {
 	arm: BrainArm
 	disabled: boolean
 	onSubmit: (prompt: string) => void
 	onAction?: () => void | Promise<void>
+	onBrowse?: () => void | Promise<void>
 	className?: string
 }) {
 	const [val, setVal] = useState("")
 	const [busy, setBusy] = useState(false)
 	const Icon = arm.icon
 	const isDisabled = disabled || busy
+	const browse = async () => {
+		if (isDisabled || !onBrowse) return
+		setBusy(true)
+		try {
+			await onBrowse()
+		} finally {
+			setBusy(false)
+		}
+	}
 	const submit = async () => {
 		const t = val.trim()
 		if (!t || isDisabled) return
@@ -367,6 +392,17 @@ function BrainArmCard({
 						placeholder={arm.placeholder}
 						className="h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
 					/>
+					{arm.browseFile && (
+						<button
+							type="button"
+							title="Pick a local file (PDF / text / markdown)"
+							onClick={() => void browse()}
+							disabled={isDisabled}
+							className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-40"
+						>
+							<FolderIcon className="size-3.5" />
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={() => void submit()}
@@ -377,6 +413,253 @@ function BrainArmCard({
 					</button>
 				</div>
 			)}
+		</div>
+	)
+}
+
+// The machine-readable manifest that ships inside a shared Brain repo (mirrors
+// what brain:publish-git writes + brain:import-git returns). Every field is
+// optional so a partial / hand-edited manifest never crashes the setup screen.
+export type BrainManifest = {
+	generatedAt?: string
+	skills?: Array<{ name: string; description?: string; type?: string }>
+	tools?: Array<{ name: string; command?: string; source?: string }>
+	models?: Array<{ name: string; source?: string }>
+	connectors?: Array<{ name?: string; source?: string }>
+}
+
+// Per-command install state on the Bring-it-Live screen.
+type InstallState = "idle" | "busy" | "ok" | "fail"
+
+/**
+ * Bring-it-Live — the setup screen shown after importing a shared Brain that
+ * carries extra bits to wire up (CLI tools, local models, service connectors).
+ *
+ * SECURITY: the install commands came from someone ELSE's Brain, so this screen
+ * is strictly human-in-the-loop — every command is ALWAYS printed on screen
+ * before it can run, and running one is a deliberate click (there's an
+ * "Install all", but only over commands already visible). Models are never
+ * auto-downloaded: we only surface a link to Open. Nothing runs on import.
+ */
+function BringItLiveView({
+	manifest,
+	health,
+	onDone,
+}: {
+	manifest: BrainManifest
+	health: string | null
+	onDone: () => void
+}) {
+	const navigate = useNavigate()
+	const tools = manifest.tools ?? []
+	const models = manifest.models ?? []
+	const connectors = manifest.connectors ?? []
+	const [showHealth, setShowHealth] = useState(false)
+	const [state, setState] = useState<Record<number, InstallState>>({})
+	const [installingAll, setInstallingAll] = useState(false)
+
+	// Run ONE tool's command — only ever from a user click here. Reflects the
+	// real exit code back as a ✓/✗, and surfaces stderr on failure.
+	const runOne = async (i: number, command: string): Promise<boolean> => {
+		const fn = bridge()?.runBrainSetupCommand
+		if (typeof fn !== "function") {
+			toast.error("Running setup needs the desktop app.")
+			return false
+		}
+		setState((p) => ({ ...p, [i]: "busy" }))
+		try {
+			const res = await fn(command)
+			const ok = !!res?.ok
+			setState((p) => ({ ...p, [i]: ok ? "ok" : "fail" }))
+			if (!ok) toast.error(res?.stderr?.trim() || `Command exited ${res?.code ?? 1}`)
+			return ok
+		} catch {
+			setState((p) => ({ ...p, [i]: "fail" }))
+			toast.error("Couldn't run that command.")
+			return false
+		}
+	}
+
+	// Runs every tool command in order — the commands are already on screen, so
+	// this only saves clicks, it doesn't hide anything.
+	const installAll = async () => {
+		setInstallingAll(true)
+		try {
+			for (let i = 0; i < tools.length; i++) {
+				const cmd = (tools[i].command || "").trim()
+				if (!cmd) continue
+				await runOne(i, cmd)
+			}
+		} finally {
+			setInstallingAll(false)
+		}
+	}
+
+	// Open a model's download page in the real browser — NEVER auto-download.
+	const openModel = (source?: string) => {
+		if (!source) return
+		const ext = bridge()?.openExternal
+		if (typeof ext === "function") void ext(source)
+		else window.open(source, "_blank", "noopener")
+	}
+
+	const statusMark = (s: InstallState) => {
+		if (s === "busy") return <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+		if (s === "ok") return <CheckIcon className="size-4 text-emerald-500" />
+		if (s === "fail") return <XIcon className="size-4 text-red-500" />
+		return null
+	}
+
+	return (
+		<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+			<div className="flex flex-col gap-1">
+				<h2 className="font-semibold text-foreground text-lg">Bring this Brain live on your machine</h2>
+				<p className="text-muted-foreground text-sm">
+					Its skills, docs and rules are already active. These are the extra bits to set up.
+				</p>
+			</div>
+
+			{health && (
+				<div className="rounded-xl border border-border bg-card">
+					<button
+						type="button"
+						onClick={() => setShowHealth((v) => !v)}
+						className="flex w-full items-center justify-between gap-2 p-3 text-left"
+					>
+						<span className="font-medium text-foreground text-sm">What still needs work</span>
+						<ChevronDownIcon
+							className={`size-4 shrink-0 text-muted-foreground transition-transform ${showHealth ? "rotate-180" : ""}`}
+						/>
+					</button>
+					{showHealth && (
+						<pre className="max-h-64 overflow-auto whitespace-pre-wrap border-border border-t p-3 font-mono text-[11px] text-muted-foreground">
+							{health}
+						</pre>
+					)}
+				</div>
+			)}
+
+			{tools.length > 0 && (
+				<div className="flex flex-col gap-2">
+					<div className="flex items-center justify-between">
+						<h3 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">TOOLS</h3>
+						<button
+							type="button"
+							onClick={() => void installAll()}
+							disabled={installingAll}
+							className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+						>
+							{installingAll ? "Installing…" : "Install all"}
+						</button>
+					</div>
+					<div className="flex flex-col gap-2">
+						{tools.map((t, i) => {
+							const cmd = (t.command || "").trim()
+							const s = state[i] ?? "idle"
+							return (
+								<div
+									key={`${t.name}-${i}`}
+									className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+								>
+									<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+										<PackageIcon className="size-4 text-purple-500" />
+									</div>
+									<div className="min-w-0 flex-1">
+										<div className="truncate font-medium text-foreground text-sm">{t.name}</div>
+										{cmd && (
+											<code className="mt-0.5 inline-block max-w-full truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+												{cmd}
+											</code>
+										)}
+									</div>
+									{statusMark(s)}
+									<button
+										type="button"
+										onClick={() => void runOne(i, cmd)}
+										disabled={!cmd || s === "busy" || installingAll}
+										className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-[11px] text-primary-foreground disabled:opacity-40"
+									>
+										Install
+									</button>
+								</div>
+							)
+						})}
+					</div>
+				</div>
+			)}
+
+			{models.length > 0 && (
+				<div className="flex flex-col gap-2">
+					<h3 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">MODELS</h3>
+					<div className="flex flex-col gap-2">
+						{models.map((m, i) => (
+							<div
+								key={`${m.name}-${i}`}
+								className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+							>
+								<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+									<CpuIcon className="size-4 text-amber-500" />
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="truncate font-medium text-foreground text-sm">{m.name}</div>
+									{m.source && (
+										<div className="truncate text-muted-foreground text-xs">{m.source}</div>
+									)}
+								</div>
+								{m.source && (
+									<button
+										type="button"
+										onClick={() => openModel(m.source)}
+										className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-[11px] text-foreground transition-colors hover:border-primary/40"
+									>
+										<ExternalLinkIcon className="size-3.5" /> Open
+									</button>
+								)}
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{connectors.length > 0 && (
+				<div className="flex flex-col gap-2">
+					<h3 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">CONNECTORS</h3>
+					<div className="flex flex-col gap-2">
+						{connectors.map((c, i) => (
+							<div
+								key={`${c.name ?? "connector"}-${i}`}
+								className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+							>
+								<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+									<PlugIcon className="size-4 text-sky-500" />
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="truncate font-medium text-foreground text-sm">
+										{c.name || "Connector"}
+									</div>
+								</div>
+								<button
+									type="button"
+									onClick={() => navigate({ to: "/settings/connectors" })}
+									className="shrink-0 rounded-md border border-border bg-background px-2.5 py-1 text-[11px] text-foreground transition-colors hover:border-primary/40"
+								>
+									Connect
+								</button>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			<div className="flex items-center justify-end">
+				<button
+					type="button"
+					onClick={onDone}
+					className="flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground"
+				>
+					Done
+				</button>
+			</div>
 		</div>
 	)
 }
@@ -401,6 +684,14 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	const user = useAtomValue(communityUserAtom)
 	const backendEnabled = useAtomValue(communityBackendEnabledAtom)
 	const setPosts = useSetAtom(communityPostsAtom)
+	// Import-from-GitHub — an inline URL field toggled open next to Import Brain.
+	const [gitImportOpen, setGitImportOpen] = useState(false)
+	const [gitUrl, setGitUrl] = useState("")
+	const [gitImporting, setGitImporting] = useState(false)
+	// Bring-it-Live setup screen — set from the imported manifest when it carries
+	// tools/models/connectors to wire up; null = not showing it.
+	const [liveManifest, setLiveManifest] = useState<BrainManifest | null>(null)
+	const [liveHealth, setLiveHealth] = useState<string | null>(null)
 
 	// Reloads the vault + registry from the main process. Reused after an
 	// import so newly-restored skills appear without a page switch.
@@ -508,6 +799,46 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 			toast.error("Couldn't import a Brain.")
 		} finally {
 			setBusy(false)
+		}
+	}
+
+	// Imports a Brain straight from a GitHub URL (clone + merge skills/registry),
+	// then — if the returned manifest carries tools/models/connectors — opens the
+	// Bring-it-Live setup screen so the user can wire them up.
+	const importFromGit = async () => {
+		const url = gitUrl.trim()
+		if (!url || gitImporting) return
+		setGitImporting(true)
+		try {
+			const fn = bridge()?.importBrainFromGit
+			if (typeof fn !== "function") {
+				toast.error("Importing from GitHub needs the desktop app.")
+				return
+			}
+			const res = await fn(url)
+			if (res?.ok) {
+				toast.success(
+					typeof res.imported === "number"
+						? `Brain imported — ${res.imported} skills now available`
+						: "Brain imported",
+				)
+				setGitImportOpen(false)
+				setGitUrl("")
+				await refresh()
+				const m = res.manifest
+				const setupCount =
+					(m?.tools?.length ?? 0) + (m?.models?.length ?? 0) + (m?.connectors?.length ?? 0)
+				if (m && setupCount > 0) {
+					setLiveManifest(m)
+					setLiveHealth(res.health ?? null)
+				}
+			} else if (res?.error) {
+				toast.error(res.error)
+			}
+		} catch {
+			toast.error("Couldn't import from GitHub.")
+		} finally {
+			setGitImporting(false)
 		}
 	}
 
@@ -649,31 +980,66 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	// Export/Import controls — shown above the vault (and in the empty state so
 	// a fresh machine can still import a Brain).
 	const actions = (
-		<div className="flex items-center gap-2">
-			<button
-				type="button"
-				onClick={openWizard}
-				disabled={busy}
-				className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
-			>
-				<Share2Icon className="size-3.5" /> Share Brain
-			</button>
-			<button
-				type="button"
-				onClick={() => void exportBrain()}
-				disabled={busy}
-				className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
-			>
-				<DownloadIcon className="size-3.5" /> Export Brain
-			</button>
-			<button
-				type="button"
-				onClick={() => void importBrain()}
-				disabled={busy}
-				className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
-			>
-				<UploadIcon className="size-3.5" /> Import Brain
-			</button>
+		<div className="flex flex-col items-end gap-2">
+			<div className="flex flex-wrap items-center justify-end gap-2">
+				<button
+					type="button"
+					onClick={openWizard}
+					disabled={busy}
+					className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+				>
+					<Share2Icon className="size-3.5" /> Share Brain
+				</button>
+				<button
+					type="button"
+					onClick={() => void exportBrain()}
+					disabled={busy}
+					className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+				>
+					<DownloadIcon className="size-3.5" /> Export Brain
+				</button>
+				<button
+					type="button"
+					onClick={() => void importBrain()}
+					disabled={busy}
+					className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+				>
+					<UploadIcon className="size-3.5" /> Import Brain
+				</button>
+				<button
+					type="button"
+					onClick={() => setGitImportOpen((v) => !v)}
+					disabled={busy}
+					className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+				>
+					<GithubIcon className="size-3.5" /> Import from GitHub
+				</button>
+			</div>
+			{gitImportOpen && (
+				<div className="flex items-center gap-1.5">
+					<input
+						value={gitUrl}
+						onChange={(e) => setGitUrl(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault()
+								void importFromGit()
+							}
+						}}
+						disabled={gitImporting}
+						placeholder="https://github.com/user/hramble-brain"
+						className="h-7 w-72 rounded-md border border-border bg-background px-2 text-[11px] outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+					/>
+					<button
+						type="button"
+						onClick={() => void importFromGit()}
+						disabled={gitImporting || !gitUrl.trim()}
+						className="flex h-7 items-center rounded-md bg-primary px-2.5 text-[11px] text-primary-foreground disabled:opacity-40"
+					>
+						{gitImporting ? "Importing…" : "Import"}
+					</button>
+				</div>
+			)}
 		</div>
 	)
 
@@ -991,6 +1357,21 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 		return <p className="py-10 text-center text-muted-foreground text-sm">Loading the vault…</p>
 	}
 
+	// The Bring-it-Live setup screen (after a GitHub import) takes over the vault
+	// surface until the user is done.
+	if (liveManifest) {
+		return (
+			<BringItLiveView
+				manifest={liveManifest}
+				health={liveHealth}
+				onDone={() => {
+					setLiveManifest(null)
+					setLiveHealth(null)
+				}}
+			/>
+		)
+	}
+
 	// Share Brain wizard takes over the whole vault surface while open.
 	if (wizardStep) {
 		return renderWizard()
@@ -1184,12 +1565,27 @@ function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNod
 				const brainX = (isLeft ? b.left : b.right) - c.left
 				const cardX = (isLeft ? r.right : r.left) - c.left
 				const cardY = r.top + r.height / 2 - c.top
-				const dx = Math.max(24, Math.abs(cardX - brainX) * 0.5)
-				const c1x = isLeft ? brainX - dx : brainX + dx
-				const c2x = isLeft ? cardX + dx : cardX - dx
-				next.push(
-					`M ${brainX.toFixed(1)} ${brainY.toFixed(1)} C ${c1x.toFixed(1)} ${brainY.toFixed(1)}, ${c2x.toFixed(1)} ${cardY.toFixed(1)}, ${cardX.toFixed(1)} ${cardY.toFixed(1)}`,
-				)
+				// Simple elbow: straight out from the brain, one rounded corner at the
+				// bend, straight into the card — not a wavy full-length curve.
+				const mx = (brainX + cardX) / 2
+				if (Math.abs(cardY - brainY) < 3) {
+					next.push(`M ${brainX.toFixed(1)} ${brainY.toFixed(1)} L ${cardX.toFixed(1)} ${cardY.toFixed(1)}`)
+				} else {
+					const hdir = Math.sign(mx - brainX) || 1
+					const hdir2 = Math.sign(cardX - mx) || 1
+					const vdir = Math.sign(cardY - brainY)
+					const rr = Math.min(10, Math.abs(cardY - brainY) / 2, Math.abs(mx - brainX), Math.abs(cardX - mx))
+					next.push(
+						[
+							`M ${brainX.toFixed(1)} ${brainY.toFixed(1)}`,
+							`H ${(mx - hdir * rr).toFixed(1)}`,
+							`Q ${mx.toFixed(1)} ${brainY.toFixed(1)} ${mx.toFixed(1)} ${(brainY + vdir * rr).toFixed(1)}`,
+							`V ${(cardY - vdir * rr).toFixed(1)}`,
+							`Q ${mx.toFixed(1)} ${cardY.toFixed(1)} ${(mx + hdir2 * rr).toFixed(1)} ${cardY.toFixed(1)}`,
+							`H ${cardX.toFixed(1)}`,
+						].join(" "),
+					)
+				}
 			}
 			setPaths(next)
 		}
@@ -1208,15 +1604,20 @@ function BrainCluster({ renderArm }: { renderArm: (id: string) => React.ReactNod
 		<div ref={clusterRef} className="relative flex flex-wrap items-center justify-center gap-5">
 			<svg
 				aria-hidden="true"
-				className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible text-primary"
+				className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible"
 			>
 				<title>Brain connections</title>
-				{/* soft glow underlay */}
 				{paths.map((d, i) => (
-					<path key={`g${i}`} d={d} fill="none" stroke="currentColor" strokeWidth={5} strokeOpacity={0.1} strokeLinecap="round" />
-				))}
-				{paths.map((d, i) => (
-					<path key={`l${i}`} d={d} fill="none" stroke="currentColor" strokeWidth={1.5} strokeOpacity={0.45} strokeLinecap="round" />
+					<path
+						key={i}
+						d={d}
+						fill="none"
+						stroke="#2B6CFF"
+						strokeWidth={1.5}
+						strokeOpacity={0.6}
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
 				))}
 			</svg>
 			<div className="relative z-10 flex flex-col gap-4">
@@ -1324,6 +1725,13 @@ export function BrainPage() {
 		)
 	}
 
+	// Browse for a local document (Docs arm) and hand its path to a Brain session.
+	const browseArmFile = async (arm: BrainArm) => {
+		const p = await bridge()?.pickDocFile?.()
+		if (!p || !arm.filePrompt) return
+		await start(arm.filePrompt(p))
+	}
+
 	// Opening screen — the brain in a box with its "arms" (feed cards) flanking it.
 	const armCard = (id: string) => {
 		const arm = BRAIN_ARMS.find((a) => a.id === id)
@@ -1334,6 +1742,7 @@ export function BrainPage() {
 				disabled={starting}
 				onSubmit={(p) => void start(p)}
 				onAction={arm.action ? () => runArmAction(arm.action as "connect" | "files") : undefined}
+				onBrowse={arm.browseFile ? () => browseArmFile(arm) : undefined}
 			/>
 		)
 	}

@@ -69,6 +69,27 @@ contextBridge.exposeInMainWorld("hramble", {
 		report?: string,
 	): Promise<{ ok: boolean; url?: string; error?: string }> =>
 		ipcRenderer.invoke("brain:publish-git", { items, report }),
+	/** Imports a Brain from a GitHub URL — merges its skills + registry, and returns its manifest + HEALTH.md for the Bring-it-Live setup screen. */
+	importBrainFromGit: (
+		url: string,
+	): Promise<{
+		ok: boolean
+		imported?: number
+		manifest?: {
+			generatedAt?: string
+			skills?: Array<{ name: string; description?: string; type?: string }>
+			tools?: Array<{ name: string; command?: string; source?: string }>
+			models?: Array<{ name: string; source?: string }>
+			connectors?: Array<{ name?: string; source?: string }>
+		} | null
+		health?: string | null
+		error?: string
+	}> => ipcRenderer.invoke("brain:import-git", { url }),
+	/** Runs ONE setup command from an imported Brain — only after the user has seen and approved it in the Bring-it-Live screen. */
+	runBrainSetupCommand: (
+		command: string,
+	): Promise<{ ok: boolean; code: number; stdout: string; stderr: string }> =>
+		ipcRenderer.invoke("brain:run-command", { command }),
 	/** A fresh scratch directory for one Design Deck variant — created on demand, never reused across runs. */
 	getDesignDeckVariantDir: (runId: string, index: number): Promise<string> =>
 		ipcRenderer.invoke("design-deck:variant-dir", runId, index),
@@ -338,6 +359,8 @@ contextBridge.exposeInMainWorld("hramble", {
 
 	/** Opens a native file picker for an HTML/SVG page. Returns the selected path, or null if cancelled. */
 	pickHtmlFile: (): Promise<string | null> => ipcRenderer.invoke("dialog:open-html-file"),
+	/** Opens a file picker for a local document (pdf/txt/md/docx) for the Brain's Docs arm. */
+	pickDocFile: (): Promise<string | null> => ipcRenderer.invoke("dialog:open-doc-file"),
 
 	/** Serves a local file's directory over localhost and returns the resulting URL (not file://). */
 	servePreviewFile: (filePath: string): Promise<string> => ipcRenderer.invoke("preview:serve-file", filePath),
