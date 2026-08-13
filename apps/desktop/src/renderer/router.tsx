@@ -16,6 +16,7 @@ import { HomeChat } from "./components/home-chat"
 import { NewChat } from "./components/new-chat"
 import { NotFoundPage } from "./components/not-found-page"
 import {
+	ProForgeAbout,
 	ProForgeDesignDeck,
 	ProForgeFanOut,
 	ProForgeMasterSession,
@@ -227,6 +228,12 @@ const proforgeFanOutRoute = createRoute({
 	component: ProForgeFanOut,
 })
 
+const proforgeAboutRoute = createRoute({
+	getParentRoute: () => proforgeRoute,
+	path: "about",
+	component: ProForgeAbout,
+})
+
 const automationsRoute = createRoute({
 	getParentRoute: () => sidebarLayout,
 	path: "automations",
@@ -289,6 +296,7 @@ const routeTree = rootRoute.addChildren([
 			proforgeDesignDeckRoute,
 			proforgeSwarmRoute,
 			proforgeFanOutRoute,
+			proforgeAboutRoute,
 		]),
 	]),
 ])
