@@ -1668,9 +1668,9 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 			{col(left, -1)}
 			<div
 				ref={brainRef}
-				className="relative z-10 flex size-48 items-center justify-center rounded-3xl border border-primary/20 bg-card shadow-[0_0_40px_-12px_rgba(43,109,255,0.35)] ring-1 ring-primary/5"
+				className="relative z-10 flex size-36 items-center justify-center overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_0_40px_-12px_rgba(43,109,255,0.35)] ring-1 ring-primary/5"
 			>
-				<BrainTracedIcon className="h-40 w-40" />
+				<BrainTracedIcon className="h-44 w-44" />
 			</div>
 			{col(right, 1)}
 		</div>

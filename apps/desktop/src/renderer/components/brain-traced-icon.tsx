@@ -14,7 +14,7 @@ import {
 	BRAIN_TRACE_WIDTH,
 } from "../lib/brain-traced-frames"
 
-const FRAME_MS = 260
+const FRAME_MS = 65
 
 export function BrainTracedIcon({ className }: { className?: string }) {
 	const layerARef = useRef<SVGGElement>(null)
