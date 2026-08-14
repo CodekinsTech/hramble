@@ -10,8 +10,10 @@ import {
 	GamepadIcon,
 	GlobeIcon,
 	type LucideIcon,
+	MonitorIcon,
 	PuzzleIcon,
 	SmartphoneIcon,
+	SparklesIcon,
 	TerminalIcon,
 } from "lucide-react"
 
@@ -352,6 +354,67 @@ export const AGENTS: Agent[] = [
 				name: "oclif",
 				url: "https://github.com/oclif/oclif",
 				note: "Salesforce's framework for larger, multi-command CLIs",
+			},
+		],
+	},
+	{
+		id: "desktop-app",
+		title: "Desktop App",
+		description: "Cross-platform desktop apps (Electron/Tauri) that build, run, and package for real.",
+		icon: MonitorIcon,
+		accent: "chart-2",
+		// Placeholder codename — rename freely.
+		agentName: "Dek-T",
+		tagline: "I'm Dek-T, specialized in desktop apps.",
+		mode: "code",
+		brief:
+			"You're building a cross-platform desktop app (Electron or Tauri). Use the terminal to run the dev build and packaging commands for real (e.g. `npm run dev`, `tauri dev`, platform builds) and verify the window actually launches and behaves — a desktop app that only compiles isn't done until it runs.",
+		toolsNote: "Tools: file read/write/edit, dev server, terminal (build/package commands)",
+		placeholder: "e.g. A menu-bar note-taking app with global shortcuts, for Mac and Windows",
+		connectorIds: ["github", "filesystem"],
+		suggestedRepos: [
+			{
+				name: "Tauri",
+				url: "https://github.com/tauri-apps/tauri",
+				note: "Rust-based, tiny bundles — the modern lightweight desktop framework",
+			},
+			{
+				name: "Electron",
+				url: "https://github.com/electron/electron",
+				note: "The battle-tested standard — web tech in a native window (what Hramble itself is built on)",
+			},
+		],
+	},
+	{
+		id: "ai-app",
+		title: "AI App / Agent",
+		description: "LLM-powered apps and agents — RAG, tool-using agents, chatbots, and MCP servers.",
+		icon: SparklesIcon,
+		accent: "chart-1",
+		// Placeholder codename — rename freely.
+		agentName: "Neu-A",
+		tagline: "I'm Neu-A, specialized in AI apps & agents.",
+		mode: "code",
+		brief:
+			"You're building an AI-powered app or agent: RAG pipelines, tool-using agents, chatbots, or MCP servers. Actually run the app against a real model/query as you build — an agent that looks right on paper but was never run against a live model isn't done. Wire retrieval, tools, and prompts, then verify the end-to-end response, not just the code.",
+		toolsNote: "Tools: file read/write/edit, dev server, terminal, web search",
+		placeholder: "e.g. A RAG chatbot over my PDFs, or an agent that researches a topic and writes a report",
+		connectorIds: ["web-search", "github", "sequential-thinking", "supabase"],
+		suggestedRepos: [
+			{
+				name: "AI Engineering Hub",
+				url: "https://github.com/patchy631/ai-engineering-hub",
+				note: "~100 real RAG / agent / MCP project examples to learn from and adapt",
+			},
+			{
+				name: "Vercel AI SDK",
+				url: "https://github.com/vercel/ai",
+				note: "The standard toolkit for building LLM apps — streaming, tool-calls, UI",
+			},
+			{
+				name: "CrewAI",
+				url: "https://github.com/crewAIInc/crewAI",
+				note: "Framework for multi-agent systems — agents that collaborate on a task",
 			},
 		],
 	},
