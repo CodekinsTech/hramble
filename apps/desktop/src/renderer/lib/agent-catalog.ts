@@ -238,6 +238,11 @@ export const AGENTS: Agent[] = [
 				url: "https://github.com/oblien/openship",
 				note: "Self-hostable deploy platform — build, ship, and TLS-route the backend from a repo",
 			},
+			{
+				name: "InsForge",
+				url: "https://github.com/InsForge/InsForge",
+				note: "All-in-one open-source backend built for coding agents — database, auth, storage, hosting in one (Supabase-style)",
+			},
 		],
 	},
 	{
