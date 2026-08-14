@@ -326,7 +326,7 @@ export function registerIpcHandlers(): void {
 				vault.push({
 					name: field(content, "name") || entry.name,
 					description: field(content, "description") || "",
-					type: ["skill", "repo", "software", "model"].includes(type) ? type : "skill",
+					type: ["skill", "repo", "software", "docs", "model"].includes(type) ? type : "skill",
 					verified: field(content, "verified") === "true",
 					source: field(content, "source"),
 					addedAt: fs.statSync(skillMdPath).mtimeMs,
@@ -860,6 +860,155 @@ export function registerIpcHandlers(): void {
 				refreshBrainCatalog()
 
 				return { ok: true, slug, storedPath: dest }
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
+	// Reads ONE Brain skill-backed item's full SKILL.md (frontmatter + body) plus
+	// the parsed fields the Vault viewer needs — so a user can read/edit what the
+	// Brain saved without opening a chat. The vault list only carries the body, so
+	// this returns the RAW file for editing. Resolves the skill folder from the
+	// item's name using the same slug approach as the rest of the Brain. Guarded;
+	// never throws across IPC.
+	ipcMain.handle(
+		"brain:read-item",
+		async (
+			_e,
+			args: { id: string },
+		): Promise<{
+			ok: boolean
+			content?: string
+			name?: string
+			description?: string
+			type?: string
+			source?: string
+			reference?: boolean
+			storedPath?: string
+			error?: string
+		}> => {
+			try {
+				const id = (args?.id || "").trim()
+				if (!id) return { ok: false, error: "No item id provided." }
+				const skillsDir = path.join(os.homedir(), ".config", "opencode", "skills")
+				const slug =
+					id
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, "-")
+						.replace(/^-+|-+$/g, "") || id
+				// Try the slugified name first, then the raw id as a folder name.
+				let dir: string | null = null
+				for (const candidate of [slug, id]) {
+					if (!candidate) continue
+					const d = path.join(skillsDir, candidate)
+					if (fs.existsSync(path.join(d, "SKILL.md"))) {
+						dir = d
+						break
+					}
+				}
+				if (!dir) return { ok: false, error: "Item not found." }
+				const content = fs.readFileSync(path.join(dir, "SKILL.md"), "utf8")
+				const field = (key: string) => {
+					const raw = (content.match(new RegExp(`^${key}:\\s*(.*)$`, "m")) || [])[1]?.trim()
+					if (!raw) return undefined
+					if (
+						raw.length >= 2 &&
+						((raw[0] === '"' && raw.at(-1) === '"') || (raw[0] === "'" && raw.at(-1) === "'"))
+					) {
+						return raw.slice(1, -1)
+					}
+					return raw
+				}
+				const reference = field("reference") === "true"
+				// For a reference item the original file is copied in next to SKILL.md —
+				// return its path so the viewer can offer "Open original file".
+				let storedPath: string | undefined
+				if (reference) {
+					try {
+						const other = fs
+							.readdirSync(dir)
+							.find((f) => f !== "SKILL.md" && fs.statSync(path.join(dir as string, f)).isFile())
+						if (other) storedPath = path.join(dir, other)
+					} catch {
+						// No stored copy — leave storedPath undefined.
+					}
+				}
+				return {
+					ok: true,
+					content,
+					name: field("name") || path.basename(dir),
+					description: field("description") || "",
+					type: field("type") || "skill",
+					source: field("source"),
+					reference,
+					storedPath,
+				}
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
+	// Overwrites ONE Brain item's SKILL.md with edited raw text (frontmatter +
+	// body) from the Vault viewer, then refreshes the Layer-1 catalog so the edit
+	// is reflected in the injected inventory. Same slug resolution as read-item;
+	// only writes an ALREADY-EXISTING item (never creates one). Guarded.
+	ipcMain.handle(
+		"brain:write-item",
+		async (
+			_e,
+			args: { id: string; content: string },
+		): Promise<{ ok: boolean; error?: string }> => {
+			try {
+				const id = (args?.id || "").trim()
+				const content = args?.content
+				if (!id) return { ok: false, error: "No item id provided." }
+				if (typeof content !== "string") return { ok: false, error: "No content provided." }
+				const skillsDir = path.join(os.homedir(), ".config", "opencode", "skills")
+				const slug =
+					id
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, "-")
+						.replace(/^-+|-+$/g, "") || id
+				let skillMdPath: string | null = null
+				for (const candidate of [slug, id]) {
+					if (!candidate) continue
+					const p = path.join(skillsDir, candidate, "SKILL.md")
+					if (fs.existsSync(p)) {
+						skillMdPath = p
+						break
+					}
+				}
+				if (!skillMdPath) return { ok: false, error: "Item not found." }
+				fs.writeFileSync(skillMdPath, content)
+				// Same as brain:save-reference / brain:remove-item — keep the Layer-1
+				// catalog in sync with the edit.
+				refreshBrainCatalog()
+				return { ok: true }
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
+	// Reveals a Brain item's stored original file in the OS file manager (used by
+	// the Vault viewer's "Open original file" for reference items). Only reveals
+	// paths inside the Brain's skills dir, so it can't be pointed anywhere else.
+	ipcMain.handle(
+		"brain:reveal-item",
+		async (_e, args: { path: string }): Promise<{ ok: boolean; error?: string }> => {
+			try {
+				const target = String(args?.path || "").trim()
+				if (!target) return { ok: false, error: "No path provided." }
+				const skillsDir = path.join(os.homedir(), ".config", "opencode", "skills")
+				const resolved = path.resolve(target)
+				if (resolved !== skillsDir && !resolved.startsWith(skillsDir + path.sep)) {
+					return { ok: false, error: "Path is outside the Brain." }
+				}
+				if (!fs.existsSync(resolved)) return { ok: false, error: "File no longer exists." }
+				shell.showItemInFolder(resolved)
+				return { ok: true }
 			} catch (err) {
 				return { ok: false, error: err instanceof Error ? err.message : String(err) }
 			}

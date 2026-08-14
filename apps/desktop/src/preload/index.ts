@@ -121,6 +121,26 @@ contextBridge.exposeInMainWorld("hramble", {
 		kind: "skill" | "registry",
 		id: string,
 	): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke("brain:remove-item", { kind, id }),
+	/** Reads one Brain item's full SKILL.md (raw text) + parsed fields, for the Vault viewer/editor. */
+	readBrainItem: (
+		id: string,
+	): Promise<{
+		ok: boolean
+		content?: string
+		name?: string
+		description?: string
+		type?: string
+		source?: string
+		reference?: boolean
+		storedPath?: string
+		error?: string
+	}> => ipcRenderer.invoke("brain:read-item", { id }),
+	/** Overwrites one existing Brain item's SKILL.md with edited raw text, then refreshes the Layer-1 catalog. */
+	writeBrainItem: (id: string, content: string): Promise<{ ok: boolean; error?: string }> =>
+		ipcRenderer.invoke("brain:write-item", { id, content }),
+	/** Reveals a reference item's stored original file in the OS file manager (paths inside the Brain only). */
+	revealBrainItem: (path: string): Promise<{ ok: boolean; error?: string }> =>
+		ipcRenderer.invoke("brain:reveal-item", { path }),
 	/** Publishes the selected Brain items to a private GitHub repo (skills + filtered registry + manifest + BRAIN.md, no secrets). */
 	publishBrainToGit: (
 		items: Array<{ kind: "skill" | "registry"; id: string; name: string; type?: string }>,

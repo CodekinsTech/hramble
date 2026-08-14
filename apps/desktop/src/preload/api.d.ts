@@ -549,6 +549,38 @@ export interface HrambleAPI {
 		opts?: { description?: string },
 	) => Promise<{ ok: boolean; slug?: string; storedPath?: string; error?: string }>
 
+	/**
+	 * Reads one Brain skill-backed item's full SKILL.md (raw frontmatter + body)
+	 * plus its parsed fields, so the Vault viewer can show and edit exactly what's
+	 * on disk. Resolves the folder from the item's name (same slug approach as the
+	 * rest of the Brain). `storedPath` is the copied original file for a reference
+	 * item. Guarded in main; resolves with the outcome and never rejects.
+	 */
+	readBrainItem?: (id: string) => Promise<{
+		ok: boolean
+		content?: string
+		name?: string
+		description?: string
+		type?: string
+		source?: string
+		reference?: boolean
+		storedPath?: string
+		error?: string
+	}>
+
+	/**
+	 * Overwrites one EXISTING Brain item's SKILL.md with edited raw text (the
+	 * Vault viewer's Edit → Save), then refreshes the Layer-1 catalog so the edit
+	 * shows in the next session's inventory. Never creates a new item. Guarded.
+	 */
+	writeBrainItem?: (id: string, content: string) => Promise<{ ok: boolean; error?: string }>
+
+	/**
+	 * Reveals a reference item's stored original file in the OS file manager.
+	 * Only reveals paths inside the Brain's skills dir. Guarded; never rejects.
+	 */
+	revealBrainItem?: (path: string) => Promise<{ ok: boolean; error?: string }>
+
 	/** Subscribe to chrome tier notification (fired once on load). */
 	onChromeTier: (callback: (tier: WindowChromeTier) => void) => () => void
 	/** Get the current chrome tier (pull-based, avoids race with push event). */

@@ -23,6 +23,8 @@ import {
 	CpuIcon,
 	DownloadIcon,
 	ExternalLinkIcon,
+	EyeIcon,
+	FileTextIcon,
 	FolderIcon,
 	GitBranchIcon,
 	GithubIcon,
@@ -816,6 +818,17 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	const [cleanList, setCleanList] = useState<CleanCandidate[] | null>(null)
 	const [cleanChecked, setCleanChecked] = useState<Record<string, boolean>>({})
 	const [cleanRemoving, setCleanRemoving] = useState(false)
+	// Item viewer — read / edit / delete a saved item's SKILL.md without opening a
+	// chat. `viewing` = the vault entry whose panel is open (null = closed). The
+	// full raw SKILL.md + parsed reference metadata are fetched on open.
+	const [viewing, setViewing] = useState<BrainVaultEntry | null>(null)
+	const [viewContent, setViewContent] = useState<string | null>(null)
+	const [viewMeta, setViewMeta] = useState<{ reference?: boolean; storedPath?: string; type?: string } | null>(null)
+	const [viewLoading, setViewLoading] = useState(false)
+	const [viewError, setViewError] = useState(false)
+	const [editing, setEditing] = useState(false)
+	const [editText, setEditText] = useState("")
+	const [savingEdit, setSavingEdit] = useState(false)
 
 	// Reloads the vault + registry from the main process. Reused after an
 	// import so newly-restored skills appear without a page switch.
@@ -1603,6 +1616,198 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 		)
 	}
 
+	// --- Item viewer (inline, replaces the vault list) ---
+	// Opens the viewer for one vault entry and loads its full SKILL.md. The vault
+	// list only carries the body, so we read the raw file here for read + edit.
+	const openViewer = async (entry: BrainVaultEntry) => {
+		setViewing(entry)
+		setEditing(false)
+		setViewContent(null)
+		setViewMeta(null)
+		setViewError(false)
+		setViewLoading(true)
+		try {
+			const res = await bridge()?.readBrainItem?.(entry.name)
+			if (res?.ok && typeof res.content === "string") {
+				setViewContent(res.content)
+				setEditText(res.content)
+				setViewMeta({ reference: res.reference, storedPath: res.storedPath, type: res.type })
+			} else {
+				setViewError(true)
+			}
+		} catch {
+			setViewError(true)
+		} finally {
+			setViewLoading(false)
+		}
+	}
+
+	const closeViewer = () => {
+		setViewing(null)
+		setViewContent(null)
+		setViewMeta(null)
+		setEditing(false)
+		setViewError(false)
+	}
+
+	// Saves the edited raw SKILL.md back to disk, then refreshes the viewer + vault.
+	const saveEdit = async () => {
+		if (!viewing) return
+		setSavingEdit(true)
+		try {
+			const res = await bridge()?.writeBrainItem?.(viewing.name, editText)
+			if (res?.ok) {
+				toast.success("Saved")
+				setViewContent(editText)
+				setEditing(false)
+				await refresh()
+			} else {
+				toast.error(res?.error || "Couldn't save the edit.")
+			}
+		} catch {
+			toast.error("Couldn't save the edit.")
+		} finally {
+			setSavingEdit(false)
+		}
+	}
+
+	// Deletes the item being viewed, then closes the viewer + refreshes the vault.
+	const deleteViewing = async () => {
+		if (!viewing) return
+		try {
+			const res = await bridge()?.removeBrainItem?.("skill", viewing.name)
+			if (res?.ok) {
+				toast.success(`Removed ${viewing.name}`)
+				closeViewer()
+				await refresh()
+			} else {
+				toast.error(res?.error || "Couldn't remove that item.")
+			}
+		} catch {
+			toast.error("Couldn't remove that item.")
+		}
+	}
+
+	const openOriginal = async () => {
+		const p = viewMeta?.storedPath
+		if (!p) return
+		try {
+			const res = await bridge()?.revealBrainItem?.(p)
+			if (res && !res.ok) toast.error(res.error || "Couldn't open the file.")
+		} catch {
+			toast.error("Couldn't open the file.")
+		}
+	}
+
+	const renderViewer = () => {
+		if (!viewing) return null
+		const displayType = (viewMeta?.type as BrainVaultEntry["type"]) || viewing.type
+		const meta = VAULT_TYPE_META[displayType] ?? VAULT_TYPE_META.skill
+		const Icon = meta.icon
+		return (
+			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+				<div className="flex items-start gap-3">
+					<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+						<Icon className={`size-4 ${meta.color}`} />
+					</div>
+					<div className="min-w-0 flex-1">
+						<h2 className="truncate font-semibold text-foreground text-lg">{viewing.name}</h2>
+						<p className="text-muted-foreground text-xs">
+							{meta.label.replace(/s$/, "")}
+							{viewMeta?.reference ? " · reference" : ""}
+						</p>
+						{viewing.description && (
+							<p className="mt-1 text-muted-foreground text-sm">{viewing.description}</p>
+						)}
+					</div>
+				</div>
+
+				{viewLoading ? (
+					<div className="flex items-center gap-2 py-8 text-muted-foreground text-sm">
+						<Loader2Icon className="size-4 animate-spin" /> Loading…
+					</div>
+				) : viewError || viewContent === null ? (
+					<p className="py-8 text-center text-muted-foreground text-sm">Couldn't load content.</p>
+				) : editing ? (
+					<textarea
+						value={editText}
+						onChange={(e) => setEditText(e.target.value)}
+						spellCheck={false}
+						className="min-h-[16rem] w-full resize-y rounded-xl border border-border bg-card px-3 py-2 font-mono text-[12px] text-foreground leading-relaxed outline-none focus:ring-1 focus:ring-primary"
+					/>
+				) : (
+					<pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-xl border border-border bg-card p-3 font-mono text-[12px] text-muted-foreground leading-relaxed">
+						{viewContent}
+					</pre>
+				)}
+
+				<div className="flex items-center justify-between gap-2">
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={closeViewer}
+							className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+						>
+							Close
+						</button>
+						{viewMeta?.reference && viewMeta.storedPath && (
+							<button
+								type="button"
+								onClick={() => void openOriginal()}
+								className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+							>
+								<FileTextIcon className="size-3.5" /> Open original file
+							</button>
+						)}
+					</div>
+					<div className="flex items-center gap-2">
+						{!viewLoading && !viewError && viewContent !== null && (
+							<>
+								{editing ? (
+									<>
+										<button
+											type="button"
+											onClick={() => {
+												setEditing(false)
+												setEditText(viewContent)
+											}}
+											className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+										>
+											Cancel
+										</button>
+										<button
+											type="button"
+											onClick={() => void saveEdit()}
+											disabled={savingEdit}
+											className="flex h-8 items-center rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-60"
+										>
+											{savingEdit ? "Saving…" : "Save"}
+										</button>
+									</>
+								) : (
+									<button
+										type="button"
+										onClick={() => setEditing(true)}
+										className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+									>
+										Edit
+									</button>
+								)}
+							</>
+						)}
+						<button
+							type="button"
+							onClick={() => void deleteViewing()}
+							className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-600 dark:hover:text-red-400"
+						>
+							<Trash2Icon className="size-3.5" /> Delete
+						</button>
+					</div>
+				</div>
+			</div>
+		)
+	}
+
 	// --- Clean panel (inline, replaces the vault list) ---
 	const renderClean = () => {
 		const anyCleanChecked = (cleanList ?? []).some((c) => cleanChecked[c.key])
@@ -1712,6 +1917,11 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 		return renderClean()
 	}
 
+	// Item viewer takes over the vault surface while open.
+	if (viewing) {
+		return renderViewer()
+	}
+
 	if (entries.length === 0) {
 		return (
 			<div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-4">
@@ -1777,6 +1987,14 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 						<div className="truncate text-muted-foreground text-xs">{entry.description}</div>
 					)}
 				</div>
+				<button
+					type="button"
+					title="View / edit / delete"
+					onClick={() => void openViewer(entry)}
+					className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+				>
+					<EyeIcon className="size-4" />
+				</button>
 				{entry.type === "skill" && (
 					<button
 						type="button"
@@ -2116,6 +2334,13 @@ export function BrainPage() {
 	const [feedPulse, setFeedPulse] = useState(0)
 	// Folder chosen for the Files arm, held pending confirmation before a scan starts.
 	const [pendingScanDir, setPendingScanDir] = useState<string | null>(null)
+	// Local file picked in the Docs arm, held so the user first chooses Extract vs
+	// Keep-as-reference (no chat opens until they pick). null = no choice pending.
+	const [pendingDocFile, setPendingDocFile] = useState<string | null>(null)
+	const [savingRef, setSavingRef] = useState(false)
+	const [refError, setRefError] = useState<string | null>(null)
+	// Slug of the last file saved as a reference — shown briefly, then cleared.
+	const [refSaved, setRefSaved] = useState<string | null>(null)
 
 	const start = async (text: string) => {
 		const t = text.trim()
@@ -2176,11 +2401,46 @@ export function BrainPage() {
 		)
 	}
 
-	// Browse for a local document (Docs arm) and hand its path to a Brain session.
-	const browseArmFile = async (arm: BrainArm) => {
+	// Browse for a local document (Docs arm). Instead of opening a chat straight
+	// away, hold the picked path so the user first chooses how to feed it (extract
+	// the knowledge into a skill, or keep the whole file as a reference).
+	const browseArmFile = async (_arm: BrainArm) => {
 		const p = await bridge()?.pickDocFile?.()
-		if (!p || !arm.filePrompt) return
-		await start(arm.filePrompt(p))
+		if (!p) return
+		setRefError(null)
+		setRefSaved(null)
+		setPendingDocFile(p)
+	}
+
+	// Extract choice — the original behaviour: open a chat that reads the file and
+	// extracts its reusable knowledge into a skill.
+	const extractPendingDoc = () => {
+		const p = pendingDocFile
+		setPendingDocFile(null)
+		if (p) void start(docsFilePrompt(p))
+	}
+
+	// Keep-as-reference choice — copy the whole file into the Brain verbatim, no
+	// chat. The vault refreshes on its own when the user switches to that tab.
+	const keepPendingDocAsReference = async () => {
+		const p = pendingDocFile
+		if (!p || savingRef) return
+		setSavingRef(true)
+		setRefError(null)
+		try {
+			const res = await bridge()?.saveBrainReference?.(p)
+			if (res?.ok) {
+				setPendingDocFile(null)
+				setRefSaved(res.slug || "reference")
+				window.setTimeout(() => setRefSaved(null), 6000)
+			} else {
+				setRefError(res?.error || "Couldn't save to Brain.")
+			}
+		} catch {
+			setRefError("Couldn't save to Brain.")
+		} finally {
+			setSavingRef(false)
+		}
 	}
 
 	// Auto-detect when the free-text bar holds JUST a link or JUST a path, and
@@ -2292,6 +2552,78 @@ export function BrainPage() {
 
 					{/* Brain at the centre, connected to its feed-arms by curved lines. */}
 					<BrainCluster renderArm={armCard} pulse={feedPulse} />
+
+					{/* Docs arm — after a LOCAL file is picked, choose how to feed it
+					    before any chat opens: extract its knowledge, or keep it whole. */}
+					{pendingDocFile && (
+						<div className="w-full max-w-xl rounded-2xl border border-border bg-popover p-4 shadow-sm">
+							<div className="flex items-center gap-2">
+								<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+									<BookOpenIcon className="size-3.5" />
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="font-medium text-foreground text-sm">How should the Brain take this in?</div>
+									<div className="truncate text-muted-foreground text-xs" title={pendingDocFile}>
+										{pendingDocFile.split(/[\\/]/).pop()}
+									</div>
+								</div>
+								<button
+									type="button"
+									title="Cancel"
+									onClick={() => {
+										setPendingDocFile(null)
+										setRefError(null)
+									}}
+									disabled={savingRef}
+									className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+								>
+									<XIcon className="size-4" />
+								</button>
+							</div>
+							<div className="mt-3 flex items-center gap-2">
+								<button
+									type="button"
+									onClick={extractPendingDoc}
+									disabled={savingRef}
+									className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-xs text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+								>
+									<SparklesIcon className="size-3.5" /> Extract knowledge
+								</button>
+								<button
+									type="button"
+									onClick={() => void keepPendingDocAsReference()}
+									disabled={savingRef}
+									className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+								>
+									{savingRef ? (
+										<>
+											<Loader2Icon className="size-3.5 animate-spin" /> Saving…
+										</>
+									) : (
+										<>
+											<BookOpenIcon className="size-3.5" /> Keep as reference
+										</>
+									)}
+								</button>
+							</div>
+							<div className="mt-2 text-[11px] text-muted-foreground/70 leading-snug">
+								Extract opens a chat that reads it and saves what it learns. Keep as reference
+								copies the whole file into your Brain — no chat.
+							</div>
+							{refError && <div className="mt-2 text-[11px] text-red-600 dark:text-red-400">{refError}</div>}
+						</div>
+					)}
+
+					{/* Brief confirmation after a file is kept as a reference. */}
+					{refSaved && !pendingDocFile && (
+						<div className="flex w-full max-w-xl items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+							<CheckIcon className="size-4 shrink-0 text-emerald-500" />
+							<span className="min-w-0 flex-1 truncate text-emerald-700 text-xs dark:text-emerald-400">
+								Saved to Brain: {refSaved}
+							</span>
+							<span className="shrink-0 text-[11px] text-muted-foreground/70">See it in the Vault tab</span>
+						</div>
+					)}
 
 					{/* Still allow free-form teaching by chat, secondary to the cards. */}
 					<div className="w-full max-w-xl">
