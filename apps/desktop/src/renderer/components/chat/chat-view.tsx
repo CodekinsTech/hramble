@@ -62,6 +62,7 @@ import {
 	type UserPermissionRule,
 } from "../../atoms/permission-rules"
 import { promptHistoryAtom, pushPromptHistory } from "../../atoms/prompt-history"
+import { pendingSessionStepsAtom } from "../../atoms/chat"
 import { fallbackModelAtom } from "../../atoms/fallback-model"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
@@ -1124,6 +1125,7 @@ function ChatInputSection({
 	const workspaceMode = useAtomValue(workspaceModeAtom)
 	const [stepsOpen, setStepsOpen] = useState(false)
 	const [steps, setSteps] = useState<string[]>(() => Array(STEP_COUNT).fill(""))
+	const [pendingSessionSteps, setPendingSessionSteps] = useAtom(pendingSessionStepsAtom)
 	const [runningSteps, setRunningSteps] = useState(false)
 	const [currentStep, setCurrentStep] = useState(-1)
 	const [completedSteps, setCompletedSteps] = useState<number[]>([])
@@ -1133,6 +1135,26 @@ function ChatInputSection({
 	const stepsRef = useRef<string[]>(steps)
 	stepsRef.current = steps
 	const hasSteps = steps.some((s) => s.trim())
+
+	// Pick up steps queued from the new-chat screen (handed off via atom).
+	useEffect(() => {
+		const pending = pendingSessionSteps[agent.sessionId]
+		if (!pending) return
+		const { steps: pendingSteps, autoRun } = pending
+		setSteps(Array.from({ length: STEP_COUNT }, (_, i) => pendingSteps[i] ?? ""))
+		setStepsOpen(true)
+		setPendingSessionSteps((prev) => {
+			const next = { ...prev }
+			delete next[agent.sessionId]
+			return next
+		})
+		if (autoRun) {
+			// Defer so the steps state has settled before the runner reads it.
+			setTimeout(() => runSteps(), 200)
+		}
+	// Only run once per session mount — sessionId is the only dependency we need.
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [agent.sessionId])
 
 	// Verification gates: an optional "done when" shell command per step. After a
 	// step's turn, the gate is run objectively (exit 0 = pass); on failure the

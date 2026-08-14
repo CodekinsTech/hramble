@@ -122,7 +122,7 @@ function LoginGate() {
 			</div>
 			<div>
 				<div style={{ background: "rgba(10, 30, 120, 0.88)", borderRadius: 8, padding: "6px 16px", display: "inline-block" }}>
-					<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>The Grid</h1>
+					<h1 className="text-4xl" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
 				</div>
 				<p className="mt-1 max-w-sm text-muted-foreground text-sm">
 					Share what you built — a thumbnail, your GitHub repo, a demo — and message other builders about
@@ -704,7 +704,7 @@ export function CommunityPage({
 				<div className="mb-4 flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<div style={{ background: "rgba(10, 30, 120, 0.88)", borderRadius: 8, padding: "4px 12px", display: "inline-block" }}>
-						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>The Grid</h1>
+						<h1 className="text-lg" style={{ fontFamily: "'Karmatic Arcade', sans-serif", color: "rgba(220, 240, 20, 0.95)", margin: 0 }}>Wired Jack</h1>
 					</div>
 						{filterTag && (
 							<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">

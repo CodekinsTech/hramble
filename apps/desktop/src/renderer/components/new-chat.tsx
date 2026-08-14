@@ -25,6 +25,7 @@ import {
 	GitForkIcon,
 	InfinityIcon,
 	ListIcon,
+	ListOrderedIcon,
 	MonitorIcon,
 	MoonIcon,
 	NetworkIcon,
@@ -48,6 +49,7 @@ import {
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
+import { pendingSessionStepsAtom } from "../atoms/chat"
 import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
 import { interruptedWorkAtom, resolveInterruptedItemAtom } from "../atoms/sleep-recovery"
 import {
@@ -297,6 +299,14 @@ export function NewChat() {
 	// Session IDs the user manually Stopped — checked by runStepUntilVerified so
 	// a deliberate stop is never mistaken for a mechanical failure and auto-retried.
 	const manuallyStoppedRef = useRef<Set<string>>(new Set())
+
+	// Sequential steps panel (mirrors chat-view's 7-step queue)
+	const STEP_COUNT = 7
+	const [stepsOpen, setStepsOpen] = useState(false)
+	const [steps, setSteps] = useState<string[]>(() => Array(STEP_COUNT).fill(""))
+	const hasSteps = steps.some((s) => s.trim())
+	const setPendingSessionSteps = useSetAtom(pendingSessionStepsAtom)
+
 	// Which recap paragraph is expanded to show its full details inline (null = none).
 	const [expandedRecap, setExpandedRecap] = useState<number | null>(null)
 	// hyperRun is deliberately persisted across navigation (see above), but this
@@ -673,6 +683,11 @@ export function NewChat() {
 				hyperloop,
 			})
 			clearDraft()
+			if (hasSteps) {
+				setPendingSessionSteps((prev) => ({ ...prev, [session.id]: { steps: [...steps], autoRun: false } }))
+				setSteps(Array(STEP_COUNT).fill(""))
+				setStepsOpen(false)
+			}
 			navigateToSession(session.id)
 		},
 		[
@@ -687,10 +702,60 @@ export function NewChat() {
 			modeSpec,
 			clearDraft,
 			persistProjectModel,
+			hasSteps,
+			steps,
+			setPendingSessionSteps,
 			navigateToSession,
 			vcs,
 		],
 	)
+
+	// "Run all steps" from the new-chat panel — creates a session using the first
+	// non-empty step as the initial prompt, hands the full list to chat-view with
+	// autoRun=true so it starts executing immediately without a separate click.
+	const runStepsFromNew = useCallback(async () => {
+		const filled = steps.filter((s) => s.trim())
+		if (!filled.length || badFolder || launching) return
+		setLaunching(true)
+		setError(null)
+		try {
+			const session = await createSession(
+				selectedDirectory,
+				undefined,
+				mergeSessionPermission(modeSpec.permission, selectedDirectory, appStore.get(permissionRulesAtom)),
+			)
+			if (!session) return
+			if (hyperloop) markHyperloopSession(session.id)
+			const currentBranch = vcs?.branch ?? ""
+			if (currentBranch) appStore.set(setSessionBranchAtom, { sessionId: session.id, branch: currentBranch })
+			persistProjectModel()
+			clearDraft()
+			setPendingSessionSteps((prev) => ({
+				...prev,
+				[session.id]: { steps: [...steps], autoRun: true },
+			}))
+			setSteps(Array(STEP_COUNT).fill(""))
+			setStepsOpen(false)
+			navigateToSession(session.id)
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to start steps")
+		} finally {
+			setLaunching(false)
+		}
+	}, [
+		steps,
+		badFolder,
+		launching,
+		selectedDirectory,
+		createSession,
+		modeSpec,
+		hyperloop,
+		vcs,
+		persistProjectModel,
+		clearDraft,
+		setPendingSessionSteps,
+		navigateToSession,
+	])
 
 	const hyperDecompose = async () => {
 		if (!hyperGoal.trim() || badFolder) return
@@ -1187,6 +1252,11 @@ export function NewChat() {
 					})
 
 					// Navigate to the real session, then clean up the stub
+					if (hasSteps) {
+						setPendingSessionSteps((prev) => ({ ...prev, [session.id]: { steps: [...steps], autoRun: false } }))
+						setSteps(Array(STEP_COUNT).fill(""))
+						setStepsOpen(false)
+					}
 					navigateToSession(session.id)
 					appStore.set(removeSessionAtom, stubId)
 
@@ -1819,6 +1889,55 @@ export function NewChat() {
 								className="min-h-14 py-2.5"
 							/>
 
+							{stepsOpen && (
+								<div className="mb-2 rounded-xl border border-border bg-muted/30 p-3">
+									<div className="mb-2 flex items-center justify-between">
+										<span className="font-medium text-muted-foreground text-xs">Steps — run in order after session starts</span>
+										<button
+											type="button"
+											onClick={() => setStepsOpen(false)}
+											className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+											title="Hide steps"
+										>
+											<XIcon className="size-3.5" />
+										</button>
+									</div>
+									<div className="space-y-1.5">
+										{steps.map((s, i) => (
+											<div key={i} className="flex items-start gap-2">
+												<span className="flex w-4 shrink-0 items-center justify-center pt-2 text-center text-xs text-muted-foreground">
+													{i + 1}
+												</span>
+												<input
+													value={s}
+													onChange={(e) => setSteps((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+													placeholder={`Step ${i + 1}`}
+													className="h-8 flex-1 rounded-md border border-border bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+												/>
+											</div>
+										))}
+									</div>
+									<div className="mt-2 flex gap-2">
+										<button
+											type="button"
+											onClick={() => void runStepsFromNew()}
+											disabled={!hasSteps || launching || badFolder}
+											className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-xs hover:opacity-90 disabled:opacity-50"
+										>
+											<PlayIcon className="size-3.5" />
+											Run all steps
+										</button>
+										<button
+											type="button"
+											onClick={() => { setSteps(Array(STEP_COUNT).fill("")); setStepsOpen(false) }}
+											className="rounded-md border border-border px-3 py-1.5 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
+										>
+											Clear
+										</button>
+									</div>
+								</div>
+							)}
+
 							{/* Toolbar inside the card — agent + model + variant selectors */}
 							{hasToolbar && (
 								<PromptInputFooter>
@@ -1832,6 +1951,13 @@ export function NewChat() {
 											<InfinityIcon className="size-4" />
 										</PromptInputButton>
 										)}
+										<PromptInputButton
+											onClick={() => setStepsOpen((v) => !v)}
+											className={stepsOpen || hasSteps ? "text-primary" : ""}
+											title="Loop — queue up to 7 steps and run them in sequence"
+										>
+											<ListOrderedIcon className="size-3.5" />
+										</PromptInputButton>
 										{!badFolder && (
 										<PromptInputButton
 											title="Codebase graph — how this project's symbols reference each other"
