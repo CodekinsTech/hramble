@@ -53,7 +53,7 @@ const PRESETS = [
 	{ id: "playwright", name: "Browser (built-in)", command: ["npx", "-y", "@playwright/mcp@latest"], note: "Drive a browser — navigate, click, type, fill & submit forms. Offline, no key. Uses a bundled Chromium (works on any machine)." },
 	{ id: "playwright-chrome", name: "Browser (your Chrome)", command: ["npx", "-y", "@playwright/mcp@latest", "--browser", "chrome"], note: "Same, but drives your installed Google Chrome with your logged-in sessions — no download. Requires Chrome to be installed." },
 	{ id: "postgres", name: "Postgres", command: ["npx", "-y", "@modelcontextprotocol/server-postgres"], note: "Query a Postgres database" },
-	{ id: "chrome-devtools", name: "Chrome DevTools", command: ["npx", "-y", "chrome-devtools-mcp@latest"], note: "Inspect/debug pages (confuses weak models)" },
+	{ id: "chrome-devtools", name: "Chrome DevTools", command: ["npx", "-y", "chrome-devtools-mcp@latest", "--no-performance-crux"], note: "Drive & debug a real Chrome — console errors (source-mapped), network, performance traces, screenshots. Best for verifying a web app you built. (Can confuse weak models.)" },
 	{ id: "figma", name: "Figma (design)", command: ["npx", "-y", "figma-developer-mcp", "--stdio"], note: "Read Figma designs to build UI from them — free key at figma.com/developers/api", envKey: "FIGMA_API_KEY" },
 
 	// --- Backend platforms — let the agent build AND operate a real backend ---
