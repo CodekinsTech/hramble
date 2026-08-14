@@ -1150,7 +1150,7 @@ function ChatInputSection({
 		})
 		if (autoRun) {
 			// Defer so the steps state has settled before the runner reads it.
-			setTimeout(() => runSteps(), 200)
+			setTimeout(() => runStepsRef.current?.(), 200)
 		}
 	// Only run once per session mount — sessionId is the only dependency we need.
 	// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1494,6 +1494,10 @@ function ChatInputSection({
 		[onSendMessage, workspaceMode, effectiveModel, agent, selectedAgent, selectedVariant],
 	)
 
+	// Always-current ref so the autoRun effect can call the latest runSteps even
+	// after re-renders update onSendMessage.
+	const runStepsRef = useRef<(() => void) | null>(null)
+
 	// "Run all steps" — the existing unattended path, now just a loop over runOneStep.
 	const runSteps = useCallback(async () => {
 		if (!onSendMessage || runningSteps || !stepsRef.current.some((s) => s.trim())) return
@@ -1521,6 +1525,8 @@ function ChatInputSection({
 			setCurrentStep(-1)
 		}
 	}, [onSendMessage, runningSteps, effectiveModel, agent, selectedAgent, selectedVariant, runOneStep])
+
+	runStepsRef.current = runSteps
 
 	// "Run one at a time" — run just this one step, then stop and wait for the
 	// user to click Run on whichever step they want next.
