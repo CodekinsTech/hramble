@@ -1328,15 +1328,75 @@ export function registerIpcHandlers(): void {
 		}),
 	)
 
-	// Pick a local document for the Brain's Docs arm (PDF / text / markdown /
-	// Word). Returns the chosen file's path, or null if cancelled.
+	// Pick a local file for the Brain's Docs arm — any document, code/text file,
+	// SVG or image (video is out of scope). Returns the chosen file's path, or
+	// null if cancelled.
 	ipcMain.handle(
 		"dialog:open-doc-file",
 		withLogging("dialog:open-doc-file", async () => {
 			const result = await dialog.showOpenDialog({
 				properties: ["openFile"],
-				title: "Choose a document for the Brain to read",
-				filters: [{ name: "Documents", extensions: ["pdf", "txt", "md", "markdown", "docx", "rtf"] }],
+				title: "Choose a file for the Brain to read",
+				filters: [
+					{
+						name: "Documents",
+						extensions: [
+							"pdf",
+							"txt",
+							"md",
+							"markdown",
+							"docx",
+							"rtf",
+							"csv",
+							"json",
+							"yaml",
+							"yml",
+							"html",
+							"xml",
+						],
+					},
+					{
+						name: "Code / text",
+						extensions: [
+							"js",
+							"mjs",
+							"cjs",
+							"ts",
+							"tsx",
+							"jsx",
+							"py",
+							"rb",
+							"go",
+							"rs",
+							"java",
+							"kt",
+							"c",
+							"h",
+							"cpp",
+							"cc",
+							"hpp",
+							"cs",
+							"php",
+							"swift",
+							"sh",
+							"bash",
+							"zsh",
+							"sql",
+							"toml",
+							"ini",
+							"cfg",
+							"conf",
+							"env",
+							"example",
+							"lua",
+							"r",
+							"vue",
+							"svelte",
+						],
+					},
+					{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg"] },
+					{ name: "All files", extensions: ["*"] },
+				],
 			})
 			if (result.canceled || result.filePaths.length === 0) return null
 			return result.filePaths[0]
