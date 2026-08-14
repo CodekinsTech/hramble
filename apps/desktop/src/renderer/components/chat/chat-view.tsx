@@ -497,7 +497,6 @@ interface ChatViewProps {
 			variant?: string
 			files?: FileAttachment[]
 			hyperloop?: boolean
-			steps?: string[]
 		},
 	) => Promise<void>
 	/** Callback to stop/abort the running session */
@@ -1879,13 +1878,11 @@ function ChatInputSection({
 			const finalText = commentPrefix ? `${commentPrefix}${text.trim()}` : text.trim()
 
 			try {
-				const activeSteps = steps.filter(Boolean)
 				await onSendBackground(finalText, {
 					model: effectiveModel ?? undefined,
 					agentName: selectedAgent || undefined,
 					variant: selectedVariant,
 					files,
-					steps: activeSteps.length > 0 ? activeSteps : undefined,
 				})
 				clearDraft()
 				setMentions([])
@@ -1903,7 +1900,6 @@ function ChatInputSection({
 			clearDraft,
 			diffComments,
 			setDiffComments,
-			steps,
 		],
 	)
 
