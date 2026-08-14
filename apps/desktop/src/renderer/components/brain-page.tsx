@@ -174,6 +174,46 @@ const VAULT_TYPE_META: Record<
 
 const VAULT_TYPE_ORDER: BrainVaultEntry["type"][] = ["skill", "repo", "software", "docs", "model"]
 
+// The vault list is organised into type "folders". `docs` is split further by
+// the extension of its source file, so PDFs and images get their own folders.
+// Tools/Models also fold in the registry entries (see the sections render).
+type VaultCategory = "Skills" | "Repos" | "Docs" | "PDFs" | "Images" | "Tools" | "Models"
+
+// Image/vector extensions that route a `docs` entry into the Images folder.
+const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
+
+// Order the folders render in when non-empty.
+const VAULT_CATEGORY_ORDER: VaultCategory[] = [
+	"Skills",
+	"Repos",
+	"Docs",
+	"PDFs",
+	"Images",
+	"Tools",
+	"Models",
+]
+
+// Which folder a vault entry belongs to — from its type, and for `docs` from the
+// lowercased extension of its source (pdf / image → own folder; else Docs).
+function categoryOf(entry: BrainVaultEntry): VaultCategory {
+	switch (entry.type) {
+		case "skill":
+			return "Skills"
+		case "repo":
+			return "Repos"
+		case "software":
+			return "Tools"
+		case "model":
+			return "Models"
+		default: {
+			const src = (entry.source || "").toLowerCase()
+			if (src.endsWith(".pdf")) return "PDFs"
+			if (IMAGE_EXTS.some((ext) => src.endsWith(ext))) return "Images"
+			return "Docs"
+		}
+	}
+}
+
 /** One entry in the Brain's tool/model registry (mirrors the brain:registry IPC shape). */
 export type BrainRegistryEntry = {
 	id: string
@@ -1694,22 +1734,102 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 
 	const filtered = filter === "all" ? entries : entries.filter((e) => e.type === filter)
 
-	// Group by month, newest first.
+	// Group into type "folders" (newest-first within each). `docs` splits
+	// further into Docs / PDFs / Images by source extension via categoryOf.
 	const sorted = [...filtered].sort((a, b) => b.addedAt - a.addedAt)
-	const groups: { key: string; label: string; items: BrainVaultEntry[] }[] = []
+	const byCategory = new Map<VaultCategory, BrainVaultEntry[]>()
 	for (const entry of sorted) {
-		const d = new Date(entry.addedAt)
-		const key = `${d.getFullYear()}-${d.getMonth()}`
-		const label = d.toLocaleString("en-US", { month: "long", year: "numeric" }).toUpperCase()
-		const group = groups.find((g) => g.key === key)
-		if (group) group.items.push(entry)
-		else groups.push({ key, label, items: [entry] })
+		const cat = categoryOf(entry)
+		const bucket = byCategory.get(cat)
+		if (bucket) bucket.push(entry)
+		else byCategory.set(cat, [entry])
 	}
+
+	// Registry tools/models fold into the Tools / Models folders. Gate them by
+	// the active filter chip so filtering stays consistent (registry only has
+	// tool/model kinds, no skill/docs).
+	const regTools = registry.filter((r) => r.kind !== "model")
+	const regModels = registry.filter((r) => r.kind === "model")
+	const regToolsVisible = filter === "all" || filter === "software"
+	const regModelsVisible = filter === "all" || filter === "model"
 
 	const chips: { id: "all" | BrainVaultEntry["type"]; label: string }[] = [
 		{ id: "all", label: "All" },
 		...VAULT_TYPE_ORDER.map((t) => ({ id: t, label: VAULT_TYPE_META[t].label })),
 	]
+
+	// One vault-entry row — unchanged markup, extracted so every folder renders
+	// it the same way. Icon/colour still keyed off the entry's own type.
+	const vaultRow = (entry: BrainVaultEntry, key: string) => {
+		const meta = VAULT_TYPE_META[entry.type]
+		const Icon = meta.icon
+		return (
+			<div
+				key={key}
+				className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+			>
+				<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+					<Icon className={`size-4 ${meta.color}`} />
+				</div>
+				<div className="min-w-0 flex-1">
+					<div className="truncate font-medium text-foreground text-sm">{entry.name}</div>
+					{entry.description && (
+						<div className="truncate text-muted-foreground text-xs">{entry.description}</div>
+					)}
+				</div>
+				{entry.type === "skill" && (
+					<button
+						type="button"
+						title="Share to Community"
+						onClick={() => void shareSkill(entry)}
+						className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+					>
+						<Share2Icon className="size-4" />
+					</button>
+				)}
+				{entry.verified ? (
+					<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
+						✓ verified
+					</span>
+				) : (
+					<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+						unverified
+					</span>
+				)}
+			</div>
+		)
+	}
+
+	// One registry (tool/model) row — unchanged markup from the old
+	// TOOLS & MODELS block, reused inside the Tools / Models folders.
+	const registryRow = (entry: BrainRegistryEntry) => {
+		const Icon = entry.kind === "model" ? CpuIcon : PackageIcon
+		return (
+			<div
+				key={entry.id}
+				className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+			>
+				<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+					<Icon className="size-4 text-primary" />
+				</div>
+				<div className="min-w-0 flex-1">
+					<div className="truncate font-medium text-foreground text-sm">{entry.name}</div>
+					<code className="mt-0.5 inline-block max-w-full truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+						{entry.command}
+					</code>
+				</div>
+				{entry.verified ? (
+					<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
+						✓ verified
+					</span>
+				) : (
+					<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+						unverified
+					</span>
+				)}
+			</div>
+		)
+	}
 
 	return (
 		<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
@@ -1739,93 +1859,39 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 			</div>
 
 			<div className="flex flex-col gap-5">
-				{groups.map((group) => (
-					<div key={group.key} className="flex flex-col gap-2">
-						<h2 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">
-							{group.label}
-						</h2>
-						<div className="flex flex-col gap-2">
-							{group.items.map((entry, i) => {
-								const meta = VAULT_TYPE_META[entry.type]
-								const Icon = meta.icon
-								return (
-									<div
-										key={`${entry.name}-${i}`}
-										className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-									>
-										<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-											<Icon className={`size-4 ${meta.color}`} />
-										</div>
-										<div className="min-w-0 flex-1">
-											<div className="truncate font-medium text-foreground text-sm">{entry.name}</div>
-											{entry.description && (
-												<div className="truncate text-muted-foreground text-xs">
-													{entry.description}
-												</div>
-											)}
-										</div>
-										{entry.type === "skill" && (
-											<button
-												type="button"
-												title="Share to Community"
-												onClick={() => void shareSkill(entry)}
-												className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-											>
-												<Share2Icon className="size-4" />
-											</button>
-										)}
-										{entry.verified ? (
-											<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
-												✓ verified
-											</span>
-										) : (
-											<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-												unverified
-											</span>
-										)}
-									</div>
-								)
-							})}
+				{VAULT_CATEGORY_ORDER.map((cat) => {
+					const vaultItems = byCategory.get(cat) ?? []
+					// Tools/Models folders also carry the registry entries (gated by
+					// the active filter chip); every other folder is vault-only.
+					const regItems =
+						cat === "Tools"
+							? regToolsVisible
+								? regTools
+								: []
+							: cat === "Models"
+								? regModelsVisible
+									? regModels
+									: []
+								: []
+					const count = vaultItems.length + regItems.length
+					if (count === 0) return null
+					return (
+						<div key={cat} className="flex flex-col gap-2">
+							<h2 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">
+								{cat.toUpperCase()} · {count}
+							</h2>
+							{/* TODO: thumbnails once originals are preserved — the source
+							    images aren't copied into the vault, so there's nothing to
+							    preview yet. Until then the Images folder just lists rows
+							    (a touch more compact) like every other folder. */}
+							<div className={`flex flex-col ${cat === "Images" ? "gap-1.5" : "gap-2"}`}>
+								{vaultItems.map((entry, i) => vaultRow(entry, `${entry.name}-${i}`))}
+								{regItems.map((entry) => registryRow(entry))}
+							</div>
 						</div>
-					</div>
-				))}
+					)
+				})}
 			</div>
-
-			{registry.length > 0 && (
-				<div className="flex flex-col gap-2">
-					<h2 className="font-medium text-[11px] text-muted-foreground/70 tracking-wider">TOOLS & MODELS</h2>
-					<div className="flex flex-col gap-2">
-						{registry.map((entry) => {
-							const Icon = entry.kind === "model" ? CpuIcon : PackageIcon
-							return (
-								<div
-									key={entry.id}
-									className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-								>
-									<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-										<Icon className="size-4 text-primary" />
-									</div>
-									<div className="min-w-0 flex-1">
-										<div className="truncate font-medium text-foreground text-sm">{entry.name}</div>
-										<code className="mt-0.5 inline-block max-w-full truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-											{entry.command}
-										</code>
-									</div>
-									{entry.verified ? (
-										<span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 font-medium text-[11px] text-emerald-600 dark:text-emerald-400">
-											✓ verified
-										</span>
-									) : (
-										<span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-											unverified
-										</span>
-									)}
-								</div>
-							)
-						})}
-					</div>
-				</div>
-			)}
 
 			{/* History — read-only, collapsible list of past jobs (episodes). */}
 			<div className="flex flex-col gap-2 border-border/60 border-t pt-4">
