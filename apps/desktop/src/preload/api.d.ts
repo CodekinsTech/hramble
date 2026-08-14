@@ -537,6 +537,18 @@ export interface HrambleAPI {
 		}>
 	>
 
+	/**
+	 * "Keep as reference" — copy a whole file into the Brain, verbatim, registered
+	 * as a reference item the agent can open in full later (as opposed to the
+	 * extract-into-a-skill flow). Writes skills/<slug>/SKILL.md (type: docs,
+	 * verified: true, reference: true) next to a copy of the original file.
+	 * Guarded in the main process; resolves with the outcome and never rejects.
+	 */
+	saveBrainReference?: (
+		filePath: string,
+		opts?: { description?: string },
+	) => Promise<{ ok: boolean; slug?: string; storedPath?: string; error?: string }>
+
 	/** Subscribe to chrome tier notification (fired once on load). */
 	onChromeTier: (callback: (tier: WindowChromeTier) => void) => () => void
 	/** Get the current chrome tier (pull-based, avoids race with push event). */

@@ -798,6 +798,74 @@ export function registerIpcHandlers(): void {
 		},
 	)
 
+	// "Keep as reference" — save a whole file INTO the Brain, verbatim. Unlike
+	// create_skill (which extracts a how-to), this copies the original file into
+	// its own skill folder and writes a SKILL.md pointing the agent at it, so a
+	// future session can open the full file when a task needs it. Same on-disk
+	// shape as every other Brain item (skills/<slug>/SKILL.md) so it shows up in
+	// the Vault + Layer-1 catalog exactly like the rest. Guarded; never throws.
+	ipcMain.handle(
+		"brain:save-reference",
+		async (
+			_e,
+			filePath: string,
+			opts?: { description?: string },
+		): Promise<{ ok: boolean; slug?: string; storedPath?: string; error?: string }> => {
+			try {
+				const src = String(filePath || "").trim()
+				if (!src) return { ok: false, error: "No file path provided." }
+				if (!fs.existsSync(src) || !fs.statSync(src).isFile()) {
+					return { ok: false, error: "File does not exist." }
+				}
+
+				const slugify = (s: string) =>
+					s
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, "-")
+						.replace(/^-+|-+$/g, "")
+
+				const originalName = path.basename(src)
+				// Slug from the base name WITHOUT its extension, same slug approach the
+				// rest of the Brain uses; fall back to a stable default if it slugs empty.
+				const nameNoExt = originalName.replace(/\.[^.]+$/, "")
+				const slug = slugify(nameNoExt) || slugify(originalName) || "reference"
+
+				const skillsDir = path.join(os.homedir(), ".config", "opencode", "skills")
+				const skillDir = path.join(skillsDir, slug)
+				await mkdir(skillDir, { recursive: true })
+
+				// Copy the original in, preserving its filename. copyFileSync overwrites
+				// an existing destination by default, so re-saving is a clean replace.
+				const dest = path.join(skillDir, originalName)
+				fs.copyFileSync(src, dest)
+
+				const description =
+					(opts?.description || "").trim() || `Reference file: ${originalName}`
+				const oneLine = (s: string) => s.replace(/\r?\n/g, " ").trim()
+				const frontmatter =
+					`name: ${slug}\n` +
+					`description: ${oneLine(description)}\n` +
+					`type: docs\n` +
+					`verified: true\n` +
+					`source: ${oneLine(src)}\n` +
+					`reference: true`
+				const body =
+					`This is a saved reference FILE, kept verbatim in the Brain — not an extracted skill.\n\n` +
+					`The full original file is stored alongside this note. When a task needs it, open ` +
+					`\`skills/${slug}/${originalName}\` to read it in full.\n`
+				fs.writeFileSync(path.join(skillDir, "SKILL.md"), `---\n${frontmatter}\n---\n\n${body}`)
+
+				// Same as brain:import / brain:remove-item — refresh the Layer-1 catalog
+				// so this reference is in the injected inventory of the next session.
+				refreshBrainCatalog()
+
+				return { ok: true, slug, storedPath: dest }
+			} catch (err) {
+				return { ok: false, error: err instanceof Error ? err.message : String(err) }
+			}
+		},
+	)
+
 	// Publish the selected Brain items to a private GitHub repo — the payoff of
 	// the Share Brain wizard. Assembles a fresh publish dir under userData with
 	// only the selected skill folders + a filtered registry, then writes a

@@ -110,6 +110,12 @@ contextBridge.exposeInMainWorld("hramble", {
 		}>,
 	): Promise<Array<{ id: string; status: "ok" | "warn" | "dead"; detail: string }>> =>
 		ipcRenderer.invoke("brain:scan", items),
+	/** "Keep as reference" — copies a whole file into the Brain and registers it as a reference item (SKILL.md, type docs, reference: true) the agent can open in full later. */
+	saveBrainReference: (
+		filePath: string,
+		opts?: { description?: string },
+	): Promise<{ ok: boolean; slug?: string; storedPath?: string; error?: string }> =>
+		ipcRenderer.invoke("brain:save-reference", filePath, opts),
 	/** Removes one Brain item — deletes a skill folder ("skill") or drops a registry entry ("registry"). */
 	removeBrainItem: (
 		kind: "skill" | "registry",
