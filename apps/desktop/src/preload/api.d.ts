@@ -265,6 +265,15 @@ export interface AppSettings {
 	 * Layer 1 `brainCatalogInSessions` toggle.
 	 */
 	brainAutoRecall: boolean
+	/**
+	 * Layer 3 — Episodic Memory. When on (default), each finished task is recorded
+	 * as a compact episode (request, outcome, relevant Brain items, optional
+	 * lesson), and each new task is matched against those past episodes so the
+	 * agent is reminded of a similar past job — reusing what worked and avoiding
+	 * past mistakes. Independent of the Layer 1/2 toggles; when off, both capture
+	 * and recall are skipped.
+	 */
+	brainEpisodicMemory: boolean
 	/** Server connection configuration. */
 	servers: ServerSettings
 }
@@ -482,6 +491,49 @@ export interface HrambleAPI {
 			verified: boolean
 			source?: string
 			score: number
+		}>
+	>
+
+	/**
+	 * Layer 3 — Episodic Memory. Returns the past episodes most similar to a task's
+	 * text (local match). Resolves to [] when the `brainEpisodicMemory` toggle is
+	 * off or nothing meaningfully matches.
+	 */
+	recallEpisodes?: (
+		taskText: string,
+		opts?: { limit?: number },
+	) => Promise<
+		Array<{
+			id: string
+			timestamp: number
+			task: string
+			outcome: "success" | "failed" | "unknown"
+			itemsUsed: string[]
+			lesson?: string
+			score: number
+		}>
+	>
+
+	/**
+	 * Layer 3 — record (or refine) a finished task's episode. No-ops when the
+	 * `brainEpisodicMemory` toggle is off. Best-effort; never rejects.
+	 */
+	recordEpisode?: (input: {
+		id: string
+		task: string
+		outcome?: "success" | "failed" | "unknown"
+		lesson?: string
+	}) => Promise<{ ok: boolean }>
+
+	/** Layer 3 — read-only list of recorded episodes, most recent first. */
+	listEpisodes?: (opts?: { limit?: number }) => Promise<
+		Array<{
+			id: string
+			timestamp: number
+			task: string
+			outcome: "success" | "failed" | "unknown"
+			itemsUsed: string[]
+			lesson?: string
 		}>
 	>
 

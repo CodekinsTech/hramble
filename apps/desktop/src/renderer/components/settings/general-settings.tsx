@@ -46,6 +46,7 @@ export function GeneralSettings() {
 			<SettingsSection title="Brain">
 				<BrainCatalogRow />
 				<BrainAutoRecallRow />
+				<BrainEpisodicMemoryRow />
 			</SettingsSection>
 
 			<SettingsSection title="Browser">
@@ -245,6 +246,24 @@ function BrainAutoRecallRow() {
 			<Switch
 				checked={enabled}
 				onCheckedChange={(checked) => updateSettings({ brainAutoRecall: checked })}
+			/>
+		</SettingsRow>
+	)
+}
+
+function BrainEpisodicMemoryRow() {
+	const { settings, updateSettings } = useSettings()
+	// Default ON when the setting hasn't loaded/persisted yet.
+	const enabled = settings.brainEpisodicMemory !== false
+
+	return (
+		<SettingsRow
+			label="Remember past jobs and reuse what worked"
+			description="Record each finished task as a short episode (what it was, whether it worked, what helped) and, when a new task looks like a past one, quietly remind the agent — so it reuses what worked and avoids past mistakes. Fully local; only a one-line pointer is surfaced."
+		>
+			<Switch
+				checked={enabled}
+				onCheckedChange={(checked) => updateSettings({ brainEpisodicMemory: checked })}
 			/>
 		</SettingsRow>
 	)

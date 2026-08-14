@@ -52,6 +52,41 @@ contextBridge.exposeInMainWorld("hramble", {
 			score: number
 		}>
 	> => ipcRenderer.invoke("brain:recall", taskText, opts),
+	/** Layer 3 — returns the past episodes most similar to a task's text (local match; [] when the toggle is off). */
+	recallEpisodes: (
+		taskText: string,
+		opts?: { limit?: number },
+	): Promise<
+		Array<{
+			id: string
+			timestamp: number
+			task: string
+			outcome: "success" | "failed" | "unknown"
+			itemsUsed: string[]
+			lesson?: string
+			score: number
+		}>
+	> => ipcRenderer.invoke("brain:recall-episodes", taskText, opts),
+	/** Layer 3 — record (or refine) a finished task's episode. No-ops when the toggle is off. */
+	recordEpisode: (input: {
+		id: string
+		task: string
+		outcome?: "success" | "failed" | "unknown"
+		lesson?: string
+	}): Promise<{ ok: boolean }> => ipcRenderer.invoke("brain:record-episode", input),
+	/** Layer 3 — read-only list of recorded episodes, most recent first (for the Brain Vault history view). */
+	listEpisodes: (opts?: {
+		limit?: number
+	}): Promise<
+		Array<{
+			id: string
+			timestamp: number
+			task: string
+			outcome: "success" | "failed" | "unknown"
+			itemsUsed: string[]
+			lesson?: string
+		}>
+	> => ipcRenderer.invoke("brain:list-episodes", opts),
 	/** The Brain's registry of real CLI tools / local models it has set up. */
 	getBrainRegistry: (): Promise<
 		Array<{

@@ -20,6 +20,7 @@ import {
 } from "./automation"
 import type { CreateAutomationInput, UpdateAutomationInput } from "./automation/types"
 import { writeBrainCatalog } from "./brain-catalog"
+import { listRecentEpisodes, recallEpisodes, recordEpisode } from "./brain-episodes"
 import { recallRelevant } from "./brain-recall"
 import { installCli, isCliInstalled, uninstallCli } from "./cli-install"
 import { installCommunitySkill, type InstallCommunitySkillInput, listInstalledSkills } from "./community-skills"
@@ -220,6 +221,58 @@ export function registerIpcHandlers(): void {
 		try {
 			if (!getSettings().brainAutoRecall) return []
 			return recallRelevant(String(taskText ?? ""), opts)
+		} catch {
+			return []
+		}
+	})
+
+	// Layer 3 — Episodic Memory recall: for the task the user just typed, return
+	// the most similar PAST episode(s) so the agent can reuse what worked. Honors
+	// the independent `brainEpisodicMemory` toggle; never throws to the caller.
+	ipcMain.handle("brain:recall-episodes", (_e, taskText: string, opts?: { limit?: number }) => {
+		try {
+			if (!getSettings().brainEpisodicMemory) return []
+			return recallEpisodes(String(taskText ?? ""), opts)
+		} catch {
+			return []
+		}
+	})
+
+	// Layer 3 — Episode capture: record (or refine) a finished task's episode.
+	// itemsUsed is derived here (best-effort) by re-running the Layer 2 matcher on
+	// the task text — i.e. the Brain items that were relevant to this task — so the
+	// renderer only needs to pass the raw task + a rough outcome. No-ops when the
+	// toggle is off; never throws.
+	ipcMain.handle(
+		"brain:record-episode",
+		(
+			_e,
+			input: { id: string; task: string; outcome?: "success" | "failed" | "unknown"; lesson?: string },
+		) => {
+			try {
+				if (!getSettings().brainEpisodicMemory) return { ok: false }
+				const task = String(input?.task ?? "")
+				const itemsUsed = recallRelevant(task, { limit: 6 }).map((m) => m.name)
+				recordEpisode({
+					id: String(input?.id ?? ""),
+					task,
+					outcome: input?.outcome,
+					itemsUsed,
+					lesson: input?.lesson,
+				})
+				return { ok: true }
+			} catch {
+				return { ok: false }
+			}
+		},
+	)
+
+	// Layer 3 — read-only list of recorded episodes, most recent first, for the
+	// Brain Vault history view. Local read; never throws.
+	ipcMain.handle("brain:list-episodes", (_e, opts?: { limit?: number }) => {
+		try {
+			const limit = Math.max(1, Math.min(200, opts?.limit ?? 50))
+			return listRecentEpisodes(limit)
 		} catch {
 			return []
 		}

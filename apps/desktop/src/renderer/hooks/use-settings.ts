@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	opaqueWindows: false,
 	brainCatalogInSessions: true,
 	brainAutoRecall: true,
+	brainEpisodicMemory: true,
 	servers: DEFAULT_SERVER_SETTINGS,
 }
 

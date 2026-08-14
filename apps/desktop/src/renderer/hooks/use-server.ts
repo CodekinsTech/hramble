@@ -79,6 +79,35 @@ async function buildBrainRecallPart(text: string): Promise<{ type: "text"; text:
 	}
 }
 
+// ── Layer 3 — Episodic Memory recall ─────────────────────────────────────────
+// For the FIRST message of a session, ask the main process for the most similar
+// PAST task(s) the user has done, and turn them into a short "here's what
+// happened last time" pointer. Like Layer 2 it's a SEPARATE agent-only text part
+// so the user's visible message stays untouched. Returns null when the toggle is
+// off, nothing matches, or the bridge isn't available.
+async function buildEpisodeRecallPart(text: string): Promise<{ type: "text"; text: string } | null> {
+	try {
+		const recall = window.hramble?.recallEpisodes
+		if (!recall) return null
+		const matches = await recall(text, { limit: 2 })
+		if (!Array.isArray(matches) || matches.length === 0) return null
+		const lines = matches.map((m) => {
+			// Keep each match to one line: trimmed task, its outcome, and a lesson.
+			const task = m.task.length > 100 ? `${m.task.slice(0, 99).trimEnd()}…` : m.task
+			const lesson = m.lesson ? ` ${m.lesson}` : ""
+			return `- "${task}" → ${m.outcome}.${lesson}`
+		})
+		return {
+			type: "text",
+			text: `[Brain memory — similar past task(s):\n${lines.join("\n")}\n]`,
+		}
+	} catch (err) {
+		// Never let an episodic-memory hiccup block sending the message.
+		log.debug("episode recall skipped", { error: err instanceof Error ? err.message : String(err) })
+		return null
+	}
+}
+
 /**
  * Hook for OpenCode server connection state.
  */
@@ -192,15 +221,20 @@ export function useAgentActions() {
 				appStore.set(upsertPartAtom, optimisticFilePart)
 			}
 
-			// Layer 2 — compute the Brain recall block (first message only). This is
-			// prepended to the SERVER parts only; the optimistic text part above keeps
-			// the user's raw message, so their visible bubble is never mangled.
-			const recallPart =
-				isFirstMessage && text.trim() ? await buildBrainRecallPart(text) : null
+			// Layer 2 + Layer 3 — compute the Brain recall blocks (first message only).
+			// These are prepended to the SERVER parts only; the optimistic text part
+			// above keeps the user's raw message, so their visible bubble is never
+			// mangled. Layer 2 = relevant Brain items; Layer 3 = similar past task(s).
+			// Each is an independent, separately-marked part gated by its own toggle.
+			const [recallPart, episodePart] =
+				isFirstMessage && text.trim()
+					? await Promise.all([buildBrainRecallPart(text), buildEpisodeRecallPart(text)])
+					: [null, null]
 
 			// Build parts array for the API call
 			const parts: Array<{ type: "text"; text: string } | FilePartInput> = [
 				...(recallPart ? [recallPart] : []),
+				...(episodePart ? [episodePart] : []),
 				{ type: "text", text },
 			]
 			for (const file of files) {

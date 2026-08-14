@@ -19,6 +19,7 @@ import {
 } from "../atoms/streaming"
 import { createLogger } from "../lib/logger"
 import type { Event } from "../lib/types"
+import { captureEpisode } from "./episode-capture"
 import {
 	connectToServer,
 	disposeAllInstances,
@@ -519,6 +520,10 @@ function createEventBatcher() {
 			if (flushedParts.length > 0) {
 				appStore.set(batchUpsertPartsAtom, flushedParts)
 			}
+			// Layer 3 — Episodic Memory: a task/round just finished, so snapshot this
+			// session as an episode (best-effort; main no-ops when the toggle is off).
+			// Runs after the flush so the latest assistant text is in the store.
+			captureEpisode(event.properties.sessionID)
 		}
 
 		const key = coalescingKey(event)

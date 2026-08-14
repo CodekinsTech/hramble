@@ -40,8 +40,12 @@ const STOPWORDS = new Set([
 	"here", "now", "one", "all", "more", "most", "each", "such", "only", "own",
 ])
 
-/** Lowercase, split on non-alphanumerics, drop stopwords + 1-char noise. */
-function tokenize(text: string): string[] {
+/**
+ * Lowercase, split on non-alphanumerics, drop stopwords + 1-char noise.
+ * Exported so Layer 3 (brain-episodes.ts) can reuse the exact same tokenizer
+ * when scoring a new task against past episodes' task text.
+ */
+export function tokenize(text: string): string[] {
 	return (text || "")
 		.toLowerCase()
 		.split(/[^a-z0-9]+/)
