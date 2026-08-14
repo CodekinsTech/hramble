@@ -10,6 +10,7 @@ import {
 	GamepadIcon,
 	GlobeIcon,
 	type LucideIcon,
+	MegaphoneIcon,
 	MonitorIcon,
 	PuzzleIcon,
 	SmartphoneIcon,
@@ -427,6 +428,23 @@ export const AGENTS: Agent[] = [
 				note: "Framework for multi-agent systems — agents that collaborate on a task",
 			},
 		],
+	},
+	{
+		id: "marketing",
+		title: "Marketing / Launch",
+		description: "Take what you built to market — launch copy, social posts, landing pages, SEO, and outreach.",
+		icon: MegaphoneIcon,
+		accent: "rose",
+		// Placeholder codename — rename freely.
+		agentName: "Pro-M",
+		tagline: "I'm Pro-M, specialized in launching & marketing what you build.",
+		mode: "code",
+		brief:
+			"You help the user MARKET and launch what they built. Write launch copy (X/Twitter threads, Product Hunt, Reddit, LinkedIn, Instagram captions), landing-page copy + SEO meta, and cold outreach / press emails — and you can build the landing page itself since you can code. Draft and prepare everything for the user to review and publish; do NOT post to anyone's real social accounts or send emails on their behalf — hand them ready-to-post drafts and let them hit publish.",
+		toolsNote: "Tools: file read/write/edit, dev server, web search (research competitors & keywords)",
+		placeholder: "e.g. A launch tweet thread + Product Hunt post + landing page for my new to-do app",
+		connectorIds: ["web-search", "github"],
+		suggestedRepos: [],
 	},
 ]
 
