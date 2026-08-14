@@ -355,6 +355,11 @@ export const AGENTS: Agent[] = [
 				url: "https://github.com/oclif/oclif",
 				note: "Salesforce's framework for larger, multi-command CLIs",
 			},
+			{
+				name: "CLI-Anything",
+				url: "https://github.com/HKUDS/CLI-Anything",
+				note: "Hub of ready-made CLIs that make desktop/creative software (Blender, Obsidian, QGIS…) agent-drivable",
+			},
 		],
 	},
 	{

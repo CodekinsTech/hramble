@@ -31,6 +31,7 @@ import {
 	PlayIcon,
 	PlusIcon,
 	Redo2Icon,
+	SendHorizontalIcon,
 	SparklesIcon,
 	SquareIcon,
 	Undo2Icon,
@@ -122,6 +123,78 @@ function AttachButton({ disabled }: { disabled?: boolean }) {
 			disabled={disabled}
 		>
 			<PlusIcon className="size-3.5" />
+		</PromptInputButton>
+	)
+}
+
+/**
+ * Convert a renderer-scoped blob: URL to a self-contained data: URL so an
+ * attachment can be handed to a *different* session (the background job) that
+ * can't resolve this window's blob URLs. Mirrors the conversion PromptInput's
+ * own submit path does.
+ */
+async function blobUrlToDataUrl(url: string): Promise<string | null> {
+	try {
+		const response = await fetch(url)
+		const blob = await response.blob()
+		return await new Promise<string | null>((resolve) => {
+			const reader = new FileReader()
+			reader.onloadend = () => resolve(reader.result as string)
+			reader.onerror = () => resolve(null)
+			reader.readAsDataURL(blob)
+		})
+	} catch {
+		return null
+	}
+}
+
+/**
+ * "Run in background" button. Must be rendered inside a <PromptInput> so it can
+ * read the live composer text + attachments via the prompt-input context. On
+ * click it hands the current prompt to `onSend` (which spins up a NEW parallel
+ * session) and then clears the composer immediately so the input is free again.
+ */
+function SendInBackgroundButton({
+	onSend,
+	disabled,
+}: {
+	onSend: (text: string, files?: FileAttachment[]) => Promise<void> | void
+	disabled?: boolean
+}) {
+	const controller = usePromptInputController()
+	const attachments = usePromptInputAttachments()
+
+	const handleClick = useCallback(async () => {
+		const text = controller.textInput.value
+		if (!text.trim()) return
+		// Resolve blob: URLs to data: URLs so the background session gets usable files.
+		const files: FileAttachment[] = await Promise.all(
+			attachments.files.map(async ({ id: _id, ...item }) => {
+				let url = item.url ?? ""
+				if (url.startsWith("blob:")) {
+					url = (await blobUrlToDataUrl(url)) ?? url
+				}
+				return {
+					type: "file" as const,
+					url,
+					mediaType: item.mediaType,
+					filename: item.filename,
+				}
+			}),
+		)
+		await onSend(text, files.length > 0 ? files : undefined)
+		// Free the composer instantly — the local input value and attachments.
+		controller.textInput.clear()
+		attachments.clear()
+	}, [controller, attachments, onSend])
+
+	return (
+		<PromptInputButton
+			tooltip="Run in background — sends this as a separate task so you can keep typing."
+			onClick={handleClick}
+			disabled={disabled}
+		>
+			<SendHorizontalIcon className="size-3.5" />
 		</PromptInputButton>
 	)
 }
@@ -414,6 +487,17 @@ interface ChatViewProps {
 			hyperloop?: boolean
 		},
 	) => Promise<void>
+	/** Fire a prompt into a NEW parallel background session (keeps the current composer free). */
+	onSendBackground?: (
+		text: string,
+		options?: {
+			model?: ModelRef
+			agentName?: string
+			variant?: string
+			files?: FileAttachment[]
+			hyperloop?: boolean
+		},
+	) => Promise<void>
 	/** Callback to stop/abort the running session */
 	onStop?: (agent: Agent) => Promise<void>
 	/** Provider data for model selector */
@@ -469,6 +553,7 @@ export function ChatView({
 	agent,
 	isConnected,
 	onSendMessage,
+	onSendBackground,
 	onStop,
 	providers,
 	config,
@@ -845,6 +930,7 @@ export function ChatView({
 					isConnected={isConnected}
 					isWorking={isWorking}
 					onSendMessage={onSendMessage}
+					onSendBackground={onSendBackground}
 					onStop={onStop}
 					providers={providers}
 					config={config}
@@ -912,6 +998,7 @@ interface ChatInputSectionProps {
 	isConnected: boolean
 	isWorking: boolean
 	onSendMessage?: ChatViewProps["onSendMessage"]
+	onSendBackground?: ChatViewProps["onSendBackground"]
 	onStop?: ChatViewProps["onStop"]
 	providers?: ProvidersData | null
 	config?: ConfigData | null
@@ -942,6 +1029,7 @@ function ChatInputSection({
 	isConnected,
 	isWorking,
 	onSendMessage,
+	onSendBackground,
 	onStop,
 	providers,
 	config,
@@ -1738,6 +1826,55 @@ function ChatInputSection({
 		],
 	)
 
+	// "Run in background" — hand the current prompt to onSendBackground (which
+	// creates a new parallel session) instead of the active one. Deliberately NOT
+	// gated on `sending` (the whole point is throughput — don't wait). Applies the
+	// same model persistence + diff-comment prefix as a normal send so the
+	// background job runs with the same context, then clears the draft/mentions.
+	const handleSendBackground = useCallback(
+		async (text: string, files?: FileAttachment[]) => {
+			if (!text.trim() || !onSendBackground) return
+
+			if (effectiveModel && agent.directory) {
+				appStore.set(setProjectModelAtom, {
+					directory: agent.directory,
+					model: {
+						...effectiveModel,
+						variant: selectedVariant,
+						agent: selectedAgent || undefined,
+					},
+				})
+			}
+
+			const commentPrefix = serializeCommentsForChat(diffComments)
+			const finalText = commentPrefix ? `${commentPrefix}${text.trim()}` : text.trim()
+
+			try {
+				await onSendBackground(finalText, {
+					model: effectiveModel ?? undefined,
+					agentName: selectedAgent || undefined,
+					variant: selectedVariant,
+					files,
+				})
+				clearDraft()
+				setMentions([])
+				if (diffComments.length > 0) setDiffComments([])
+			} catch (err) {
+				log.error("handleSendBackground failed", { sessionId: agent.sessionId }, err)
+			}
+		},
+		[
+			onSendBackground,
+			effectiveModel,
+			agent,
+			selectedAgent,
+			selectedVariant,
+			clearDraft,
+			diffComments,
+			setDiffComments,
+		],
+	)
+
 	const canSend = isConnected && !sending
 
 	const handleStop = useCallback(() => {
@@ -2523,6 +2660,12 @@ function ChatInputSection({
 												<ListOrderedIcon className="size-3.5" />
 											</PromptInputButton>
 											<AttachButton disabled={!isConnected} />
+											{onSendBackground && (
+												<SendInBackgroundButton
+													onSend={handleSendBackground}
+													disabled={!isConnected}
+												/>
+											)}
 											<PromptToolbar
 												agents={openCodeAgents ?? []}
 												selectedAgent={selectedAgent}

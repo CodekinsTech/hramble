@@ -240,6 +240,10 @@ type BrainArm = {
 	// session prompt from the picked file path.
 	browseFile?: boolean
 	filePrompt?: (filePath: string) => string
+	// Shown as a hover note near the arrow so the user knows what the arrow will
+	// do before clicking. `verb` is the short action, `hint` the one-line what-happens.
+	verb?: string
+	hint?: string
 }
 
 const BRAIN_ARMS: BrainArm[] = [
@@ -248,6 +252,8 @@ const BRAIN_ARMS: BrainArm[] = [
 		name: "Skill",
 		icon: SparklesIcon,
 		placeholder: "Paste a skill link…",
+		verb: "Get & add",
+		hint: "Fetch it, test it once, add to your Brain if it works",
 		prompt: (l) =>
 			`Add this skill to your local library: ${l}\n\nThen actually try it once on a small test to confirm it genuinely works. Only if the test passes, call create_skill with type: "skill", source: "${l}", and verified: true. If the test fails, tell me exactly what went wrong and save it with verified: false (or not at all) — do not claim success. Finally, tell me in one line what it does.`,
 	},
@@ -256,6 +262,8 @@ const BRAIN_ARMS: BrainArm[] = [
 		name: "Git Repo",
 		icon: GitBranchIcon,
 		placeholder: "Paste a repo URL…",
+		verb: "Absorb",
+		hint: "Clone → set up → test → save as a skill or tool",
 		prompt: (l) =>
 			`Absorb this git repo — read it and set it up as a reusable skill or callable tool (whichever fits): ${l}\n\nThen actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "repo", source: "${l}", and verified: true. If it fails, explain what went wrong and save with verified: false (or not at all) rather than claiming success. Then confirm what you saved.`,
 		preprocess: async (l) => {
@@ -272,6 +280,8 @@ const BRAIN_ARMS: BrainArm[] = [
 		name: "Tool",
 		icon: PackageIcon,
 		placeholder: "Name a CLI tool (e.g. ffmpeg)…",
+		verb: "Install",
+		hint: "Install the CLI, run it once to confirm it works",
 		prompt: (v) =>
 			`Install the command-line tool "${v}" using whatever package manager fits this machine (brew, npm, cargo, pip, etc.). Then actually run it once on a small test to confirm it genuinely works. Only if that passes, call create_skill with type: "software", source: "${v}", and verified: true, saving how to use it — AND also call register_brain_tool with kind: "tool" and the real invocation command (e.g. how you actually ran it). If you can't install it or the test fails, tell me exactly what went wrong and don't claim success.`,
 	},
@@ -280,6 +290,8 @@ const BRAIN_ARMS: BrainArm[] = [
 		name: "Docs",
 		icon: BookOpenIcon,
 		placeholder: "Paste a URL — or pick a file →",
+		verb: "Read & save",
+		hint: "Extract the key knowledge, save it for later",
 		prompt: (l) =>
 			`Read the documentation / reference at ${l} and extract the key, reusable knowledge from it (how the API/tool/library actually works, the important endpoints/options/gotchas). Save it with create_skill using type: "docs" and source: "${l}", so future sessions can use it without guessing. Then tell me in one line what it covers.`,
 		browseFile: true,
@@ -305,6 +317,8 @@ const BRAIN_ARMS: BrainArm[] = [
 		name: "Rules",
 		icon: ListChecksIcon,
 		placeholder: "Type a standing rule…",
+		verb: "Save rule",
+		hint: "Always follow this from now on",
 		prompt: (v) =>
 			`Save this as a standing rule you always follow from now on: "${v}". Store it with create_skill (type: "skill", named like a rule) so it's applied in future sessions, then confirm it's saved.`,
 	},
@@ -403,14 +417,22 @@ function BrainArmCard({
 							<FolderIcon className="size-3.5" />
 						</button>
 					)}
-					<button
-						type="button"
-						onClick={() => void submit()}
-						disabled={isDisabled || !val.trim()}
-						className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
-					>
-						<ArrowRightIcon className="size-3.5" />
-					</button>
+					<div className="group/arrow relative shrink-0">
+						<button
+							type="button"
+							onClick={() => void submit()}
+							disabled={isDisabled || !val.trim()}
+							className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-40"
+						>
+							<ArrowRightIcon className="size-3.5" />
+						</button>
+						{(arm.verb || arm.hint) && (
+							<div className="pointer-events-none absolute right-0 bottom-full z-20 mb-1.5 hidden w-48 rounded-lg border border-border bg-popover p-2 text-left shadow-md group-hover/arrow:block">
+								{arm.verb && <div className="font-medium text-[11px] text-foreground">{arm.verb}</div>}
+								{arm.hint && <div className="mt-0.5 text-[10px] text-muted-foreground leading-snug">{arm.hint}</div>}
+							</div>
+						)}
+					</div>
 				</div>
 			)}
 		</div>
@@ -1697,6 +1719,8 @@ export function BrainPage() {
 	const [tab, setTab] = useState<"teach" | "vault">("teach")
 	// Bumped whenever the brain is fed, so the connector "current" pulses.
 	const [feedPulse, setFeedPulse] = useState(0)
+	// Folder chosen for the Files arm, held pending confirmation before a scan starts.
+	const [pendingScanDir, setPendingScanDir] = useState<string | null>(null)
 
 	const start = async (text: string) => {
 		const t = text.trim()
@@ -1743,10 +1767,16 @@ export function BrainPage() {
 			navigate({ to: "/settings/connectors" })
 			return
 		}
-		// Files — pick a local folder for the Brain to learn the user's style from.
+		// Files — pick a local folder, then confirm before kicking off a scan session.
 		const dir = await bridge().pickDirectory()
 		if (!dir) return
-		await start(
+		setPendingScanDir(dir)
+	}
+
+	// Prompt run once the user confirms the picked folder scan.
+	const startScan = (dir: string) => {
+		setPendingScanDir(null)
+		void start(
 			`Look through the files in ${dir} to learn my coding style, conventions, and patterns. Save what you learn with create_skill (type: "skill", named like a style guide) so future sessions match how I write. Then summarise in one line what you picked up.`,
 		)
 	}
@@ -1756,6 +1786,63 @@ export function BrainPage() {
 		const p = await bridge()?.pickDocFile?.()
 		if (!p || !arm.filePrompt) return
 		await start(arm.filePrompt(p))
+	}
+
+	// Auto-detect when the free-text bar holds JUST a link or JUST a path, and
+	// route it through the same verified prompt the matching arm uses — instead
+	// of firing it off as plain free-form text. A sentence with real words is
+	// respected as-is (falls back to `start`).
+	const routeFreeText = async (raw: string) => {
+		const token = raw.trim()
+		if (!token) return
+		// Only treat it as a "lone token" when there's no internal whitespace —
+		// one URL or one path, nothing else. Otherwise honour the user's words.
+		if (/\s/.test(token)) {
+			void start(raw)
+			return
+		}
+
+		// (a) Git repo URL — a *.git link, or a github/gitlab/bitbucket /user/repo.
+		const isGitHost = /^(https?:\/\/)?(www\.)?(github\.com|gitlab\.com|bitbucket\.org)\/[^/]+\/[^/]+/i.test(token)
+		if (/\.git($|\?)/.test(token) || isGitHost) {
+			const arm = BRAIN_ARMS.find((a) => a.id === "repo")
+			if (arm) {
+				const prompt = arm.preprocess ? await arm.preprocess(token) : (arm.prompt?.(token) ?? token)
+				void start(prompt)
+				return
+			}
+		}
+
+		// Local path (absolute, home-relative, or file://). Strip a file:// prefix.
+		const isFileUrl = /^file:\/\//i.test(token)
+		const localPath = isFileUrl ? token.replace(/^file:\/\//i, "") : token
+		const isLocalPath = isFileUrl || /^[~/]/.test(token)
+		if (isLocalPath) {
+			// (b) Doc file — an absolute path ending in a known document extension.
+			if (/\.(pdf|txt|md|markdown|docx|rtf)$/i.test(localPath)) {
+				const arm = BRAIN_ARMS.find((a) => a.id === "docs")
+				if (arm?.filePrompt) {
+					void start(arm.filePrompt(localPath))
+					return
+				}
+			}
+			// (c) Folder — no file extension, or a trailing slash. Reuse the guard.
+			setPendingScanDir(localPath)
+			setInput("")
+			return
+		}
+
+		// (d) Any other http(s) URL — unsure if it's a skill, docs, or a tool.
+		// Route through a universal "absorb this link" verified prompt.
+		if (/^https?:\/\//i.test(token)) {
+			void start(
+				`Absorb this link and add it to my Brain: ${token}\n\nFirst figure out what it actually is — a reusable skill, a documentation/reference page, or an installable tool — then set it up appropriately. If it's runnable, actually run it once on a small test to confirm it genuinely works. Then save it with create_skill using the correct type ("skill" | "docs" | "software") and source: "${token}", marking verified: true ONLY if a real test passed (otherwise verified: false and tell me exactly what failed). If it turned out to be a runnable tool, also call register_brain_tool with the real invocation command. Finally, tell me in one line what you saved.`,
+			)
+			return
+		}
+
+		// (e) Anything else — bare text that isn't a URL/path. Respect the words.
+		void start(raw)
 	}
 
 	// Opening screen — the brain in a box with its "arms" (feed cards) flanking it.
@@ -1819,7 +1906,7 @@ export function BrainPage() {
 							onKeyDown={(e) => {
 								if (e.key === "Enter" && !e.shiftKey) {
 									e.preventDefault()
-									void start(input)
+									void routeFreeText(input)
 								}
 							}}
 							rows={2}
@@ -1827,6 +1914,37 @@ export function BrainPage() {
 							placeholder="…or just teach the Brain something in your own words"
 							className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
 						/>
+					</div>
+				</div>
+			)}
+
+			{/* Confirm guard so a mis-picked folder doesn't kick off a big scan session. */}
+			{pendingScanDir && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+					<div className="mx-4 w-full max-w-sm rounded-2xl border border-border bg-popover p-5 text-foreground shadow-xl">
+						<h2 className="font-semibold text-base">Learn coding style from this folder?</h2>
+						<p
+							className="mt-2 truncate rounded-lg border border-border bg-card px-3 py-2 font-mono text-muted-foreground text-xs"
+							title={pendingScanDir}
+						>
+							{pendingScanDir}
+						</p>
+						<div className="mt-4 flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => setPendingScanDir(null)}
+								className="rounded-lg px-3 py-1.5 font-medium text-muted-foreground text-sm hover:text-foreground"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => startScan(pendingScanDir)}
+								className="rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-foreground text-sm hover:bg-primary/90"
+							>
+								Start
+							</button>
+						</div>
 					</div>
 				</div>
 			)}

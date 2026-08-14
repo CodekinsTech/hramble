@@ -91,6 +91,17 @@ interface AgentDetailProps {
 			hyperloop?: boolean
 		},
 	) => Promise<void>
+	/** Fire a prompt into a NEW parallel background session (keeps the current composer free). */
+	onSendBackground?: (
+		text: string,
+		options?: {
+			model?: ModelRef
+			agentName?: string
+			variant?: string
+			files?: FileAttachment[]
+			hyperloop?: boolean
+		},
+	) => Promise<void>
 	onRename?: (agent: Agent, title: string) => Promise<void>
 	/** Display name of the parent session (for breadcrumb) */
 	parentSessionName?: string
@@ -131,6 +142,7 @@ export function AgentDetail({
 	onReplyQuestion,
 	onRejectQuestion,
 	onSendMessage,
+	onSendBackground,
 	onRename,
 	parentSessionName,
 	isConnected,
@@ -322,6 +334,7 @@ export function AgentDetail({
 					agent={agent}
 					isConnected={isConnected ?? false}
 					onSendMessage={onSendMessage}
+					onSendBackground={onSendBackground}
 					onStop={onStop}
 					providers={providers}
 					config={config}

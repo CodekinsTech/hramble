@@ -39,6 +39,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	const {
 		abort,
 		sendPrompt,
+		createSession,
 		renameSession,
 		respondToPermission,
 		replyToQuestion,
@@ -254,6 +255,51 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		[sendPrompt],
 	)
 
+	// "Run in background" — fire the prompt into a brand-new sibling session in the
+	// SAME directory so the current composer/session stays free and the user can
+	// keep typing. We do NOT navigate to or select the new session — createSession
+	// seeds it into the Jotai store (via upsertSessionAtom), so it shows up in the
+	// sidebar session list on its own while the user stays exactly where they are.
+	const handleSendBackground = useCallback(
+		async (
+			message: string,
+			options?: {
+				model?: ModelRef
+				agentName?: string
+				variant?: string
+				files?: FileAttachment[]
+				hyperloop?: boolean
+			},
+		) => {
+			if (!selectedAgent || !message.trim()) return
+			const directory = selectedAgent.directory
+			// Short, human-readable title derived from the prompt (first ~40 chars).
+			const title = message.trim().replace(/\s+/g, " ").slice(0, 40) || "Background task"
+			log.debug("handleSendBackground", { directory, titleLength: title.length })
+			try {
+				const newSession = await createSession(directory, title)
+				if (!newSession) {
+					// Fail gracefully — don't throw and break the composer.
+					log.error("handleSendBackground: createSession returned null", { directory })
+					return
+				}
+				await sendPrompt(newSession.directory ?? directory, newSession.id, message, {
+					model: options?.model,
+					agent: options?.agentName || undefined,
+					variant: options?.variant,
+					files: options?.files,
+					hyperloop: options?.hyperloop,
+				})
+				log.debug("handleSendBackground completed", { sessionId: newSession.id })
+			} catch (err) {
+				// Swallow — the current session UI must stay usable even if the
+				// background job couldn't be started.
+				log.error("handleSendBackground failed", { directory }, err)
+			}
+		},
+		[selectedAgent, createSession, sendPrompt],
+	)
+
 	// Session not yet resolved — show spinner while the fallback fetch runs
 	if (!selectedAgent && resolving) {
 		return (
@@ -291,6 +337,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 			onReplyQuestion={handleReplyQuestion}
 			onRejectQuestion={handleRejectQuestion}
 			onSendMessage={handleSendMessage}
+			onSendBackground={handleSendBackground}
 			onRename={handleRenameSession}
 			parentSessionName={parentSessionName}
 			isConnected={true}

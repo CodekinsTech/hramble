@@ -9,7 +9,7 @@ import {
 	usePromptInputAttachments,
 	usePromptInputController,
 } from "@hramble/ui/components/ai-elements/prompt-input"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, SendHorizontalIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { setProjectModelAtom } from "../../atoms/preferences"
 import { appStore } from "../../atoms/store"
@@ -44,6 +44,11 @@ interface ChatInputProps {
 		message: string,
 		options?: { model?: ModelRef; agentName?: string; variant?: string; files?: FileAttachment[] },
 	) => Promise<void>
+	/** Fire a prompt into a NEW parallel background session (keeps the composer free). */
+	onSendBackground?: (
+		text: string,
+		options?: { model?: ModelRef; agentName?: string; variant?: string; files?: FileAttachment[] },
+	) => Promise<void>
 	onStop?: (agent: Agent) => Promise<void>
 	providers?: ProvidersData | null
 	config?: ConfigData | null
@@ -62,6 +67,70 @@ function AttachButton({ disabled }: { disabled?: boolean }) {
 			disabled={disabled}
 		>
 			<PlusIcon className="size-4" />
+		</PromptInputButton>
+	)
+}
+
+/** blob: URL -> data: URL so an attachment can be handed to a different session. */
+async function blobUrlToDataUrl(url: string): Promise<string | null> {
+	try {
+		const response = await fetch(url)
+		const blob = await response.blob()
+		return await new Promise<string | null>((resolve) => {
+			const reader = new FileReader()
+			reader.onloadend = () => resolve(reader.result as string)
+			reader.onerror = () => resolve(null)
+			reader.readAsDataURL(blob)
+		})
+	} catch {
+		return null
+	}
+}
+
+/**
+ * "Run in background" button — reads the live composer text + attachments and
+ * hands them to `onSend` (which spins up a NEW parallel session), then clears
+ * the composer so the input is immediately free. Rendered inside <PromptInput>.
+ */
+function SendInBackgroundButton({
+	onSend,
+	disabled,
+}: {
+	onSend: (text: string, files?: FileAttachment[]) => Promise<void> | void
+	disabled?: boolean
+}) {
+	const controller = usePromptInputController()
+	const attachments = usePromptInputAttachments()
+
+	const handleClick = useCallback(async () => {
+		const text = controller.textInput.value
+		if (!text.trim()) return
+		const files: FileAttachment[] = await Promise.all(
+			attachments.files.map(async ({ id: _id, ...item }) => {
+				let url = item.url ?? ""
+				if (url.startsWith("blob:")) {
+					url = (await blobUrlToDataUrl(url)) ?? url
+				}
+				return {
+					type: "file" as const,
+					url,
+					mediaType: item.mediaType,
+					filename: item.filename,
+				}
+			}),
+		)
+		await onSend(text, files.length > 0 ? files : undefined)
+		controller.textInput.clear()
+		attachments.clear()
+	}, [controller, attachments, onSend])
+
+	return (
+		<PromptInputButton
+			tooltip="Run in background — sends this as a separate task so you can keep typing."
+			onClick={handleClick}
+			disabled={disabled}
+		>
+			<SendHorizontalIcon className="size-4" />
 		</PromptInputButton>
 	)
 }
@@ -158,6 +227,7 @@ export function ChatInput({
 	agent,
 	isConnected,
 	onSendMessage,
+	onSendBackground,
 	onStop,
 	providers,
 	config,
@@ -254,6 +324,38 @@ export function ChatInput({
 			onScrollToBottom,
 			handleSlashCommand,
 		],
+	)
+
+	// "Run in background" — fire the current prompt into a NEW parallel session
+	// (via onSendBackground) instead of the active one, then clear draft/mentions
+	// so the composer is instantly free. No-ops if empty or unwired.
+	const handleSendBackground = useCallback(
+		async (text: string, files?: FileAttachment[]) => {
+			if (!text.trim() || !onSendBackground) return
+			if (effectiveModel && agent.directory) {
+				appStore.set(setProjectModelAtom, {
+					directory: agent.directory,
+					model: {
+						...effectiveModel,
+						variant: selectedVariant,
+						agent: selectedAgent || undefined,
+					},
+				})
+			}
+			try {
+				await onSendBackground(text.trim(), {
+					model: effectiveModel ?? undefined,
+					agentName: selectedAgent || undefined,
+					variant: selectedVariant,
+					files,
+				})
+				clearDraft()
+				setMentions([])
+			} catch {
+				// Keep the composer usable even if the background job failed to start.
+			}
+		},
+		[onSendBackground, effectiveModel, agent, selectedAgent, selectedVariant, clearDraft],
 	)
 
 	const handleMentionSelect = useCallback((option: MentionOption) => {
@@ -381,6 +483,12 @@ export function ChatInput({
 					<PromptInputFooter>
 						<PromptInputTools>
 							<AttachButton disabled={!isConnected} />
+							{onSendBackground && (
+								<SendInBackgroundButton
+									onSend={handleSendBackground}
+									disabled={!isConnected}
+								/>
+							)}
 							<PromptToolbar
 								agents={openCodeAgents ?? []}
 								selectedAgent={selectedAgent}
