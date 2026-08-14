@@ -340,21 +340,6 @@ function docsFilePrompt(p: string): string {
 	return `Read the document at ${p} (a local file — a document, or a code/text file) and extract the key, reusable knowledge from it. Save it with create_skill using type: "docs" and source: "${p}", so future sessions can use it without re-reading the whole file. Then tell me in one line what it covers.`
 }
 
-// Builds the Docs arm's session prompt for a picked local file, branching on the
-// file's extension so each kind of file is handled the smart way: SVGs and images
-// carry reusable knowledge that plain "read the doc" misses. Everything else keeps
-// the original read-the-document behaviour.
-function docsFilePrompt(p: string): string {
-	const ext = (p.split(".").pop() || "").toLowerCase()
-	if (ext === "svg") {
-		return `The file at ${p} is an SVG (it's just text/XML — read it directly). Study what it draws and how it's built (shapes, groups, gradients, viewBox, key paths) and extract the reusable knowledge: what the graphic depicts, its structure, and how to reuse or adapt it in future work. Save it with create_skill using type: "docs" and source: "${p}", so future sessions can rebuild or tweak it without starting over. Then tell me in one line what it is.`
-	}
-	if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
-		return `LOOK AT the image at ${p} and extract the reusable knowledge from it. If it's a UI mockup / design, describe the layout, components, spacing and styling precisely enough to rebuild it in code; if it's a diagram, capture its structure and relationships; otherwise capture whatever is reusable about it. NOTE: this needs a vision-capable model — if you can't actually see images, say so plainly and stop rather than guessing or hallucinating what's in it. If you can see it, save what you learned with create_skill using type: "docs" and source: "${p}". Then tell me in one line what it shows.`
-	}
-	return `Read the document at ${p} (a local file — a document, or a code/text file) and extract the key, reusable knowledge from it. Save it with create_skill using type: "docs" and source: "${p}", so future sessions can use it without re-reading the whole file. Then tell me in one line what it covers.`
-}
-
 const BRAIN_ARMS: BrainArm[] = [
 	{
 		id: "skill",
