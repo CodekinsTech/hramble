@@ -26,6 +26,7 @@ import {
 	FolderIcon,
 	GitBranchIcon,
 	GithubIcon,
+	HistoryIcon,
 	ListChecksIcon,
 	Loader2Icon,
 	PackageIcon,
@@ -34,6 +35,7 @@ import {
 	SettingsIcon,
 	Share2Icon,
 	SparklesIcon,
+	Trash2Icon,
 	UploadIcon,
 	XIcon,
 } from "lucide-react"
@@ -184,8 +186,43 @@ export type BrainRegistryEntry = {
 	addedAt: number
 }
 
+/** One past job the Brain remembers (mirrors the brain:list-episodes IPC shape). */
+export type BrainEpisode = {
+	id: string
+	timestamp: number
+	task: string
+	outcome: "success" | "failed" | "unknown"
+	itemsUsed: string[]
+	lesson?: string
+}
+
+/** Short, human relative time ("just now", "3h ago", "2d ago") for episode rows. */
+function relativeTime(ts: number): string {
+	const diff = Date.now() - ts
+	if (!Number.isFinite(diff) || diff < 0) return ""
+	const min = Math.floor(diff / 60000)
+	if (min < 1) return "just now"
+	if (min < 60) return `${min}m ago`
+	const hr = Math.floor(min / 60)
+	if (hr < 24) return `${hr}h ago`
+	const day = Math.floor(hr / 24)
+	if (day < 30) return `${day}d ago`
+	return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
 // --- Share Brain wizard types ---
 type ScanStatus = "ok" | "warn" | "dead"
+
+// --- Clean (dead / duplicate removal) types ---
+// One thing the Clean panel proposes removing — either a scan-broken item or a
+// duplicate of an item we're keeping. `kind`+`id` are exactly what removeBrainItem takes.
+type CleanCandidate = {
+	key: string
+	name: string
+	kind: "skill" | "registry"
+	id: string
+	reason: string
+}
 
 // One selectable/scannable thing in the wizard — a vault entry OR a registry
 // entry, normalised to a common shape. `item` is exactly what's sent to
@@ -714,6 +751,17 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	// tools/models/connectors to wire up; null = not showing it.
 	const [liveManifest, setLiveManifest] = useState<BrainManifest | null>(null)
 	const [liveHealth, setLiveHealth] = useState<string | null>(null)
+	// Episode History — a read-only, collapsible list of past jobs. Lazily
+	// fetched on first expand; null = not fetched yet.
+	const [historyOpen, setHistoryOpen] = useState(false)
+	const [episodes, setEpisodes] = useState<BrainEpisode[] | null>(null)
+	// Clean panel — computes a dead/duplicate cleanup list from a fresh scan and
+	// lets the user remove the ones they approve. null list = still scanning.
+	const [cleanOpen, setCleanOpen] = useState(false)
+	const [cleanScanning, setCleanScanning] = useState(false)
+	const [cleanList, setCleanList] = useState<CleanCandidate[] | null>(null)
+	const [cleanChecked, setCleanChecked] = useState<Record<string, boolean>>({})
+	const [cleanRemoving, setCleanRemoving] = useState(false)
 
 	// Reloads the vault + registry from the main process. Reused after an
 	// import so newly-restored skills appear without a page switch.
@@ -963,6 +1011,124 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 		}
 	}
 
+	// Expands/collapses the read-only History section. Lazily loads the episode
+	// list on first open — wrapped so a missing bridge (dev:web) just shows the
+	// empty state instead of hanging.
+	const toggleHistory = async () => {
+		const next = !historyOpen
+		setHistoryOpen(next)
+		if (next && episodes === null) {
+			try {
+				const list = (await bridge()?.listEpisodes?.()) as BrainEpisode[] | undefined
+				setEpisodes(Array.isArray(list) ? list : [])
+			} catch {
+				setEpisodes([])
+			}
+		}
+	}
+
+	// Opens the Clean panel: runs one deterministic scan over every Brain item,
+	// then computes the cleanup list = (a) items the scan flags broken PLUS (b)
+	// duplicates (same normalized name or same source URL — first one kept). All
+	// candidates start checked; the user unticks anything they want to keep.
+	const openClean = async () => {
+		setCleanOpen(true)
+		setCleanList(null)
+		setCleanChecked({})
+		setCleanScanning(true)
+		const all = buildTargets()
+		try {
+			// Scan every item (best-effort — skip if there's no desktop bridge).
+			const statusByKey = new Map<string, { status: ScanStatus; detail: string }>()
+			const fn = bridge()?.scanBrain
+			if (typeof fn === "function") {
+				const res = (await fn(all.map((t) => t.item))) as
+					| Array<{ id: string; status: ScanStatus; detail: string }>
+					| undefined
+				if (Array.isArray(res)) {
+					all.forEach((t, i) => {
+						const r = res[i] ?? res.find((x) => x.id === t.item.id)
+						if (r) statusByKey.set(t.key, r)
+					})
+				}
+			}
+
+			// Duplicate detection (client-side): the first item under a given
+			// normalized name / source is the keeper; later matches are dups of it.
+			const nameRep = new Map<string, ScanTarget>()
+			const sourceRep = new Map<string, ScanTarget>()
+			const dupOf = new Map<string, string>()
+			for (const t of all) {
+				const nName = t.name.trim().toLowerCase()
+				const nSrc = t.item.source ? t.item.source.trim().toLowerCase().replace(/\/+$/, "") : ""
+				const rep =
+					(nName && nameRep.get(nName)) || (nSrc && sourceRep.get(nSrc)) || undefined
+				if (rep) {
+					dupOf.set(t.key, rep.name)
+				} else {
+					if (nName) nameRep.set(nName, t)
+					if (nSrc) sourceRep.set(nSrc, t)
+				}
+			}
+
+			const candidates: CleanCandidate[] = []
+			for (const t of all) {
+				const broken = statusByKey.get(t.key)
+				const isBroken = !!broken && broken.status !== "ok"
+				const dup = dupOf.get(t.key)
+				if (!isBroken && !dup) continue
+				const reason = isBroken
+					? `broken: ${broken?.detail || (broken?.status === "dead" ? "dead" : "needs repair")}`
+					: `duplicate of ${dup}`
+				candidates.push({
+					key: t.key,
+					name: t.name,
+					kind: t.key.startsWith("reg:") ? "registry" : "skill",
+					id: t.item.id,
+					reason,
+				})
+			}
+			setCleanList(candidates)
+			const init: Record<string, boolean> = {}
+			for (const c of candidates) init[c.key] = true
+			setCleanChecked(init)
+		} catch {
+			setCleanList([])
+		} finally {
+			setCleanScanning(false)
+		}
+	}
+
+	const closeClean = () => {
+		setCleanOpen(false)
+		setCleanList(null)
+		setCleanChecked({})
+	}
+
+	// Removes each checked cleanup candidate one at a time, swallowing per-item
+	// errors so one failure doesn't abort the rest, then refreshes the vault.
+	const removeCleanSelected = async () => {
+		const targets = (cleanList ?? []).filter((c) => cleanChecked[c.key])
+		if (targets.length === 0) return
+		setCleanRemoving(true)
+		let removed = 0
+		try {
+			for (const c of targets) {
+				try {
+					const res = await bridge()?.removeBrainItem?.(c.kind, c.id)
+					if (res?.ok) removed++
+				} catch {
+					// swallow — keep going through the rest of the list
+				}
+			}
+			if (removed > 0) toast.success(`Cleaned ${removed} item${removed === 1 ? "" : "s"}`)
+			await refresh()
+		} finally {
+			setCleanRemoving(false)
+			closeClean()
+		}
+	}
+
 	// Publishes the scanned set to a private GitHub repo (skills + registry +
 	// manifest + BRAIN.md). Surfaces the repo URL on success, the error on fail.
 	const publish = async (reportMarkdown?: string) => {
@@ -1011,6 +1177,14 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 					className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
 				>
 					<Share2Icon className="size-3.5" /> Share Brain
+				</button>
+				<button
+					type="button"
+					onClick={() => void openClean()}
+					disabled={busy}
+					className="flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[11px] text-foreground transition-colors hover:border-primary/40 disabled:opacity-60"
+				>
+					<Trash2Icon className="size-3.5" /> Clean
 				</button>
 				<button
 					type="button"
@@ -1375,6 +1549,86 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 		)
 	}
 
+	// --- Clean panel (inline, replaces the vault list) ---
+	const renderClean = () => {
+		const anyCleanChecked = (cleanList ?? []).some((c) => cleanChecked[c.key])
+		return (
+			<div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+				<div className="flex flex-col gap-1">
+					<h2 className="font-semibold text-foreground text-lg">Clean your Brain</h2>
+					<p className="text-muted-foreground text-sm">
+						{cleanScanning
+							? "Scanning for dead and duplicate items…"
+							: "Broken and duplicate items found. Untick anything you want to keep."}
+					</p>
+				</div>
+
+				{cleanScanning ? (
+					<div className="flex items-center gap-2 py-6 text-muted-foreground text-sm">
+						<Loader2Icon className="size-4 animate-spin" /> Scanning…
+					</div>
+				) : (cleanList?.length ?? 0) === 0 ? (
+					<p className="py-8 text-center text-muted-foreground text-sm">Nothing to clean 🎉</p>
+				) : (
+					<div className="flex flex-col gap-2">
+						{(cleanList ?? []).map((c) => (
+							<label
+								key={c.key}
+								className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3"
+							>
+								<input
+									type="checkbox"
+									checked={!!cleanChecked[c.key]}
+									onChange={() =>
+										setCleanChecked((prev) => ({ ...prev, [c.key]: !prev[c.key] }))
+									}
+									className="size-4 shrink-0 accent-primary"
+								/>
+								<div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
+									<Trash2Icon className="size-4 text-muted-foreground" />
+								</div>
+								<div className="min-w-0 flex-1">
+									<div className="truncate font-medium text-foreground text-sm">{c.name}</div>
+									<div className="truncate text-muted-foreground text-xs">{c.reason}</div>
+								</div>
+								<span
+									className={`shrink-0 rounded-full px-2 py-0.5 font-medium text-[11px] ${
+										c.reason.startsWith("broken")
+											? "bg-red-500/10 text-red-600 dark:text-red-400"
+											: "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+									}`}
+								>
+									{c.reason.startsWith("broken") ? "broken" : "duplicate"}
+								</span>
+							</label>
+						))}
+					</div>
+				)}
+
+				<div className="flex items-center justify-end gap-2">
+					<button
+						type="button"
+						onClick={closeClean}
+						className="flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs text-foreground transition-colors hover:border-primary/40"
+					>
+						Cancel
+					</button>
+					{(cleanList?.length ?? 0) > 0 && (
+						<button
+							type="button"
+							onClick={() => void removeCleanSelected()}
+							disabled={cleanRemoving || !anyCleanChecked}
+							className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-40"
+						>
+							<Trash2Icon className="size-3.5" />
+							{cleanRemoving ? "Removing…" : "Remove selected"}
+						</button>
+					)}
+				</div>
+			</div>
+		)
+	}
+
 	if (!entries) {
 		return <p className="py-10 text-center text-muted-foreground text-sm">Loading the vault…</p>
 	}
@@ -1397,6 +1651,11 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 	// Share Brain wizard takes over the whole vault surface while open.
 	if (wizardStep) {
 		return renderWizard()
+	}
+
+	// Clean panel takes over the vault surface while open.
+	if (cleanOpen) {
+		return renderClean()
 	}
 
 	if (entries.length === 0) {
@@ -1553,6 +1812,62 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 					</div>
 				</div>
 			)}
+
+			{/* History — read-only, collapsible list of past jobs (episodes). */}
+			<div className="flex flex-col gap-2 border-border/60 border-t pt-4">
+				<button
+					type="button"
+					onClick={() => void toggleHistory()}
+					className="flex items-center justify-between gap-2 text-left"
+				>
+					<span className="flex items-center gap-1.5 font-medium text-[11px] text-muted-foreground/70 tracking-wider">
+						<HistoryIcon className="size-3.5" /> HISTORY
+					</span>
+					<ChevronDownIcon
+						className={`size-4 shrink-0 text-muted-foreground transition-transform ${historyOpen ? "rotate-180" : ""}`}
+					/>
+				</button>
+				{historyOpen &&
+					(episodes === null ? (
+						<p className="px-1 py-2 text-muted-foreground/60 text-xs">Loading…</p>
+					) : episodes.length === 0 ? (
+						<p className="px-1 py-2 text-muted-foreground/60 text-xs">
+							No past jobs remembered yet.
+						</p>
+					) : (
+						<div className="flex flex-col gap-2">
+							{episodes.map((ep) => (
+								<div
+									key={ep.id}
+									className="flex flex-col gap-1 rounded-xl border border-border bg-card p-3"
+								>
+									<div className="flex items-center gap-2">
+										<span className="min-w-0 flex-1 truncate text-foreground text-sm">
+											{ep.task || "Untitled job"}
+										</span>
+										<span
+											className={`shrink-0 rounded-full px-2 py-0.5 font-medium text-[11px] ${
+												ep.outcome === "success"
+													? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+													: ep.outcome === "failed"
+														? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+														: "bg-muted text-muted-foreground"
+											}`}
+										>
+											{ep.outcome}
+										</span>
+										<span className="shrink-0 text-[11px] text-muted-foreground/60">
+											{relativeTime(ep.timestamp)}
+										</span>
+									</div>
+									{ep.lesson && (
+										<p className="text-muted-foreground text-xs leading-snug">{ep.lesson}</p>
+									)}
+								</div>
+							))}
+						</div>
+					))}
+			</div>
 		</div>
 	)
 }
