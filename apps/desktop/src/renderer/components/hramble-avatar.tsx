@@ -4,15 +4,9 @@ import { useAtom, useAtomValue } from "jotai"
 import { AVATARS, type AvatarKey, VrmStage } from "./vrm-stage"
 import { speak, warmupTTS } from "../tts/supertonic"
 import { anyBusyAtom } from "../atoms/sessions"
-import { companionCollapsedAtom } from "../atoms/preferences"
+import { companionCollapsedAtom, companionStyleAtom } from "../atoms/preferences"
+import { COMPANION_STYLES, COMPANION_STYLE_LABELS, pickPhrase } from "../lib/companion-phrases"
 import { type SttHandle, injectIntoChatInput, startVosk, warmupVosk } from "../stt/vosk"
-
-const DONE_PHRASES = [
-	"All done — your code is ready.",
-	"Finished! Take a look.",
-	"Done. I've made the changes.",
-	"That's ready for you.",
-]
 
 const PopOutIcon = () => (
 	<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -46,6 +40,7 @@ const ChevronDownIcon = () => (
 export function HrambleAvatar() {
 	const [floating, setFloating] = useState(false)
 	const [collapsed, setCollapsed] = useAtom(companionCollapsedAtom)
+	const [companionStyle, setCompanionStyle] = useAtom(companionStyleAtom)
 	const [pos, setPos] = useState({ x: 320, y: 120 })
 	const [avatar, setAvatar] = useState<AvatarKey>("flora")
 	const [speaking, setSpeaking] = useState(false)
@@ -114,10 +109,12 @@ export function HrambleAvatar() {
 	mutedRef.current = muted
 	const avatarRef = useRef(avatar)
 	avatarRef.current = avatar
+	const styleRef = useRef(companionStyle)
+	styleRef.current = companionStyle
 	useEffect(() => {
 		if (wasBusy.current && !anyBusy && !mutedRef.current) {
 			const a = AVATARS[avatarRef.current]
-			const phrase = DONE_PHRASES[phraseIdx.current % DONE_PHRASES.length]
+			const phrase = pickPhrase(styleRef.current, "done", phraseIdx.current)
 			phraseIdx.current++
 			setSpeaking(true)
 			speak(phrase, { voice: a.voice, lang: a.lang, onEnd: () => setSpeaking(false) }).catch(() =>
@@ -130,11 +127,12 @@ export function HrambleAvatar() {
 	const toggleMute = () => {
 		setMuted((m) => {
 			const next = !m
-			// Unmuting → quick voice test so you know it works.
+			// Unmuting → quick voice test so you know it works. Greets in the
+			// currently selected companion persona.
 			if (!next && !speaking) {
 				const a = AVATARS[avatar]
 				setSpeaking(true)
-				speak(`Hi! I'm ${a.name}.`, {
+				speak(pickPhrase(companionStyle, "hello"), {
 					voice: a.voice,
 					lang: a.lang,
 					onEnd: () => setSpeaking(false),
@@ -142,6 +140,21 @@ export function HrambleAvatar() {
 			}
 			return next
 		})
+	}
+
+	// Switch persona. When a new style is chosen, speak one of its hello lines
+	// as instant feedback (unless muted / already speaking).
+	const pickStyle = (style: (typeof COMPANION_STYLES)[number]) => {
+		setCompanionStyle(style)
+		if (style !== companionStyle && !muted && !speaking) {
+			const a = AVATARS[avatar]
+			setSpeaking(true)
+			speak(pickPhrase(style, "hello"), {
+				voice: a.voice,
+				lang: a.lang,
+				onEnd: () => setSpeaking(false),
+			}).catch(() => setSpeaking(false))
+		}
 	}
 
 	const startDrag = (e: React.PointerEvent) => {
@@ -219,6 +232,26 @@ export function HrambleAvatar() {
 				>
 					{speaking ? "…" : muted ? "🔇" : "🔊"}
 				</button>
+			</div>
+			<div
+				className="hramble-av-styles"
+				onPointerDown={(e) => e.stopPropagation()}
+				title="Companion voice persona"
+			>
+				{COMPANION_STYLES.map((s) => (
+					<button
+						key={s}
+						type="button"
+						className={`hramble-av-style${companionStyle === s ? " active" : ""}`}
+						title={`${COMPANION_STYLE_LABELS[s]} persona`}
+						onClick={(e) => {
+							e.stopPropagation()
+							pickStyle(s)
+						}}
+					>
+						{COMPANION_STYLE_LABELS[s]}
+					</button>
+				))}
 			</div>
 			{docked && (
 				<button

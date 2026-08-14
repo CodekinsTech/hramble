@@ -1,6 +1,7 @@
 import { atom } from "jotai"
 import { atomWithStorage } from "jotai/utils"
 import type { WindowChromeTier } from "../../preload/api"
+import type { CompanionStyle } from "../lib/companion-phrases"
 import type { ColorScheme } from "../lib/themes"
 
 // ============================================================
@@ -89,6 +90,13 @@ export const companionCollapsedAtom = atomWithStorage<boolean>("hramble:companio
  * it stays true forever, and companionCollapsedAtom takes over from there.
  */
 export const companionActivatedAtom = atomWithStorage<boolean>("hramble:companionActivated", false)
+
+/**
+ * The companion's persona/voice style — "chill", "smart", or "buddy". Controls
+ * which phrase set the avatar speaks on greeting (unmute) and on task-done.
+ * Defaults to "buddy" (the warmest set). Phrases live in lib/companion-phrases.
+ */
+export const companionStyleAtom = atomWithStorage<CompanionStyle>("hramble:companionStyle", "buddy")
 
 /**
  * Whether the user prefers opaque (non-transparent) windows.
