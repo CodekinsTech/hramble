@@ -2023,7 +2023,7 @@ export function NewChat() {
 					{/* No projects warning */}
 					{projects.length === 0 && (
 						<p className="mt-2 text-center text-xs text-muted-foreground">
-							No projects found. Check that projects exist in ~/.local/share/opencode/storage/.
+							No projects found. Open a project folder to get started.
 						</p>
 					)}
 				</div>

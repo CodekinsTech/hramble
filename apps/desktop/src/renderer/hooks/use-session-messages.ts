@@ -155,7 +155,7 @@ export function useSessionMessages(directory: string | null, sessionId: string |
 			// Use a directory-scoped client when available, otherwise fall back to the base client
 			const client = (directory ? getProjectClient(directory) : null) ?? getBaseClient()
 			if (!client) {
-				setError("Not connected to OpenCode server")
+				setError("Not connected to server")
 				setActivities([])
 				return
 			}

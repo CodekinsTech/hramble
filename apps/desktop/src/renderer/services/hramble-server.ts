@@ -35,7 +35,7 @@ export async function fetchOpenCodeUrl(): Promise<{ url: string }> {
 	const res = await client.api.servers.opencode.$get()
 	if (!res.ok) {
 		const data = await res.json()
-		throw new Error("error" in data ? data.error : "Failed to get OpenCode server URL")
+		throw new Error("error" in data ? data.error : "Failed to connect to Hramble server")
 	}
 	return res.json()
 }
