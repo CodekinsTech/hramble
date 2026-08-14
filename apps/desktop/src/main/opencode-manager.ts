@@ -4,6 +4,7 @@ import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { dialog } from "electron"
 import type { LocalServerConfig } from "../preload/api"
+import { writeBrainCatalog } from "./brain-catalog"
 import { getCredential } from "./credential-store"
 import { findFreePort } from "./find-free-port"
 import { getManagedConfigDir } from "./harness-installer"
@@ -344,6 +345,13 @@ async function spawnServer(
 	const managedConfigDir = getManagedConfigDir()
 	const env: NodeJS.ProcessEnv = { ...process.env, PATH: augmentedPath }
 	if (managedConfigDir) env.OPENCODE_CONFIG_DIR = managedConfigDir
+
+	// Layer 1 — Always-Aware Brain: (re)generate the compact Brain inventory the
+	// session context injects (BRAIN.md, wired into the harness `instructions`
+	// list) so every session that starts under this server knows what's saved
+	// locally. Regenerating at each server (re)start keeps it current; respects
+	// the user's toggle (writes an empty catalog when off).
+	writeBrainCatalog(getSettings().brainCatalogInSessions)
 
 	const proc = spawn("opencode", args, {
 		cwd: homedir(),

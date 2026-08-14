@@ -252,6 +252,19 @@ export interface AppSettings {
 	notifications: NotificationSettings
 	/** Whether the user prefers opaque (solid) windows. Read at window creation time. */
 	opaqueWindows: boolean
+	/**
+	 * Layer 1 — Always-Aware Brain. When on (default), a compact catalog of the
+	 * user's saved Brain (skills, repos, docs, tools, models, connectors) is
+	 * injected into every session so the agent always knows its inventory.
+	 */
+	brainCatalogInSessions: boolean
+	/**
+	 * Layer 2 — Auto-Recall. When on (default), each new task is matched against
+	 * the saved Brain and the few most relevant items (skills, tools, models,
+	 * connectors, …) are surfaced to the agent for that task. Independent of the
+	 * Layer 1 `brainCatalogInSessions` toggle.
+	 */
+	brainAutoRecall: boolean
 	/** Server connection configuration. */
 	servers: ServerSettings
 }
@@ -452,6 +465,25 @@ export interface HrambleAPI {
 	platform: NodeJS.Platform
 	getAppInfo: () => Promise<AppInfo>
 	getHomeDir: () => Promise<string>
+
+	/**
+	 * Layer 2 — Auto-Recall. Returns the saved Brain items most relevant to a
+	 * task's text (local keyword+entity match). Resolves to [] when the
+	 * `brainAutoRecall` toggle is off or nothing meaningfully matches.
+	 */
+	recallBrain?: (
+		taskText: string,
+		opts?: { limit?: number },
+	) => Promise<
+		Array<{
+			name: string
+			type: string
+			description: string
+			verified: boolean
+			source?: string
+			score: number
+		}>
+	>
 
 	/** Subscribe to chrome tier notification (fired once on load). */
 	onChromeTier: (callback: (tier: WindowChromeTier) => void) => () => void

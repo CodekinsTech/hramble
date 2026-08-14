@@ -19,6 +19,8 @@ import {
 	updateAutomation,
 } from "./automation"
 import type { CreateAutomationInput, UpdateAutomationInput } from "./automation/types"
+import { writeBrainCatalog } from "./brain-catalog"
+import { recallRelevant } from "./brain-recall"
 import { installCli, isCliInstalled, uninstallCli } from "./cli-install"
 import { installCommunitySkill, type InstallCommunitySkillInput, listInstalledSkills } from "./community-skills"
 import { buildRepoGraph } from "./repo-graph"
@@ -199,6 +201,30 @@ export function registerIpcHandlers(): void {
 		return dir
 	})
 
+	// Layer 1 — Always-Aware Brain: regenerate the compact BRAIN.md catalog from
+	// the current on-disk Brain, honoring the user's toggle. Called after any
+	// Brain-mutating action so the next session's injected inventory is current.
+	const refreshBrainCatalog = () => writeBrainCatalog(getSettings().brainCatalogInSessions)
+
+	// Explicit refresh the renderer can call after it changes the Brain (e.g. a
+	// vault edit) so the catalog is up to date before the next session starts.
+	ipcMain.handle("brain:refresh-catalog", () => {
+		refreshBrainCatalog()
+		return { ok: true }
+	})
+
+	// Layer 2 — Auto-Recall: for the task the user just typed, return the few
+	// Brain items most relevant to it (local keyword+entity score, no network).
+	// Honors the toggle — returns [] when off — and never throws to the caller.
+	ipcMain.handle("brain:recall", (_e, taskText: string, opts?: { limit?: number }) => {
+		try {
+			if (!getSettings().brainAutoRecall) return []
+			return recallRelevant(String(taskText ?? ""), opts)
+		} catch {
+			return []
+		}
+	})
+
 	// Everything that's been added to the Brain — one entry per skill folder
 	// under ~/.config/opencode/skills (same place create_skill writes). Reads
 	// the SKILL.md frontmatter, including the newer verify-before-trust fields
@@ -369,6 +395,7 @@ export function registerIpcHandlers(): void {
 			} catch {
 				// Skills dir unreadable after import — leave the count at 0.
 			}
+			refreshBrainCatalog()
 			return { ok: true, imported }
 		} catch (err) {
 			return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -506,6 +533,7 @@ export function registerIpcHandlers(): void {
 					// Skills dir unreadable after merge — leave the count at 0.
 				}
 
+				refreshBrainCatalog()
 				return { ok: true, imported, manifest, health }
 			} catch (err) {
 				return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -693,6 +721,7 @@ export function registerIpcHandlers(): void {
 							.replace(/[^a-z0-9]+/g, "-")
 							.replace(/^-+|-+$/g, "") || id
 					fs.rmSync(path.join(configDir, "skills", slug), { recursive: true, force: true })
+					refreshBrainCatalog()
 					return { ok: true }
 				}
 				if (kind === "registry") {
@@ -706,6 +735,7 @@ export function registerIpcHandlers(): void {
 					}
 					const next = registry.filter((e) => e && e.id !== id && e.name !== id)
 					fs.writeFileSync(registryPath, JSON.stringify(next, null, 2))
+					refreshBrainCatalog()
 					return { ok: true }
 				}
 				return { ok: false, error: "Unknown item kind." }
@@ -768,7 +798,14 @@ export function registerIpcHandlers(): void {
 				// the SAME repo. Only the generated content is cleared + rebuilt.
 				const publishDir = path.join(app.getPath("userData"), "brain-repo")
 				await mkdir(publishDir, { recursive: true })
-				for (const stale of ["skills", "brain-registry.json", "manifest.json", "BRAIN.md", "HEALTH.md"]) {
+				for (const stale of [
+					"skills",
+					"brain-registry.json",
+					"manifest.json",
+					"BRAIN.md",
+					"AGENTS.md",
+					"HEALTH.md",
+				]) {
 					fs.rmSync(path.join(publishDir, stale), { recursive: true, force: true })
 				}
 				const outSkillsDir = path.join(publishDir, "skills")
@@ -831,8 +868,13 @@ export function registerIpcHandlers(): void {
 					"A shared, portable **Brain** for Hramble Coder — a bundle of reusable skills, CLI tools and local models taught on another machine.",
 				)
 				md.push("")
+				// Split skill items by their frontmatter `type` so a human browsing
+				// GitHub can scan skills, absorbed repos and saved docs separately.
+				const plainSkills = manifest.skills.filter((s) => (s.type || "skill") === "skill")
+				const repoSkills = manifest.skills.filter((s) => s.type === "repo")
+				const docSkills = manifest.skills.filter((s) => s.type === "docs")
 				md.push(
-					`**Contents:** ${manifest.skills.length} skills · ${manifest.tools.length} tools · ${manifest.models.length} models`,
+					`**Contents:** ${plainSkills.length} skills · ${repoSkills.length} repos · ${docSkills.length} docs · ${manifest.tools.length} tools · ${manifest.models.length} models${manifest.connectors.length > 0 ? ` · ${manifest.connectors.length} connectors` : ""}`,
 				)
 				md.push("")
 				md.push("## To bring it live")
@@ -841,10 +883,22 @@ export function registerIpcHandlers(): void {
 					"Import this repo into Hramble (Brain → Import), then run setup to install the listed tools, download the models, and reconnect any services. Nothing here contains secrets or tokens — you re-authenticate services yourself.",
 				)
 				md.push("")
-				if (manifest.skills.length > 0) {
+				if (plainSkills.length > 0) {
 					md.push("## Skills")
 					md.push("")
-					for (const s of manifest.skills) md.push(`- **${s.name}** — ${s.description || s.type}`)
+					for (const s of plainSkills) md.push(`- **${s.name}** — ${s.description || s.type}`)
+					md.push("")
+				}
+				if (repoSkills.length > 0) {
+					md.push("## Repos absorbed")
+					md.push("")
+					for (const s of repoSkills) md.push(`- **${s.name}** — ${s.description || s.type}`)
+					md.push("")
+				}
+				if (docSkills.length > 0) {
+					md.push("## Docs / references")
+					md.push("")
+					for (const s of docSkills) md.push(`- **${s.name}** — ${s.description || s.type}`)
 					md.push("")
 				}
 				if (manifest.tools.length > 0) {
@@ -865,7 +919,72 @@ export function registerIpcHandlers(): void {
 					}
 					md.push("")
 				}
+				if (manifest.connectors.length > 0) {
+					md.push("## Connectors")
+					md.push("")
+					for (const c of manifest.connectors) {
+						const cn = c && typeof c === "object" ? (c as Record<string, unknown>) : undefined
+						const name = cn ? String(cn.name ?? cn.id ?? "connector") : String(c)
+						const desc = cn && cn.description ? ` — ${String(cn.description)}` : ""
+						md.push(`- **${name}**${desc}`)
+					}
+					md.push("")
+				}
 				fs.writeFileSync(path.join(publishDir, "BRAIN.md"), md.join("\n"))
+
+				// AGENTS.md — OpenCode auto-loads this as instructions, so it is how the
+				// receiving user's AI learns the brain. Built from the same manifest data:
+				// a compact menu (names + one-liners + invocation commands), never the full
+				// skill bodies (those live in skills/<name>/SKILL.md). No secrets/tokens.
+				const ag: string[] = []
+				ag.push("# Hramble Brain — agent instructions")
+				ag.push("")
+				ag.push(
+					"This repository is an imported Hramble **Brain** — a bundle of reusable skills, absorbed repos, saved docs, CLI tools, local models, and service connectors that you can use. The full instructions for each skill live in `skills/<name>/SKILL.md`; open the matching one when a task lines up with it instead of re-deriving the work.",
+				)
+				ag.push("")
+				if (plainSkills.length > 0) {
+					ag.push("## Skills")
+					for (const s of plainSkills) ag.push(`- ${s.name} (${s.type || "skill"}): ${s.description || ""}`.trimEnd())
+					ag.push("")
+				}
+				if (repoSkills.length > 0) {
+					ag.push("## Repos")
+					for (const s of repoSkills) ag.push(`- ${s.name} (repo): ${s.description || ""}`.trimEnd())
+					ag.push("")
+				}
+				if (docSkills.length > 0) {
+					ag.push("## Docs")
+					for (const s of docSkills) ag.push(`- ${s.name} (docs): ${s.description || ""}`.trimEnd())
+					ag.push("")
+				}
+				if (manifest.tools.length > 0) {
+					ag.push("## Tools")
+					ag.push("Installed CLI tools — invoke each via its command:")
+					for (const t of manifest.tools) {
+						ag.push(`- ${t.name}: run via \`${t.command || t.name}\``)
+					}
+					ag.push("")
+				}
+				if (manifest.models.length > 0) {
+					ag.push("## Models")
+					for (const m of manifest.models) ag.push(`- ${m.name}${m.source ? `: ${m.source}` : ""}`)
+					ag.push("")
+				}
+				if (manifest.connectors.length > 0) {
+					ag.push("## Connectors")
+					for (const c of manifest.connectors) {
+						const cn = c && typeof c === "object" ? (c as Record<string, unknown>) : undefined
+						const name = cn ? String(cn.name ?? cn.id ?? "connector") : String(c)
+						ag.push(`- ${name}`)
+					}
+					ag.push("")
+				}
+				ag.push(
+					"When unsure, consult the matching `skills/<name>/SKILL.md` before re-deriving anything.",
+				)
+				ag.push("")
+				fs.writeFileSync(path.join(publishDir, "AGENTS.md"), ag.join("\n"))
 
 				// Ship the health report alongside the brain, so an incomplete brain
 				// arrives with a clear "here's what still needs work" checklist.
@@ -1296,7 +1415,15 @@ export function registerIpcHandlers(): void {
 
 	ipcMain.handle("settings:get", () => getSettings())
 
-	ipcMain.handle("settings:update", (_, partial) => updateSettings(partial))
+	ipcMain.handle("settings:update", (_, partial) => {
+		const updated = updateSettings(partial)
+		// Keep the always-aware Brain catalog in sync with the toggle so a change
+		// takes effect for the next session (writes an empty catalog when off).
+		if (partial && Object.hasOwn(partial, "brainCatalogInSessions")) {
+			writeBrainCatalog(updated.brainCatalogInSessions)
+		}
+		return updated
+	})
 
 	// --- Credential storage (safeStorage-backed) ---
 

@@ -1,7 +1,7 @@
 import { useAtomValue } from "jotai"
 import { useCallback } from "react"
 import { connectionAtom } from "../atoms/connection"
-import { upsertMessageAtom } from "../atoms/messages"
+import { messagesFamily, upsertMessageAtom } from "../atoms/messages"
 import { upsertPartAtom } from "../atoms/parts"
 import { sessionFamily, upsertSessionAtom } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
@@ -49,6 +49,34 @@ function isHyperloopDone(text: string): boolean {
 	if (/\bCONTINUE\b/.test(v)) return false
 	if (/NOT\s+(YET\s+)?(DONE|COMPLETE|FINISHED)/.test(v)) return false
 	return /\bDONE\b/.test(v)
+}
+
+// ── Layer 2 — Brain Auto-Recall ──────────────────────────────────────────────
+// For the FIRST message of a session, ask the main process which saved Brain
+// items are most relevant to what the user just typed, and turn them into a
+// short, clearly-marked context block. The block is sent to the AGENT only — it
+// is prepended as a SEPARATE text part so the user's own visible message (the
+// optimistic text part) stays clean and unmodified. Returns null when the
+// toggle is off, nothing matches, or the bridge isn't available.
+async function buildBrainRecallPart(text: string): Promise<{ type: "text"; text: string } | null> {
+	try {
+		const recall = window.hramble?.recallBrain
+		if (!recall) return null
+		const matches = await recall(text, { limit: 5 })
+		if (!Array.isArray(matches) || matches.length === 0) return null
+		const lines = matches.map((m) => {
+			const how = m.source ? `  [how to use: ${m.source}]` : ""
+			return `- ${m.name} (${m.type}): ${m.description}${how}`
+		})
+		return {
+			type: "text",
+			text: `[Brain — relevant to this task, use if helpful:\n${lines.join("\n")}]`,
+		}
+	} catch (err) {
+		// A recall problem must never block sending the message.
+		log.debug("brain recall skipped", { error: err instanceof Error ? err.message : String(err) })
+		return null
+	}
 }
 
 /**
@@ -117,6 +145,11 @@ export function useAgentActions() {
 			}
 			log.debug("sendPrompt: got client", { directory })
 
+			// Layer 2 — Auto-Recall runs on the FIRST message only (least-invasive
+			// v1). Capture this BEFORE the optimistic message is added, since that
+			// insertion would otherwise make the session look non-empty.
+			const isFirstMessage = (appStore.get(messagesFamily(sessionId)) ?? []).length === 0
+
 			// Optimistic user message — include variant so it's available when
 			// re-initializing the session's toolbar state (the v1 UserMessage type
 			// doesn't have variant but the server stores it on user messages).
@@ -159,8 +192,17 @@ export function useAgentActions() {
 				appStore.set(upsertPartAtom, optimisticFilePart)
 			}
 
+			// Layer 2 — compute the Brain recall block (first message only). This is
+			// prepended to the SERVER parts only; the optimistic text part above keeps
+			// the user's raw message, so their visible bubble is never mangled.
+			const recallPart =
+				isFirstMessage && text.trim() ? await buildBrainRecallPart(text) : null
+
 			// Build parts array for the API call
-			const parts: Array<{ type: "text"; text: string } | FilePartInput> = [{ type: "text", text }]
+			const parts: Array<{ type: "text"; text: string } | FilePartInput> = [
+				...(recallPart ? [recallPart] : []),
+				{ type: "text", text },
+			]
 			for (const file of files) {
 				parts.push({
 					type: "file",

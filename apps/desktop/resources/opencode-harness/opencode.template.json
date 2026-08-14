@@ -35,6 +35,7 @@
   },
   "instructions": [
     "{{HARNESS_DIR}}/memory-harness.md",
+    "{{CONFIG_DIR}}/BRAIN.md",
     "HRAMBLE.md"
   ],
   "plugin": [

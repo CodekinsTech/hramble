@@ -20,6 +20,7 @@
  */
 
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { app } from "electron"
 import { createLogger } from "./logger"
@@ -32,6 +33,12 @@ const TEMPLATE_FILE = "opencode.template.json"
 const STAMP_FILE = ".hramble-harness-version"
 /** Placeholder in the config template, replaced with the absolute managed dir. */
 const HARNESS_DIR_TOKEN = "{{HARNESS_DIR}}"
+/**
+ * Placeholder replaced with the user's OpenCode config dir (`~/.config/opencode`).
+ * Used to point the `instructions` list at the always-aware Brain catalog
+ * (`BRAIN.md`), which the app regenerates there from the local Brain.
+ */
+const CONFIG_DIR_TOKEN = "{{CONFIG_DIR}}"
 
 let managedConfigDir: string | null = null
 
@@ -82,9 +89,15 @@ export function installHarness(): string | null {
 
 		const templatePath = path.join(managedDir, TEMPLATE_FILE)
 		const template = fs.readFileSync(templatePath, "utf8")
-		// JSON-escape the path so backslashes/quotes are safe in the JSON string context.
+		// JSON-escape the paths so backslashes/quotes are safe in the JSON string context.
 		const escapedDir = JSON.stringify(managedDir).slice(1, -1)
-		const resolved = template.split(HARNESS_DIR_TOKEN).join(escapedDir)
+		const openCodeConfigDir = path.join(os.homedir(), ".config", "opencode")
+		const escapedConfigDir = JSON.stringify(openCodeConfigDir).slice(1, -1)
+		const resolved = template
+			.split(HARNESS_DIR_TOKEN)
+			.join(escapedDir)
+			.split(CONFIG_DIR_TOKEN)
+			.join(escapedConfigDir)
 		JSON.parse(resolved) // fail fast if the resolved config is not valid JSON
 		fs.writeFileSync(path.join(managedDir, "opencode.json"), resolved, "utf8")
 		fs.rmSync(templatePath, { force: true })

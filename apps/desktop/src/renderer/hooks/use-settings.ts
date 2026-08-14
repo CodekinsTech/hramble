@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 		dockBadge: true,
 	},
 	opaqueWindows: false,
+	brainCatalogInSessions: true,
+	brainAutoRecall: true,
 	servers: DEFAULT_SERVER_SETTINGS,
 }
 

@@ -35,6 +35,23 @@ contextBridge.exposeInMainWorld("hramble", {
 	/** Clones a git repo locally for the Brain's Git Repo arm, returning its on-disk path. */
 	cloneBrainRepo: (url: string): Promise<{ ok: boolean; path?: string; error?: string }> =>
 		ipcRenderer.invoke("brain:clone-repo", url),
+	/** Regenerates the always-aware Brain catalog (BRAIN.md) from the current on-disk Brain. */
+	refreshBrainCatalog: (): Promise<{ ok: boolean }> =>
+		ipcRenderer.invoke("brain:refresh-catalog"),
+	/** Layer 2 — returns the Brain items most relevant to a task's text (local match; [] when the toggle is off). */
+	recallBrain: (
+		taskText: string,
+		opts?: { limit?: number },
+	): Promise<
+		Array<{
+			name: string
+			type: string
+			description: string
+			verified: boolean
+			source?: string
+			score: number
+		}>
+	> => ipcRenderer.invoke("brain:recall", taskText, opts),
 	/** The Brain's registry of real CLI tools / local models it has set up. */
 	getBrainRegistry: (): Promise<
 		Array<{

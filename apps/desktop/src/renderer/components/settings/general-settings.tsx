@@ -16,6 +16,7 @@ import { browserAutoOpenAtom } from "../../atoms/browser"
 import { communityAccessTokenAtom } from "../../atoms/community"
 import { dispatchPairTokenAtom, dispatchSessionRefAtom } from "../../atoms/dispatch"
 import { type DisplayMode, displayModeAtom, opaqueWindowsAtom } from "../../atoms/preferences"
+import { useSettings } from "../../hooks/use-settings"
 import { useColorScheme, useSetColorScheme } from "../../hooks/use-theme"
 import { shareUrlForRoom } from "../../lib/share-client"
 import type { ColorScheme } from "../../lib/themes"
@@ -40,6 +41,11 @@ export function GeneralSettings() {
 				<ThemeRow />
 				<OpaqueWindowsRow />
 				<DisplayModeRow />
+			</SettingsSection>
+
+			<SettingsSection title="Brain">
+				<BrainCatalogRow />
+				<BrainAutoRecallRow />
 			</SettingsSection>
 
 			<SettingsSection title="Browser">
@@ -204,6 +210,42 @@ function ChromeConsoleAccessRow() {
 					mode, then "Load unpacked" and pick the revealed folder.
 				</p>
 			</div>
+		</SettingsRow>
+	)
+}
+
+function BrainCatalogRow() {
+	const { settings, updateSettings } = useSettings()
+	// Default ON when the setting hasn't loaded/persisted yet.
+	const enabled = settings.brainCatalogInSessions !== false
+
+	return (
+		<SettingsRow
+			label="Let the Brain know its whole inventory"
+			description="Inject a compact menu of everything saved in your Brain (skills, repos, docs, tools, models, connectors) into every session, so the agent always knows what it has. Only names + one-line descriptions are shared — the full item still loads on demand."
+		>
+			<Switch
+				checked={enabled}
+				onCheckedChange={(checked) => updateSettings({ brainCatalogInSessions: checked })}
+			/>
+		</SettingsRow>
+	)
+}
+
+function BrainAutoRecallRow() {
+	const { settings, updateSettings } = useSettings()
+	// Default ON when the setting hasn't loaded/persisted yet.
+	const enabled = settings.brainAutoRecall !== false
+
+	return (
+		<SettingsRow
+			label="Auto-suggest relevant Brain items for each task"
+			description="For each new task, automatically find the few saved Brain items most relevant to what you asked and point the agent at them — so it uses the right skill or tool without being told. Only a short list of names is surfaced; matching is fully local."
+		>
+			<Switch
+				checked={enabled}
+				onCheckedChange={(checked) => updateSettings({ brainAutoRecall: checked })}
+			/>
 		</SettingsRow>
 	)
 }
