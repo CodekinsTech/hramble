@@ -63,6 +63,7 @@ import {
 } from "../../atoms/permission-rules"
 import { promptHistoryAtom, pushPromptHistory } from "../../atoms/prompt-history"
 import { pendingSessionStepsAtom } from "../../atoms/chat"
+import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../../atoms/chat-mode"
 import { fallbackModelAtom } from "../../atoms/fallback-model"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
@@ -1049,6 +1050,12 @@ function ChatInputSection({
 	onForkFromTurn,
 }: ChatInputSectionProps) {
 	const [sending, setSending] = useState(false)
+
+	const [chatMode, setChatMode] = useAtom(chatModeAtom)
+	const cycleMode = useCallback(() => {
+		const i = CHAT_MODE_ORDER.indexOf(chatMode)
+		setChatMode(CHAT_MODE_ORDER[(i + 1) % CHAT_MODE_ORDER.length])
+	}, [chatMode, setChatMode])
 
 	// Tree-scoped interactive requests — bubbles up from sub-agent sessions.
 	// These replace the direct `agent.permissions` / `agent.questions` arrays
@@ -2704,6 +2711,8 @@ function ChatInputSection({
 												selectedVariant={selectedVariant}
 												onSelectVariant={setSelectedVariant}
 												disabled={!isConnected}
+												chatMode={chatMode}
+												onCycleMode={cycleMode}
 											/>
 										</PromptInputTools>
 										<PromptInputSubmit
