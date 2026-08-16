@@ -48,7 +48,7 @@ import {
 	upsertSessionAtom,
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
-import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
+import { CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
 import { pendingSessionStepsAtom } from "../atoms/chat"
 import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
 import { interruptedWorkAtom, resolveInterruptedItemAtom } from "../atoms/sleep-recovery"
@@ -424,10 +424,6 @@ export function NewChat() {
 	// Claude's Shift+Tab. Applied as a session permission preset at creation.
 	const chatMode = useAtomValue(chatModeAtom)
 	const setChatMode = useSetAtom(chatModeAtom)
-	const cycleMode = useCallback(() => {
-		const i = CHAT_MODE_ORDER.indexOf(chatMode)
-		setChatMode(CHAT_MODE_ORDER[(i + 1) % CHAT_MODE_ORDER.length])
-	}, [chatMode, setChatMode])
 	const modeSpec = CHAT_MODES[chatMode]
 
 	// Mention popover state
@@ -1979,7 +1975,7 @@ export function NewChat() {
 											selectedVariant={selectedVariant}
 											onSelectVariant={setSelectedVariant}
 											chatMode={chatMode}
-											onCycleMode={cycleMode}
+											onSelectMode={setChatMode}
 											planMode={planMode}
 											onTogglePlanMode={togglePlanMode}
 										/>

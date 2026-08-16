@@ -63,7 +63,7 @@ import {
 } from "../../atoms/permission-rules"
 import { promptHistoryAtom, pushPromptHistory } from "../../atoms/prompt-history"
 import { pendingSessionStepsAtom } from "../../atoms/chat"
-import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../../atoms/chat-mode"
+import { chatModeAtom } from "../../atoms/chat-mode"
 import { fallbackModelAtom } from "../../atoms/fallback-model"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
@@ -904,7 +904,7 @@ export function ChatView({
 						</div>
 					</ConversationContent>
 					<ScrollToResponseStart isWorking={isWorking} scrollRef={scrollRef} />
-					<ConversationScrollButton />
+					<ConversationScrollButton className="bottom-4 z-20" />
 				</Conversation>
 
 				{/* Top fade */}
@@ -1052,10 +1052,6 @@ function ChatInputSection({
 	const [sending, setSending] = useState(false)
 
 	const [chatMode, setChatMode] = useAtom(chatModeAtom)
-	const cycleMode = useCallback(() => {
-		const i = CHAT_MODE_ORDER.indexOf(chatMode)
-		setChatMode(CHAT_MODE_ORDER[(i + 1) % CHAT_MODE_ORDER.length])
-	}, [chatMode, setChatMode])
 
 	// Tree-scoped interactive requests — bubbles up from sub-agent sessions.
 	// These replace the direct `agent.permissions` / `agent.questions` arrays
@@ -2712,7 +2708,7 @@ function ChatInputSection({
 												onSelectVariant={setSelectedVariant}
 												disabled={!isConnected}
 												chatMode={chatMode}
-												onCycleMode={cycleMode}
+												onSelectMode={setChatMode}
 											/>
 										</PromptInputTools>
 										<PromptInputSubmit

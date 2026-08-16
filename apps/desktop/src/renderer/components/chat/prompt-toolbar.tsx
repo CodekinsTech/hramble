@@ -18,9 +18,10 @@ import {
 } from "@hramble/ui/components/select"
 import { Separator } from "@hramble/ui/components/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@hramble/ui/components/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@hramble/ui/components/popover"
 import { cn } from "@hramble/ui/lib/utils"
 import { useAtomValue } from "jotai"
-import { type ChatMode, CHAT_MODES } from "../../atoms/chat-mode"
+import { type ChatMode, CHAT_MODE_ORDER, CHAT_MODES } from "../../atoms/chat-mode"
 import {
 	CheckIcon,
 	ChevronDownIcon,
@@ -477,7 +478,7 @@ export interface PromptToolbarProps {
 
 	/** Permission mode (Plan / Manual / Accept Edits / Auto / Bypass). */
 	chatMode?: ChatMode
-	onCycleMode?: () => void
+	onSelectMode?: (mode: ChatMode) => void
 
 	/** Think-first (plan) then act (build). Optional so existing consumers that
 	 *  don't wire it simply don't render the toggle. */
@@ -508,7 +509,7 @@ export function PromptToolbar({
 	selectedVariant,
 	onSelectVariant,
 	chatMode,
-	onCycleMode,
+	onSelectMode,
 	planMode,
 	onTogglePlanMode,
 	hyperloop,
@@ -528,33 +529,51 @@ export function PromptToolbar({
 
 	return (
 		<div className="flex min-w-0 flex-wrap items-center gap-0.5">
-			{onCycleMode && mode && (
+			{onSelectMode && mode && chatMode && (
 				<>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								disabled={disabled}
-								onClick={onCycleMode}
-								className={cn(
-									"flex items-center gap-1 rounded-md px-2 py-1 font-medium text-xs transition-colors",
-									chatMode === "bypass"
-										? "bg-red-500/15 text-red-600 dark:text-red-400"
-										: chatMode === "plan"
-											? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-											: chatMode === "manual"
-												? "bg-muted text-foreground"
-												: "text-muted-foreground hover:bg-accent hover:text-foreground",
-								)}
-							>
-								{mode.label}
-							</button>
-						</TooltipTrigger>
-						<TooltipContent className="max-w-60 text-center">
-							{mode.blurb}
-							<span className="mt-1 block text-muted-foreground">Click to change mode.</span>
-						</TooltipContent>
-					</Tooltip>
+					<Popover>
+						<PopoverTrigger
+							disabled={disabled}
+							className={cn(
+								"flex items-center gap-1 rounded-md px-2 py-1 font-medium text-xs transition-colors",
+								chatMode === "bypass"
+									? "bg-red-500/15 text-red-600 dark:text-red-400"
+									: chatMode === "plan"
+										? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+										: chatMode === "manual"
+											? "bg-muted text-foreground"
+											: "text-muted-foreground hover:bg-accent hover:text-foreground",
+							)}
+						>
+							{mode.label}
+							<ChevronDownIcon className="size-3 opacity-60" />
+						</PopoverTrigger>
+						<PopoverContent side="top" align="start" className="w-64 gap-1 p-1.5">
+							{CHAT_MODE_ORDER.map((m) => {
+								const spec = CHAT_MODES[m]
+								const isActive = m === chatMode
+								return (
+									<button
+										key={m}
+										type="button"
+										onClick={() => onSelectMode(m)}
+										className={cn(
+											"flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors",
+											isActive
+												? "bg-accent text-foreground"
+												: "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+										)}
+									>
+										<span className="flex w-full items-center gap-1.5 text-xs font-medium">
+											{spec.label}
+											{isActive && <CheckIcon className="ml-auto size-3" />}
+										</span>
+										<span className="text-[11px] leading-snug opacity-70">{spec.blurb}</span>
+									</button>
+								)
+							})}
+						</PopoverContent>
+					</Popover>
 					<Separator orientation="vertical" className="mx-0.5 my-2 self-stretch" />
 				</>
 			)}
