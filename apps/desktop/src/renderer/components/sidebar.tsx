@@ -463,7 +463,7 @@ export function AppSidebarContent({
 							onClick={() => navigate({ to: "/proforge" })}
 							className="text-primary"
 						>
-							<img src={proforgeIconUrl} alt="" className="size-4" />
+							<img src={proforgeIconUrl} alt="" className="size-5" />
 							<span>ProForge</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>

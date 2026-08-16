@@ -36,3 +36,11 @@ if (typeof window !== "undefined") {
 		appStore.set(nowAtom, Date.now())
 	}, 1000)
 }
+
+/**
+ * Steps queued from the new-chat screen, keyed by session ID.
+ * When new-chat starts a session with steps filled in, it writes here.
+ * chat-view reads on mount, initialises its steps state, then clears the entry.
+ * autoRun: true means chat-view should immediately start running all steps.
+ */
+export const pendingSessionStepsAtom = atom<Record<string, { steps: string[]; autoRun: boolean }>>({})

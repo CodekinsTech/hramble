@@ -21,15 +21,6 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
 					<HrambleWordmark className="h-6 w-auto text-foreground" />
 				</div>
 
-				{/* Description */}
-				<div className="space-y-3">
-					<p className="text-lg text-muted-foreground">Your desktop companion for OpenCode.</p>
-					<p className="text-sm leading-relaxed text-muted-foreground/70">
-						Hramble Coder gives you a native experience for managing OpenCode sessions across all your
-						projects, with real-time streaming, native notifications, and multi-session support.
-					</p>
-				</div>
-
 				{/* CTA */}
 				<div className="space-y-3">
 					<Button size="lg" onClick={onContinue} className="gap-2">

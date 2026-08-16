@@ -123,7 +123,7 @@ function ProForgeSidebarContent() {
 					</div>
 					<div className="px-2 pt-2 pb-1">
 						<div className="flex items-center gap-1.5 font-medium text-primary text-xs uppercase tracking-wide">
-							<img src={proforgeIconUrl} alt="" className="size-3.5" />
+							<img src={proforgeIconUrl} alt="" className="size-4" />
 							ProForge
 						</div>
 					</div>

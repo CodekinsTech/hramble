@@ -125,7 +125,7 @@ export function useServerConnection() {
 export function useAgentActions() {
 	const abort = useCallback(async (directory: string, sessionId: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("abort", { sessionId })
 		// Also halt any running Hyperloop for this session.
 		stopHyperloop(sessionId)
@@ -170,7 +170,7 @@ export function useAgentActions() {
 			const client = getProjectClient(directory)
 			if (!client) {
 				log.error("sendPrompt: no client for directory", { directory })
-				throw new Error("Not connected to OpenCode server")
+				throw new Error("Not connected to server")
 			}
 			log.debug("sendPrompt: got client", { directory })
 
@@ -444,7 +444,7 @@ export function useAgentActions() {
 			permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>,
 		) => {
 			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to OpenCode server")
+			if (!client) throw new Error("Not connected to server")
 			log.debug("createSession", { directory, title, hasPermission: !!permission })
 			try {
 				const result = await client.session.create(permission ? { title, permission } : { title })
@@ -462,7 +462,7 @@ export function useAgentActions() {
 
 	const renameSession = useCallback(async (directory: string, sessionId: string, title: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("renameSession", { sessionId, title })
 
 		// Optimistic update
@@ -484,7 +484,7 @@ export function useAgentActions() {
 
 	const deleteSession = useCallback(async (directory: string, sessionId: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("deleteSession", { sessionId })
 		try {
 			await client.session.delete({ sessionID: sessionId })
@@ -502,7 +502,7 @@ export function useAgentActions() {
 			response: "once" | "always" | "reject",
 		) => {
 			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to OpenCode server")
+			if (!client) throw new Error("Not connected to server")
 			log.debug("respondToPermission", { sessionId, permissionId, response })
 			try {
 				await client.permission.respond({
@@ -521,7 +521,7 @@ export function useAgentActions() {
 	const replyToQuestion = useCallback(
 		async (directory: string, requestId: string, answers: QuestionAnswer[]) => {
 			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to OpenCode server")
+			if (!client) throw new Error("Not connected to server")
 			log.debug("replyToQuestion", { requestId })
 			try {
 				await client.question.reply({ requestID: requestId, answers })
@@ -535,7 +535,7 @@ export function useAgentActions() {
 
 	const rejectQuestion = useCallback(async (directory: string, requestId: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("rejectQuestion", { requestId })
 		try {
 			await client.question.reject({ requestID: requestId })
@@ -547,7 +547,7 @@ export function useAgentActions() {
 
 	const revert = useCallback(async (directory: string, sessionId: string, messageId: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("revert", { sessionId, messageId })
 		try {
 			const entry = appStore.get(sessionFamily(sessionId))
@@ -564,7 +564,7 @@ export function useAgentActions() {
 
 	const unrevert = useCallback(async (directory: string, sessionId: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("unrevert", { sessionId })
 		try {
 			await client.session.unrevert({ sessionID: sessionId })
@@ -577,7 +577,7 @@ export function useAgentActions() {
 	const executeCommand = useCallback(
 		async (directory: string, sessionId: string, command: string, args: string) => {
 			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to OpenCode server")
+			if (!client) throw new Error("Not connected to server")
 			log.debug("executeCommand", { sessionId, command })
 			try {
 				await client.session.command({
@@ -595,7 +595,7 @@ export function useAgentActions() {
 
 	const summarize = useCallback(async (directory: string, sessionId: string) => {
 		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to OpenCode server")
+		if (!client) throw new Error("Not connected to server")
 		log.debug("summarize", { sessionId })
 		try {
 			await client.session.summarize({ sessionID: sessionId })
@@ -608,7 +608,7 @@ export function useAgentActions() {
 	const deletePart = useCallback(
 		async (directory: string, sessionId: string, messageId: string, partId: string) => {
 			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to OpenCode server")
+			if (!client) throw new Error("Not connected to server")
 			log.debug("deletePart", { sessionId, messageId, partId })
 			try {
 				await client.part.delete({ sessionID: sessionId, messageID: messageId, partID: partId })
@@ -623,7 +623,7 @@ export function useAgentActions() {
 	const forkSession = useCallback(
 		async (directory: string, sessionId: string, messageId?: string): Promise<Session> => {
 			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to OpenCode server")
+			if (!client) throw new Error("Not connected to server")
 			log.debug("forkSession", { sessionId, messageId })
 			try {
 				const result = await client.session.fork({

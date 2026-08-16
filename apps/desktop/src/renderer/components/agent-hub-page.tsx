@@ -124,7 +124,7 @@ export function AgentHubPage() {
 			if (!url) return
 			await bridge()?.connectors?.add({ name: preset.id, url: url.trim() })
 			setConnectedNames((prev) => new Set(prev).add(preset.id))
-			toast.success(`${preset.name} connected`, { description: "Restart OpenCode in Settings → Connectors to apply it." })
+			toast.success(`${preset.name} connected`, { description: "Restart Hramble in Settings → Connectors to apply it." })
 			return
 		}
 		let environment: Record<string, string> | undefined
@@ -135,7 +135,7 @@ export function AgentHubPage() {
 		}
 		await bridge()?.connectors?.add({ name: preset.id, command: preset.command, environment })
 		setConnectedNames((prev) => new Set(prev).add(preset.id))
-		toast.success(`${preset.name} connected`, { description: "Restart OpenCode in Settings → Connectors to apply it." })
+		toast.success(`${preset.name} connected`, { description: "Restart Hramble in Settings → Connectors to apply it." })
 	}
 
 	// Community panel — the real Community page, filtered to this agent's tag,
