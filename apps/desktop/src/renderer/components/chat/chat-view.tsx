@@ -1380,9 +1380,6 @@ function ChatInputSection({
 			const arr = ((msgs?.data as Array<{ parts: ToolPart[] }>) ?? []).slice(sinceIndex)
 			const toolParts = arr.flatMap((m) => m.parts ?? []).filter((p) => p.type === "tool")
 
-			if (toolParts.length === 0) {
-				return { ok: false, reason: "No tool call was made — the model replied with text instead of doing the work" }
-			}
 			// OpenCode represents "the model called a tool that doesn't exist" as a
 			// synthetic tool part named "invalid" with status "completed" (not
 			// "error") — so status alone won't catch it; check the tool name too.
