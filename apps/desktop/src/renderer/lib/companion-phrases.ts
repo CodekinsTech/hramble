@@ -71,6 +71,43 @@ export const COMPANION_PHRASES: Record<CompanionStyle, PhraseSet> = {
 }
 
 /**
+ * Turn a live tool event into a short spoken line for the SMART / LIVE personas
+ * (e.g. "Editing foo.ts", "Running npm", "Reading utils.js"). Ported from the
+ * desktop AvatarBox companion phrasing.
+ *
+ * Returns `null` for tools that aren't worth narrating (trivial internal tools).
+ */
+export function narrateToolEvent(
+	tool: string,
+	opts: { filePath?: string; command?: string },
+): string | null {
+	const t = (tool || "").toLowerCase()
+
+	// Skip trivial / noisy internal tools — not worth speaking aloud.
+	if (t === "todowrite" || t === "todoread" || t === "task" || t === "skill") return null
+
+	// basename of the file path (last path segment), and first word of a command.
+	const f = opts.filePath ? opts.filePath.split(/[\\/]/).filter(Boolean).pop() : undefined
+	const cmd = opts.command ? opts.command.trim().split(/\s+/)[0] : undefined
+
+	if (t === "edit" || t === "write" || t === "patch" || t === "apply_patch" || t === "replace") {
+		return f ? `Editing ${f}.` : "Editing files."
+	}
+	if (t === "read") {
+		return f ? `Reading ${f}.` : "Reading files."
+	}
+	if (t === "grep" || t === "glob") {
+		return f ? `Searching ${f}.` : "Scanning files."
+	}
+	if (t === "bash" || t === "shell") {
+		return cmd ? `Running ${cmd}.` : "Running a command."
+	}
+
+	// Fallback for anything else.
+	return f ? `Working on ${f}.` : `Using ${tool}.`
+}
+
+/**
  * Pick a phrase for a given style + kind. Pass a rotating `index` to mirror the
  * avatar's existing `phraseIdx` behavior (wraps around the set); omit it to get
  * a random phrase.

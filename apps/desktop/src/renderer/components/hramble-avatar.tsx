@@ -3,9 +3,14 @@ import { createPortal } from "react-dom"
 import { useAtom, useAtomValue } from "jotai"
 import { AVATARS, type AvatarKey, VrmStage } from "./vrm-stage"
 import { speak, warmupTTS } from "../tts/supertonic"
-import { anyBusyAtom } from "../atoms/sessions"
+import { anyBusyAtom, lastToolEventAtom } from "../atoms/sessions"
 import { companionCollapsedAtom, companionStyleAtom } from "../atoms/preferences"
-import { COMPANION_STYLES, COMPANION_STYLE_LABELS, pickPhrase } from "../lib/companion-phrases"
+import {
+	COMPANION_STYLES,
+	COMPANION_STYLE_LABELS,
+	narrateToolEvent,
+	pickPhrase,
+} from "../lib/companion-phrases"
 import { type SttHandle, injectIntoChatInput, startVosk, warmupVosk } from "../stt/vosk"
 
 const PopOutIcon = () => (
@@ -124,6 +129,38 @@ export function HrambleAvatar() {
 		}
 		wasBusy.current = anyBusy
 	}, [anyBusy])
+
+	// Live tool-activity narration — SMART and LIVE personas speak the agent's
+	// actual tool calls as they run (e.g. "Editing foo.ts", "Running npm").
+	// BUDDY ignores tool events entirely (it only keeps the task-done summary).
+	// Per-persona cadence: LIVE is faster/more reactive than SMART. Events that
+	// arrive during the cooldown (or while she's already speaking) are dropped —
+	// not queued — to avoid audio pile-up during heavy tool bursts.
+	const toolEvent = useAtomValue(lastToolEventAtom)
+	const speakingRef = useRef(speaking)
+	speakingRef.current = speaking
+	const lastNarrateAt = useRef(0)
+	// biome-ignore lint/correctness/useExhaustiveDependencies: keyed on seq; other values read via refs
+	useEffect(() => {
+		if (!toolEvent) return
+		const style = styleRef.current
+		if (style !== "smart" && style !== "live") return
+		if (mutedRef.current || speakingRef.current) return
+		const cooldown = style === "live" ? 1500 : 3500
+		const now = Date.now()
+		if (now - lastNarrateAt.current < cooldown) return
+		const line = narrateToolEvent(toolEvent.tool, {
+			filePath: toolEvent.filePath,
+			command: toolEvent.command,
+		})
+		if (!line) return
+		lastNarrateAt.current = now
+		const a = AVATARS[avatarRef.current]
+		setSpeaking(true)
+		speak(line, { voice: a.voice, lang: a.lang, onEnd: () => setSpeaking(false) }).catch(() =>
+			setSpeaking(false),
+		)
+	}, [toolEvent?.seq])
 
 	const toggleMute = () => {
 		setMuted((m) => {

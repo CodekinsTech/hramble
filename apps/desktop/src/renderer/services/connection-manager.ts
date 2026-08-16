@@ -3,6 +3,7 @@ import { processEvent } from "../atoms/actions/event-processor"
 import { authHeaderAtom, serverConnectedAtom, serverUrlAtom } from "../atoms/connection"
 import { batchUpsertPartsAtom } from "../atoms/parts"
 import {
+	lastToolEventAtom,
 	SESSIONS_PAGE_SIZE,
 	setProjectPaginationLoadingAtom,
 	setSessionsAtom,
@@ -418,6 +419,46 @@ export function disconnect(): void {
 
 const FRAME_BUDGET_MS = 16
 
+// ============================================================
+// Live tool-activity channel (companion narration)
+// ============================================================
+
+/** Tool part ids we've already fired a "running" event for (dedupe). */
+const seenRunningToolIds = new Set<string>()
+/** Monotonic counter so repeated identical tools register as new events. */
+let toolEventSeq = 0
+
+/**
+ * Best-effort emit of a live tool event for the avatar companion. Fires at most
+ * once per tool part, only on the pending→running transition. This is a hot path
+ * during heavy tool activity, so it does the minimal work and never throws.
+ */
+function maybeEmitToolEvent(event: Event): void {
+	try {
+		if (event.type !== "message.part.updated") return
+		const part = event.properties.part
+		if (part.type !== "tool") return
+		if (part.state.status !== "running") return
+		if (seenRunningToolIds.has(part.id)) return
+		seenRunningToolIds.add(part.id)
+		// Keep the dedupe set from growing unbounded across a long session.
+		if (seenRunningToolIds.size > 2000) seenRunningToolIds.clear()
+
+		const input = (part.state.input ?? {}) as Record<string, unknown>
+		const filePath = (input.filePath ?? input.path) as string | undefined
+		const command = input.command as string | undefined
+		appStore.set(lastToolEventAtom, {
+			id: part.id,
+			tool: part.tool,
+			filePath: typeof filePath === "string" ? filePath : undefined,
+			command: typeof command === "string" ? command : undefined,
+			seq: ++toolEventSeq,
+		})
+	} catch {
+		// Never disturb the event pipeline on narration bookkeeping.
+	}
+}
+
 function coalescingKey(event: Event): string | undefined {
 	switch (event.type) {
 		case "message.part.updated": {
@@ -475,6 +516,11 @@ function createEventBatcher() {
 	}
 
 	function enqueue(event: Event) {
+		// Companion narration: fire a live tool event on the pending→running
+		// transition (deduped, never throws). Cheap guards keep this off the
+		// streaming-delta hot path in practice.
+		maybeEmitToolEvent(event)
+
 		// Fast path: route high-frequency text/reasoning part updates to streaming buffer
 		if (event.type === "message.part.updated") {
 			const part = event.properties.part

@@ -425,3 +425,31 @@ export const anyBusyAtom = atom((get) => {
 	}
 	return false
 })
+
+// ============================================================
+// Live tool-activity channel (companion narration)
+// ============================================================
+
+/**
+ * Latest tool call the agent has started running. The Hramble avatar's SMART
+ * and LIVE personas subscribe to this to narrate activity live
+ * (e.g. "Editing foo.ts", "Running npm"). Emitted from connection-manager on
+ * the pending→running transition of a tool part.
+ *
+ * `seq` is a monotonic counter so two identical back-to-back tool calls still
+ * register as distinct events (drives the avatar's narration effect).
+ */
+export type ToolEvent = {
+	/** Tool part id (used to dedupe the running transition). */
+	id: string
+	/** Tool name, e.g. "edit" / "write" / "read" / "bash" / "grep". */
+	tool: string
+	/** Target file path, when the tool has one (input.filePath ?? input.path). */
+	filePath?: string
+	/** Shell command, when the tool has one (input.command). */
+	command?: string
+	/** Monotonic sequence — makes repeated identical tools new events. */
+	seq: number
+}
+
+export const lastToolEventAtom = atom<ToolEvent | null>(null)
