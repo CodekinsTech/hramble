@@ -95,22 +95,25 @@ body {
 .hramble-av-stage-wrap { width: 100%; height: 132px; }
 .hramble-av-float .hramble-av-stage-wrap { width: 152px; height: 200px; }
 .hramble-vrm-stage { width: 100%; height: 100%; }
-.hramble-av-tabs { display: flex; gap: 5px; }
+.hramble-av-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .hramble-av-tab {
+  display: inline-flex; align-items: center; justify-content: center;
   font-family: "Quadrangle", sans-serif; font-size: 12px; letter-spacing: 0.5px;
-  padding: 2px 11px; border-radius: 999px; cursor: pointer;
+  padding: 3px 10px; border-radius: 999px; cursor: pointer; line-height: 1;
   background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.6); color: #5b6470;
 }
+.hramble-av-tab svg { display: block; }
 .hramble-av-tab.active { background: #12c24f; border-color: #12c24f; color: #fff; }
 
 /* Companion persona selector — compact chips under the tab row. */
-.hramble-av-stylebox { position: relative; margin-top: 5px; }
+.hramble-av-stylebox { position: relative; }
 .hramble-av-style-trigger {
-  font-family: "Quadrangle", sans-serif; font-size: 10px; letter-spacing: 0.3px;
-  display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
-  cursor: pointer; background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.6);
-  color: #5b6470;
+  font-family: "Quadrangle", sans-serif; font-size: 12px; letter-spacing: 0.5px;
+  display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 999px;
+  cursor: pointer; line-height: 1; background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.6); color: #5b6470;
 }
+.hramble-av-style-trigger svg { display: block; }
 .hramble-av-style-trigger:hover { color: #12c24f; }
 .hramble-av-style-menu {
   position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 20;

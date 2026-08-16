@@ -37,6 +37,37 @@ const ChevronDownIcon = () => (
 		<path d="m6 9 6 6 6-6" />
 	</svg>
 )
+const MicIcon = () => (
+	<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+		<rect x="9" y="2" width="6" height="11" rx="3" />
+		<path d="M5 10a7 7 0 0 0 14 0" />
+		<path d="M12 17v4" />
+		<path d="M8 21h8" />
+	</svg>
+)
+const PerchIcon = () => (
+	<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M8 3v18" />
+		<path d="M16 3v18" />
+		<path d="M8 7h8" />
+		<path d="M8 12h8" />
+		<path d="M8 17h8" />
+	</svg>
+)
+const SpeakerOnIcon = () => (
+	<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M11 5 6 9H2v6h4l5 4z" />
+		<path d="M15.5 8.5a5 5 0 0 1 0 7" />
+		<path d="M18.5 5.5a9 9 0 0 1 0 13" />
+	</svg>
+)
+const SpeakerOffIcon = () => (
+	<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M11 5 6 9H2v6h4l5 4z" />
+		<path d="m22 9-6 6" />
+		<path d="m16 9 6 6" />
+	</svg>
+)
 
 /**
  * Hramble avatar companion — a live VRM avatar (Flora / Libo) in a box near
@@ -53,6 +84,7 @@ export function HrambleAvatar() {
 	const [listening, setListening] = useState(false)
 	const [perched, setPerched] = useState(false)
 	const [styleMenuOpen, setStyleMenuOpen] = useState(false)
+	const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
 	const sttRef = useRef<SttHandle | null>(null)
 	const drag = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
 
@@ -224,19 +256,38 @@ export function HrambleAvatar() {
 				</div>
 			)}
 			<div className="hramble-av-tabs" onPointerDown={(e) => e.stopPropagation()}>
-				{(Object.keys(AVATARS) as AvatarKey[]).map((k) => (
+				<div className="hramble-av-stylebox" title="Choose avatar">
 					<button
-						key={k}
 						type="button"
-						className={`hramble-av-tab${avatar === k ? " active" : ""}`}
+						className="hramble-av-style-trigger"
+						title="Choose avatar"
 						onClick={(e) => {
 							e.stopPropagation()
-							setAvatar(k)
+							setAvatarMenuOpen((o) => !o)
 						}}
 					>
-						{AVATARS[k].name}
+						<span>{AVATARS[avatar].name}</span>
+						<ChevronDownIcon />
 					</button>
-				))}
+					{avatarMenuOpen && (
+						<div className="hramble-av-style-menu">
+							{(Object.keys(AVATARS) as AvatarKey[]).map((k) => (
+								<button
+									key={k}
+									type="button"
+									className={`hramble-av-style-item${avatar === k ? " active" : ""}`}
+									onClick={(e) => {
+										e.stopPropagation()
+										setAvatar(k)
+										setAvatarMenuOpen(false)
+									}}
+								>
+									{AVATARS[k].name}
+								</button>
+							))}
+						</div>
+					)}
+				</div>
 				<button
 					type="button"
 					className={`hramble-av-tab hramble-av-mic${listening ? " listening" : ""}`}
@@ -246,7 +297,7 @@ export function HrambleAvatar() {
 						toggleMic()
 					}}
 				>
-					🎤
+					<MicIcon />
 				</button>
 				<button
 					type="button"
@@ -257,7 +308,7 @@ export function HrambleAvatar() {
 						togglePerch()
 					}}
 				>
-					🪜
+					<PerchIcon />
 				</button>
 				<button
 					type="button"
@@ -268,14 +319,13 @@ export function HrambleAvatar() {
 						toggleMute()
 					}}
 				>
-					{speaking ? "…" : muted ? "🔇" : "🔊"}
+					{muted ? <SpeakerOffIcon /> : <SpeakerOnIcon />}
 				</button>
-			</div>
-			<div
-				className="hramble-av-stylebox"
-				onPointerDown={(e) => e.stopPropagation()}
-				title="Companion voice persona"
-			>
+				<div
+					className="hramble-av-stylebox"
+					onPointerDown={(e) => e.stopPropagation()}
+					title="Companion voice persona"
+				>
 				<button
 					type="button"
 					className="hramble-av-style-trigger"
@@ -306,6 +356,7 @@ export function HrambleAvatar() {
 						))}
 					</div>
 				)}
+			</div>
 			</div>
 			{docked && (
 				<button
