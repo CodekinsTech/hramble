@@ -246,13 +246,31 @@ export type BrainCandidate = {
 	source?: string
 }
 
+// Layer 2 calls readBrainCandidates on the FIRST message of every session (and
+// again when recording an episode), each time re-reading the whole skills dir +
+// registry + connectors config from disk. A tiny in-process TTL cache keeps a
+// large Brain from turning the send path into a burst of synchronous reads, while
+// the short window means a just-added skill still shows up almost immediately.
+const CANDIDATES_TTL_MS = 5000
+let candidatesCache: { at: number; value: BrainCandidate[] } | null = null
+
+/** Drop the candidate cache — call after the Brain is mutated to avoid staleness. */
+export function invalidateBrainCandidatesCache(): void {
+	candidatesCache = null
+}
+
 /**
  * Build the full, flat list of Brain items using the SAME local readers the
  * Layer 1 catalog uses (no duplicated frontmatter parsing). Reads a few dozen
  * small local files only — no network. Never throws; returns [] on an empty or
- * unreadable Brain.
+ * unreadable Brain. Results are cached for a few seconds (see CANDIDATES_TTL_MS)
+ * so repeated first-message recalls don't re-hit disk every time.
  */
 export function readBrainCandidates(): BrainCandidate[] {
+	const now = Date.now()
+	if (candidatesCache && now - candidatesCache.at < CANDIDATES_TTL_MS) {
+		return candidatesCache.value
+	}
 	try {
 		const skills = readSkills()
 		const registry = readRegistry()
@@ -294,8 +312,12 @@ export function readBrainCandidates(): BrainCandidate[] {
 			})
 		}
 
+		candidatesCache = { at: now, value: out }
 		return out
 	} catch {
+		// On any read failure, cache the empty result too so a broken Brain can't
+		// hammer the disk on every recall; the short TTL still lets it recover.
+		candidatesCache = { at: now, value: [] }
 		return []
 	}
 }

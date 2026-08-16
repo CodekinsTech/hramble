@@ -19,7 +19,7 @@ import {
 	updateAutomation,
 } from "./automation"
 import type { CreateAutomationInput, UpdateAutomationInput } from "./automation/types"
-import { writeBrainCatalog } from "./brain-catalog"
+import { invalidateBrainCandidatesCache, writeBrainCatalog } from "./brain-catalog"
 import { listRecentEpisodes, recallEpisodes, recordEpisode } from "./brain-episodes"
 import { recallRelevant } from "./brain-recall"
 import { installCli, isCliInstalled, uninstallCli } from "./cli-install"
@@ -205,7 +205,12 @@ export function registerIpcHandlers(): void {
 	// Layer 1 — Always-Aware Brain: regenerate the compact BRAIN.md catalog from
 	// the current on-disk Brain, honoring the user's toggle. Called after any
 	// Brain-mutating action so the next session's injected inventory is current.
-	const refreshBrainCatalog = () => writeBrainCatalog(getSettings().brainCatalogInSessions)
+	const refreshBrainCatalog = () => {
+		// The Brain changed — drop the Layer 2 candidate cache so the next recall
+		// reflects the edit immediately rather than waiting out its TTL.
+		invalidateBrainCandidatesCache()
+		writeBrainCatalog(getSettings().brainCatalogInSessions)
+	}
 
 	// Explicit refresh the renderer can call after it changes the Brain (e.g. a
 	// vault edit) so the catalog is up to date before the next session starts.

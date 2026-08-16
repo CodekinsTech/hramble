@@ -151,10 +151,14 @@ export function listRecentEpisodes(limit = 50): Episode[] {
 
 // Scoring reuses Layer 2's tokenizer. An episode's `task` is a whole request
 // sentence (no name/desc split), so each DISTINCT meaningful token it shares with
-// the new task counts equally. Two shared tokens is the floor for a real match —
-// mirrors Layer 2's "don't force a weak single-token suggestion" threshold.
+// the new task counts equally. One shared MEANINGFUL token (stopwords already
+// stripped) is enough to surface a past task — real requests for the same thing
+// are often phrased differently ("fix the login bug" vs "the login page is
+// broken" share only "login"), and the reminder is a capped, clearly-marked nudge
+// rather than an instruction, so a single strong content-word overlap is the right
+// floor. More shared tokens simply rank higher.
 const TOKEN_WEIGHT = 2
-const MIN_SCORE = 4
+const MIN_SCORE = 2
 
 /**
  * Find past episodes most similar to `taskText`. Local, synchronous, safe:
