@@ -47,6 +47,7 @@ export function HrambleAvatar() {
 	const [muted, setMuted] = useState(false)
 	const [listening, setListening] = useState(false)
 	const [perched, setPerched] = useState(false)
+	const [styleMenuOpen, setStyleMenuOpen] = useState(false)
 	const sttRef = useRef<SttHandle | null>(null)
 	const drag = useRef<{ sx: number; sy: number; ox: number; oy: number } | null>(null)
 
@@ -234,24 +235,40 @@ export function HrambleAvatar() {
 				</button>
 			</div>
 			<div
-				className="hramble-av-styles"
+				className="hramble-av-stylebox"
 				onPointerDown={(e) => e.stopPropagation()}
 				title="Companion voice persona"
 			>
-				{COMPANION_STYLES.map((s) => (
-					<button
-						key={s}
-						type="button"
-						className={`hramble-av-style${companionStyle === s ? " active" : ""}`}
-						title={`${COMPANION_STYLE_LABELS[s]} persona`}
-						onClick={(e) => {
-							e.stopPropagation()
-							pickStyle(s)
-						}}
-					>
-						{COMPANION_STYLE_LABELS[s]}
-					</button>
-				))}
+				<button
+					type="button"
+					className="hramble-av-style-trigger"
+					title="Companion voice persona"
+					onClick={(e) => {
+						e.stopPropagation()
+						setStyleMenuOpen((o) => !o)
+					}}
+				>
+					<span>{COMPANION_STYLE_LABELS[companionStyle]}</span>
+					<ChevronDownIcon />
+				</button>
+				{styleMenuOpen && (
+					<div className="hramble-av-style-menu">
+						{COMPANION_STYLES.map((s) => (
+							<button
+								key={s}
+								type="button"
+								className={`hramble-av-style-item${companionStyle === s ? " active" : ""}`}
+								onClick={(e) => {
+									e.stopPropagation()
+									pickStyle(s)
+									setStyleMenuOpen(false)
+								}}
+							>
+								{COMPANION_STYLE_LABELS[s]}
+							</button>
+						))}
+					</div>
+				)}
 			</div>
 			{docked && (
 				<button

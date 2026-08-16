@@ -104,14 +104,27 @@ body {
 .hramble-av-tab.active { background: #12c24f; border-color: #12c24f; color: #fff; }
 
 /* Companion persona selector — compact chips under the tab row. */
-.hramble-av-styles { display: flex; gap: 4px; margin-top: 5px; }
-.hramble-av-style {
+.hramble-av-stylebox { position: relative; margin-top: 5px; }
+.hramble-av-style-trigger {
   font-family: "Quadrangle", sans-serif; font-size: 10px; letter-spacing: 0.3px;
-  padding: 1px 8px; border-radius: 999px; cursor: pointer;
-  background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.6); color: #5b6470;
+  display: flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  cursor: pointer; background: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.6);
+  color: #5b6470;
 }
-.hramble-av-style:hover { color: #12c24f; }
-.hramble-av-style.active { background: #12c24f; border-color: #12c24f; color: #fff; }
+.hramble-av-style-trigger:hover { color: #12c24f; }
+.hramble-av-style-menu {
+  position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 20;
+  display: flex; flex-direction: column; min-width: 92px; padding: 3px;
+  border-radius: 10px; background: rgba(255,255,255,0.96); border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15); backdrop-filter: blur(8px);
+}
+.hramble-av-style-item {
+  font-family: "Quadrangle", sans-serif; font-size: 11px; text-align: left;
+  padding: 4px 8px; border-radius: 6px; cursor: pointer; background: transparent;
+  border: none; color: #5b6470;
+}
+.hramble-av-style-item:hover { background: rgba(18,194,79,0.12); color: #12c24f; }
+.hramble-av-style-item.active { background: #12c24f; color: #fff; }
 .hramble-av-btn {
   position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
   border-radius: 50%; border: 1px solid #dde3ec; background: #fff; color: #5b6470;

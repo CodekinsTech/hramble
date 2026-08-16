@@ -1,17 +1,16 @@
 // Companion persona phrases — ported from the desktop AvatarBox companion
-// (server.js). Three personas: Chill / Smart / Buddy. Each has a `hello` set
+// (server.js). Three personas: Smart / Buddy / Live. Each has a `hello` set
 // (spoken on unmute/greeting) and a `done` set (spoken when a task finishes).
 // These phrases are safe to edit — just keep each style's `hello`/`done`
 // arrays non-empty.
 
-export type CompanionStyle = "chill" | "smart" | "buddy" | "live"
+export type CompanionStyle = "smart" | "buddy" | "live"
 
-/** Ordered list of styles (used for cycling through the selector). */
-export const COMPANION_STYLES: CompanionStyle[] = ["chill", "smart", "buddy", "live"]
+/** Ordered list of styles (used for the selector dropdown). */
+export const COMPANION_STYLES: CompanionStyle[] = ["smart", "buddy", "live"]
 
 /** Short human-facing labels for each style. */
 export const COMPANION_STYLE_LABELS: Record<CompanionStyle, string> = {
-	chill: "Chill",
 	smart: "Smart",
 	buddy: "Buddy",
 	live: "Live",
@@ -20,18 +19,6 @@ export const COMPANION_STYLE_LABELS: Record<CompanionStyle, string> = {
 type PhraseSet = { hello: string[]; done: string[] }
 
 export const COMPANION_PHRASES: Record<CompanionStyle, PhraseSet> = {
-	chill: {
-		hello: ["I am here!", "Hey! Ready.", "Here with you.", "Hi! Let's go.", "I am watching."],
-		done: [
-			"Done! Check it out.",
-			"All done!",
-			"Easy one!",
-			"Finished!",
-			"All good!",
-			"Ready for you.",
-			"Done! Have a look.",
-		],
-	},
 	buddy: {
 		hello: [
 			"Hey! I am here, all ready for you.",

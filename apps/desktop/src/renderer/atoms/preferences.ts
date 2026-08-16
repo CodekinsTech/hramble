@@ -96,7 +96,9 @@ export const companionActivatedAtom = atomWithStorage<boolean>("hramble:companio
  * which phrase set the avatar speaks on greeting (unmute) and on task-done.
  * Defaults to "buddy" (the warmest set). Phrases live in lib/companion-phrases.
  */
-export const companionStyleAtom = atomWithStorage<CompanionStyle>("hramble:companionStyle", "buddy")
+// Key bumped to :v2 when the "chill" persona was removed, so any stored "chill"
+// value is dropped and everyone falls back to the "buddy" default.
+export const companionStyleAtom = atomWithStorage<CompanionStyle>("hramble:companionStyle:v2", "buddy")
 
 /**
  * Whether the user prefers opaque (non-transparent) windows.
