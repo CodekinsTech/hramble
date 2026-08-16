@@ -30,6 +30,9 @@ import {
 	listSessions,
 	subscribeToGlobalEvents,
 } from "./opencode"
+import { engineConnectedAtom } from "../atoms/engine"
+import { processEngineEvent } from "./engine-event-processor"
+import { openEngineEventStream } from "./engine-client"
 
 const log = createLogger("connection-manager")
 
@@ -687,4 +690,55 @@ async function startEventLoop(
 	}
 
 	log.info("SSE event loop exited", { generation, stale: generation !== eventLoopGeneration })
+}
+
+// ============================================================
+// xot engine connection
+// ============================================================
+
+let engineEventSource: EventSource | null = null
+
+/**
+ * Opens an SSE connection to the xot engine and processes events.
+ * Safe to call multiple times — closes the previous stream first.
+ */
+export function connectToEngine(): void {
+	// Close any existing stream
+	if (engineEventSource) {
+		engineEventSource.close()
+		engineEventSource = null
+		appStore.set(engineConnectedAtom, false)
+	}
+
+	log.info("Connecting to xot engine SSE stream")
+
+	const es = openEngineEventStream()
+	engineEventSource = es
+
+	es.addEventListener("open", () => {
+		log.info("xot engine SSE connected")
+		appStore.set(engineConnectedAtom, true)
+	})
+
+	es.addEventListener("message", (evt) => {
+		try {
+			const event = JSON.parse(evt.data)
+			processEngineEvent(event)
+		} catch (err) {
+			log.error("Failed to parse engine event", err, evt.data)
+		}
+	})
+
+	es.addEventListener("error", () => {
+		log.warn("xot engine SSE disconnected, will retry via EventSource reconnect")
+		appStore.set(engineConnectedAtom, false)
+	})
+}
+
+export function disconnectEngine(): void {
+	if (engineEventSource) {
+		engineEventSource.close()
+		engineEventSource = null
+	}
+	appStore.set(engineConnectedAtom, false)
 }

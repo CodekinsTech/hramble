@@ -586,6 +586,11 @@ export interface HrambleAPI {
 	/** Get the current chrome tier (pull-based, avoids race with push event). */
 	getChromeTier: () => Promise<WindowChromeTier>
 
+	/** Ensures the xot engine is running. Spawns it if not. */
+	ensureEngine: () => Promise<{ url: string; pid: number | null }>
+	/** Gets the engine URL if already running, or null. */
+	getEngineUrl: () => Promise<string | null>
+
 	ensureOpenCode: () => Promise<OpenCodeServerInfo>
 	getServerUrl: () => Promise<string | null>
 	/** Run a shell command in `cwd`; resolves with its exit code + captured output. */

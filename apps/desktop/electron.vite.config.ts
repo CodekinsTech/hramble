@@ -50,6 +50,10 @@ export default defineConfig({
 	},
 	renderer: {
 		root: path.resolve(__dirname, "src/renderer"),
+		// Treat 3D model/animation files as static assets so `?url` imports resolve
+		// to a served URL instead of Vite trying to parse the binary as a JS module
+		// (which throws "Invalid or unexpected token" and blanks the renderer).
+		assetsInclude: ["**/*.vrm", "**/*.vrma", "**/*.glb", "**/*.gltf"],
 		plugins: [react(), tailwindcss()],
 		resolve: {
 			alias: {

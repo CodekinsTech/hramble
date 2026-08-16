@@ -16,6 +16,15 @@ import type {
 	UserMessage,
 } from "../lib/types"
 import { getProjectClient } from "../services/connection-manager"
+import { engineConnectedAtom } from "../atoms/engine"
+import {
+	createEngineSession,
+	sendEnginePrompt,
+	abortEngineSession,
+	allowEnginePermission,
+	denyEnginePermission,
+	type EngineModelRef,
+} from "../services/engine-client"
 
 const log = createLogger("use-server")
 
@@ -124,12 +133,15 @@ export function useServerConnection() {
  */
 export function useAgentActions() {
 	const abort = useCallback(async (directory: string, sessionId: string) => {
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
 		log.debug("abort", { sessionId })
-		// Also halt any running Hyperloop for this session.
 		stopHyperloop(sessionId)
 		try {
+			if (appStore.get(engineConnectedAtom)) {
+				await abortEngineSession(sessionId)
+				return
+			}
+			const client = getProjectClient(directory)
+			if (!client) throw new Error("Not connected to server")
 			await client.session.abort({ sessionID: sessionId })
 		} catch (err) {
 			log.error("abort failed", { sessionId }, err)
@@ -258,6 +270,26 @@ export function useAgentActions() {
 				planMode: options?.planMode,
 				hyperloop: options?.hyperloop,
 			})
+
+			// ── Engine routing ──────────────────────────────────────────────
+			// When the xot engine is connected, send the prompt there instead
+			// of going through the OpenCode SDK.
+			if (appStore.get(engineConnectedAtom)) {
+				const engineModel: EngineModelRef | undefined = options?.model
+					? {
+						provider: options.model.providerID,
+						model: options.model.modelID,
+						apiKey: "", // engine uses env var fallback when empty
+					}
+					: undefined
+				// Combine all text parts into a single string for the engine
+				const promptText = parts
+					.filter((p): p is { type: "text"; text: string } => p.type === "text")
+					.map((p) => p.text)
+					.join("\n\n")
+				await sendEnginePrompt(sessionId, promptText || text, engineModel)
+				return
+			}
 
 			// One unit of work. When `withPlan`, it thinks first (plan agent, edits
 			// disabled) then executes (build agent) in the same session; otherwise a
@@ -439,26 +471,36 @@ export function useAgentActions() {
 		async (
 			directory: string,
 			title?: string,
-			// Permission preset for the chosen mode (Manual / Accept Edits / Bypass…).
-			// Applied at creation because permissions are a session-level setting.
 			permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>,
 		) => {
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
 			log.debug("createSession", { directory, title, hasPermission: !!permission })
 			try {
+				// Route to engine when connected
+				if (appStore.get(engineConnectedAtom)) {
+					const engineSession = await createEngineSession(directory, title ?? "New chat")
+					// The engine SSE stream will fire session.created → upsertSessionAtom.
+					// Return a minimal compatible session object for the caller.
+					return {
+						id: engineSession.id,
+						directory: engineSession.directory,
+						title: engineSession.title,
+					} as unknown as import("../lib/types").Session
+				}
+
+				const client = getProjectClient(directory)
+				if (!client) throw new Error("Not connected to server")
 				const result = await client.session.create(permission ? { title, permission } : { title })
-			const session = result.data
-			if (session) {
-				appStore.set(upsertSessionAtom, { session, directory })
+				const session = result.data
+				if (session) {
+					appStore.set(upsertSessionAtom, { session, directory })
+				}
+				log.debug("createSession succeeded", { sessionId: session?.id })
+				return session
+			} catch (err) {
+				log.error("createSession failed", { directory, title }, err)
+				throw err
 			}
-			log.debug("createSession succeeded", { sessionId: session?.id })
-			return session
-		} catch (err) {
-			log.error("createSession failed", { directory, title }, err)
-			throw err
-		}
-	}, [])
+		}, [])
 
 	const renameSession = useCallback(async (directory: string, sessionId: string, title: string) => {
 		const client = getProjectClient(directory)
@@ -501,10 +543,18 @@ export function useAgentActions() {
 			permissionId: string,
 			response: "once" | "always" | "reject",
 		) => {
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
 			log.debug("respondToPermission", { sessionId, permissionId, response })
 			try {
+				if (appStore.get(engineConnectedAtom)) {
+					if (response === "reject") {
+						await denyEnginePermission(permissionId)
+					} else {
+						await allowEnginePermission(permissionId)
+					}
+					return
+				}
+				const client = getProjectClient(directory)
+				if (!client) throw new Error("Not connected to server")
 				await client.permission.respond({
 					sessionID: sessionId,
 					permissionID: permissionId,

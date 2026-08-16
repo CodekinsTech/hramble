@@ -1,0 +1,362 @@
+import Anthropic from "@anthropic-ai/sdk"
+import type { MessageParam, Tool } from "@anthropic-ai/sdk/resources/messages.js"
+import OpenAI from "openai"
+import { nanoid } from "nanoid"
+import { buildSystemPrompt } from "./system-prompt.js"
+import type { EngineEvent, ModelRef, PermissionRequest } from "./types.js"
+import { runBash, bashToolDefinition } from "./tools/bash.js"
+import { readFile, readToolDefinition } from "./tools/read.js"
+import { writeFile, writeToolDefinition } from "./tools/write.js"
+import { editFile, editToolDefinition } from "./tools/edit.js"
+import { globFiles, globToolDefinition } from "./tools/glob.js"
+import { grepFiles, grepToolDefinition } from "./tools/grep.js"
+import { getProvider } from "./providers.js"
+import { addMessage } from "./sessions.js"
+import { checkPermission } from "./permissions.js"
+import { resolveMaxOutputTokens } from "./limits.js"
+import { getModel } from "./providers.js"
+import { isTransientError, backoffDelay, sleep, MAX_RETRIES } from "./retry.js"
+import type { ContentBlock } from "./types.js"
+
+const TOOLS: Tool[] = [
+	bashToolDefinition,
+	readToolDefinition,
+	writeToolDefinition,
+	editToolDefinition,
+	globToolDefinition,
+	grepToolDefinition,
+]
+
+// OpenAI-compat tool format (same schema, different wrapper)
+const OPENAI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t) => ({
+	type: "function" as const,
+	function: {
+		name: t.name,
+		description: t.description,
+		parameters: t.input_schema,
+	},
+}))
+
+export type EventEmitter = (event: EngineEvent) => void
+
+interface RunOptions {
+	sessionId: string
+	directory: string
+	messages: MessageParam[]
+	model: ModelRef
+	emit: EventEmitter
+	signal: AbortSignal
+	onPermissionRequest: (req: PermissionRequest) => Promise<"allow" | "deny">
+}
+
+export async function runAgentLoop(options: RunOptions): Promise<void> {
+	const { sessionId, directory, model, emit, signal, onPermissionRequest } = options
+	const messages: MessageParam[] = [...options.messages]
+
+	const provider = getProvider(model.provider)
+	const useAnthropic = !provider || provider.type === "anthropic"
+
+	const MAX_ITERATIONS = 50
+	let iterations = 0
+
+	while (iterations < MAX_ITERATIONS) {
+		if (signal.aborted) break
+		iterations++
+
+		const messageId = nanoid()
+		emit({ type: "message.start", messageId, sessionId, role: "assistant" })
+
+		let fullText = ""
+		let toolCalls: Array<{ id: string; name: string; inputJson: string }> = []
+
+		// Attempt the model turn, retrying transient failures (429/5xx/network)
+		// with backoff. Only retry when nothing has streamed to the user yet —
+		// once text or tool calls have been emitted, a retry would duplicate them.
+		let attempt = 0
+		while (true) {
+			if (signal.aborted) break
+			fullText = ""
+			toolCalls = []
+			let streamed = false
+			const attemptEmit: EventEmitter = (e) => {
+				if (e.type === "message.delta") streamed = true
+				emit(e)
+			}
+			try {
+				if (useAnthropic) {
+					;({ fullText } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal))
+				} else {
+					;({ fullText } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal))
+				}
+				break
+			} catch (err) {
+				if (signal.aborted) break
+				const error = err instanceof Error ? err.message : String(err)
+				const canRetry = isTransientError(err) && !streamed && toolCalls.length === 0 && attempt < MAX_RETRIES
+				if (!canRetry) {
+					emit({ type: "session.error", sessionId, error })
+					return
+				}
+				attempt++
+				const delayMs = backoffDelay(attempt, err)
+				emit({ type: "session.retry", sessionId, attempt, delayMs, error })
+				await sleep(delayMs, signal)
+			}
+		}
+		if (signal.aborted) break
+
+		emit({ type: "message.complete", messageId, sessionId })
+
+		// Build the assistant turn (text + any tool calls) and persist it verbatim
+		// so the full transcript — not just the prose — survives across turns.
+		const assistantBlocks: ContentBlock[] = []
+		if (fullText) assistantBlocks.push({ type: "text", text: fullText })
+		for (const tc of toolCalls) {
+			assistantBlocks.push({
+				type: "tool_use",
+				id: tc.id,
+				name: tc.name,
+				input: JSON.parse(tc.inputJson || "{}") as Record<string, unknown>,
+			})
+		}
+		if (assistantBlocks.length > 0) {
+			addMessage(sessionId, "assistant", assistantBlocks)
+			messages.push({ role: "assistant", content: assistantBlocks as MessageParam["content"] })
+		}
+
+		if (toolCalls.length === 0) break
+
+		// Execute tools
+		const toolResults: ContentBlock[] = []
+
+		for (const tc of toolCalls) {
+			if (signal.aborted) break
+
+			const input = JSON.parse(tc.inputJson || "{}") as Record<string, unknown>
+			emit({ type: "tool.start", toolCallId: tc.id, sessionId, tool: tc.name, input })
+
+			const perm = checkPermission(tc.name, input, directory)
+			if (perm.needs) {
+				const permissionId = nanoid()
+				const req: PermissionRequest = {
+					id: permissionId,
+					sessionId,
+					tool: tc.name,
+					input,
+					description: perm.description,
+				}
+				emit({ type: "permission.request", permissionId, sessionId, tool: tc.name, input, description: perm.description })
+				const resolution = await onPermissionRequest(req)
+				emit({ type: "permission.resolved", permissionId, resolution })
+
+				if (resolution === "deny") {
+					emit({ type: "tool.result", toolCallId: tc.id, sessionId, output: "Permission denied by user.", isError: true })
+					toolResults.push({ type: "tool_result", tool_use_id: tc.id, content: "Permission denied by user.", is_error: true })
+					continue
+				}
+			}
+
+			let output: string
+			let isError = false
+			try {
+				output = await executeTool(tc.name, input, directory)
+			} catch (err) {
+				output = err instanceof Error ? err.message : String(err)
+				isError = true
+			}
+
+			emit({ type: "tool.result", toolCallId: tc.id, sessionId, output, isError })
+			toolResults.push({ type: "tool_result", tool_use_id: tc.id, content: isError ? `Error: ${output}` : output, is_error: isError || undefined })
+		}
+
+		// Persist the tool results so the next turn sees what the tools returned.
+		addMessage(sessionId, "user", toolResults)
+		messages.push({ role: "user", content: toolResults as MessageParam["content"] })
+	}
+
+	emit({ type: "session.idle", sessionId })
+}
+
+// ── Anthropic streaming turn ───────────────────────────────────────────────
+
+async function runAnthropicTurn(
+	model: ModelRef,
+	messages: MessageParam[],
+	directory: string,
+	emit: EventEmitter,
+	messageId: string,
+	sessionId: string,
+	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
+	signal: AbortSignal,
+): Promise<{ fullText: string }> {
+	const client = new Anthropic({ apiKey: model.apiKey })
+	const maxTokens = resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000)
+
+	const stream = client.messages.stream(
+		{
+			model: model.model,
+			max_tokens: maxTokens,
+			system: buildSystemPrompt(directory),
+			tools: TOOLS,
+			messages,
+		},
+		{ signal },
+	)
+
+	let fullText = ""
+
+	for await (const event of stream) {
+		if (signal.aborted) break
+		if (event.type === "content_block_start") {
+			if (event.content_block.type === "tool_use") {
+				toolCalls.push({ id: event.content_block.id, name: event.content_block.name, inputJson: "" })
+			}
+		} else if (event.type === "content_block_delta") {
+			if (event.delta.type === "text_delta") {
+				fullText += event.delta.text
+				emit({ type: "message.delta", messageId, sessionId, text: event.delta.text })
+			} else if (event.delta.type === "input_json_delta") {
+				const last = toolCalls[toolCalls.length - 1]
+				if (last) last.inputJson += event.delta.partial_json
+			}
+		}
+	}
+
+	return { fullText }
+}
+
+// ── OpenAI-compat streaming turn ──────────────────────────────────────────
+
+async function runOpenAICompatTurn(
+	model: ModelRef,
+	baseURL: string,
+	messages: MessageParam[],
+	directory: string,
+	emit: EventEmitter,
+	messageId: string,
+	sessionId: string,
+	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
+	signal: AbortSignal,
+): Promise<{ fullText: string }> {
+	// Keyless free tiers (e.g. OpenCode Zen "-free" models) 401 on a bogus
+	// bearer, so omit the Authorization header entirely when we have no key.
+	const hasKey = Boolean(model.apiKey?.trim())
+	const client = new OpenAI({
+		apiKey: hasKey ? model.apiKey : "unused",
+		baseURL: model.baseURL ?? baseURL,
+		...(hasKey ? {} : { defaultHeaders: { Authorization: null } }),
+	})
+
+	const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
+		role: "system",
+		content: buildSystemPrompt(directory),
+	}
+
+	// Convert Anthropic-style messages to OpenAI format
+	const openaiMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = messages.map((m) => {
+		if (typeof m.content === "string") {
+			return { role: m.role as "user" | "assistant", content: m.content }
+		}
+		// Handle tool results (user messages with tool_result content)
+		if (m.role === "user" && Array.isArray(m.content)) {
+			const toolResults = m.content.filter((c): c is { type: "tool_result"; tool_use_id: string; content: string } =>
+				"type" in c && c.type === "tool_result",
+			)
+			if (toolResults.length > 0) {
+				return toolResults.map((tr) => ({
+					role: "tool" as const,
+					tool_call_id: tr.tool_use_id,
+					content: tr.content,
+				})) as unknown as OpenAI.Chat.Completions.ChatCompletionMessageParam
+			}
+		}
+		// Handle assistant messages with tool_use content
+		if (m.role === "assistant" && Array.isArray(m.content)) {
+			const text = m.content.find((c) => "type" in c && c.type === "text") as { text: string } | undefined
+			const toolUses = m.content.filter((c): c is { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } =>
+				"type" in c && c.type === "tool_use",
+			)
+			return {
+				role: "assistant" as const,
+				content: text?.text ?? null,
+				tool_calls: toolUses.map((tu) => ({
+					id: tu.id,
+					type: "function" as const,
+					function: { name: tu.name, arguments: JSON.stringify(tu.input) },
+				})),
+			}
+		}
+		return { role: m.role as "user" | "assistant", content: typeof m.content === "string" ? m.content : "" }
+	}).flat() as OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+
+	const stream = await client.chat.completions.create(
+		{
+			model: model.model,
+			messages: [systemMessage, ...openaiMessages],
+			tools: OPENAI_TOOLS,
+			tool_choice: "auto",
+			max_tokens: resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000),
+			stream: true,
+		},
+		{ signal },
+	)
+
+	let fullText = ""
+	const activeToolCalls: Record<number, { id: string; name: string; inputJson: string }> = {}
+
+	for await (const chunk of stream) {
+		if (signal.aborted) break
+		const delta = chunk.choices[0]?.delta
+		if (!delta) continue
+
+		if (delta.content) {
+			fullText += delta.content
+			emit({ type: "message.delta", messageId, sessionId, text: delta.content })
+		}
+
+		if (delta.tool_calls) {
+			for (const tc of delta.tool_calls) {
+				const idx = tc.index
+				if (!activeToolCalls[idx]) {
+					activeToolCalls[idx] = { id: tc.id ?? nanoid(), name: tc.function?.name ?? "", inputJson: "" }
+					toolCalls.push(activeToolCalls[idx])
+				}
+				if (tc.function?.arguments) {
+					activeToolCalls[idx].inputJson += tc.function.arguments
+				}
+			}
+		}
+	}
+
+	return { fullText }
+}
+
+// ── Tool execution ────────────────────────────────────────────────────────
+
+async function executeTool(name: string, input: Record<string, unknown>, directory: string): Promise<string> {
+	switch (name) {
+		case "bash": {
+			const result = await runBash(
+				{ command: String(input.command ?? ""), timeout: Number(input.timeout) || undefined },
+				directory,
+			)
+			const parts = []
+			if (result.stdout) parts.push(result.stdout)
+			if (result.stderr) parts.push(`[stderr] ${result.stderr}`)
+			if (result.exitCode !== 0) parts.push(`[exit code: ${result.exitCode}]`)
+			return parts.join("\n") || "(no output)"
+		}
+		case "read":
+			return readFile({ filePath: String(input.filePath ?? ""), offset: input.offset !== undefined ? Number(input.offset) : undefined, limit: input.limit !== undefined ? Number(input.limit) : undefined }, directory)
+		case "write":
+			return writeFile({ filePath: String(input.filePath ?? ""), content: String(input.content ?? "") }, directory)
+		case "edit":
+			return editFile({ filePath: String(input.filePath ?? ""), oldString: String(input.oldString ?? ""), newString: String(input.newString ?? ""), replaceAll: Boolean(input.replaceAll) }, directory)
+		case "glob":
+			return globFiles({ pattern: String(input.pattern ?? "**/*"), exclude: Array.isArray(input.exclude) ? (input.exclude as string[]) : undefined }, directory)
+		case "grep":
+			return grepFiles({ pattern: String(input.pattern ?? ""), path: input.path ? String(input.path) : undefined, glob: input.glob ? String(input.glob) : undefined, caseSensitive: Boolean(input.caseSensitive) }, directory)
+		default:
+			throw new Error(`Unknown tool: ${name}`)
+	}
+}

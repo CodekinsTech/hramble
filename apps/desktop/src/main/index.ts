@@ -14,6 +14,7 @@ import { installLiquidGlass, resolveWindowChrome } from "./liquid-glass"
 import { createLogger } from "./logger"
 import { startMdnsScanner, stopMdnsScanner } from "./mdns-scanner"
 import { stopServer } from "./opencode-manager"
+import { ensureEngine, stopEngine } from "./engine-manager"
 import { initSettingsStore } from "./settings-store"
 import { registerPerch } from "./perch" // perch mode (480×528, edge-sit)
 import { registerConnectors } from "./connectors" // MCP connectors management
@@ -375,6 +376,7 @@ if (!gotLock) {
 		registerGraphStore()
 		registerSleepMonitor()
 		startExtensionBridge()
+		ensureEngine().catch((err) => log.warn("xot engine failed to start", err))
 		initAutomations().catch(console.error)
 		startMdnsScanner().catch((err) => log.warn("mDNS scanner failed to start", err))
 		createWindow()
@@ -401,6 +403,7 @@ if (!gotLock) {
 		shutdownAutomations()
 		stopMdnsScanner()
 		stopServer()
+		stopEngine()
 		stopAutoUpdater()
 	})
 }

@@ -62,6 +62,7 @@ import {
 } from "./onboarding"
 import { getOpenInTargets, openInTarget, setPreferredTarget } from "./open-in-targets"
 import { ensureServer, getServerUrl, restartServer, stopServer } from "./opencode-manager"
+import { ensureEngine, getEngineUrl } from "./engine-manager"
 import { getOpaqueWindows, getSettings, onSettingsChanged, updateSettings } from "./settings-store"
 import {
 	checkForUpdates,
@@ -1395,6 +1396,15 @@ export function registerIpcHandlers(): void {
 		"opencode:restart",
 		withLogging("opencode:restart", async () => await restartServer()),
 	)
+
+	// --- xot engine lifecycle ---
+
+	ipcMain.handle(
+		"engine:ensure",
+		withLogging("engine:ensure", async () => await ensureEngine()),
+	)
+
+	ipcMain.handle("engine:url", () => getEngineUrl())
 
 	// --- Model state ---
 

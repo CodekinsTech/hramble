@@ -8,6 +8,7 @@ import { createLogger } from "../lib/logger"
 import { resolveAuthHeader, resolveServerUrl } from "../services/backend"
 import {
 	connectToOpenCode,
+	connectToEngine,
 	loadAllProjects,
 	loadProjectSessions,
 } from "../services/connection-manager"
@@ -84,6 +85,8 @@ export function useDiscovery() {
 					authenticated: !!authHeader,
 				})
 				await connectToOpenCode(url, authHeader)
+				// Also connect to the xot engine (runs in parallel with OpenCode)
+				connectToEngine()
 
 				// --- Step 3b: Bail if server is unreachable ---
 				// connectToOpenCode runs a health check and sets serverConnectedAtom.
