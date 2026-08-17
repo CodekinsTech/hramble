@@ -142,12 +142,10 @@ Remove `opencode-manager.ts`, `harness-installer.ts` + `resources/opencode-harne
 `THIRD-PARTY-NOTICES.md` (drop the OpenCode section) and README.
 
 ### Post-cutover capabilities (engine, after OpenCode is gone)
-- **MCP client** — the engine speaks the Model Context Protocol so agents can use
-  third-party MCP servers (GitHub, Slack, databases, design tools like Moda, …).
-  Today MCP comes via OpenCode; once OpenCode is removed the engine needs its own
-  MCP client (stdio + SSE/HTTP transports, tool/resource/prompt discovery, per-
-  project server config) to keep that whole ecosystem working under our brand.
-  HIGH priority after cutover — it's what makes the engine extensible.
+- **MCP client ✅ DONE** — engine speaks MCP (stdio transport). Per-project
+  .hramble/mcp.json lists servers; tools offered as mcp__<server>__<tool>,
+  permission-gated, closed on shutdown. Verified client-level + live agent call.
+  (Remaining: SSE/HTTP transport + resources/prompts — stdio covers most servers.)
 - Integrated terminal (simple, up to 4 panes — xterm.js + node-pty).
 - SQLite storage + automation model (schedule/monitor) — ref: Compozy.
 - WebSearch (needs a search API key).
