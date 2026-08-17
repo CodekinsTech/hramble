@@ -9,7 +9,7 @@ export interface PermissionCheck {
 
 // Tools that only read or track state — low-risk, never prompt (Claude-style),
 // even for paths outside the project.
-const NEVER_PROMPT = new Set(["read", "grep", "glob", "task", "todowrite", "remember"])
+const NEVER_PROMPT = new Set(["read", "grep", "glob", "task", "todowrite", "remember", "skill"])
 
 /** True if `target` is the project dir itself or nested inside it. */
 export function isInsideProject(directory: string, target: string): boolean {

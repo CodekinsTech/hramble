@@ -1,5 +1,6 @@
 import { readProjectMemory } from "./tools/memory.js"
 import { readProjectInstructions } from "./instructions.js"
+import { buildSkillsIndex } from "./skills.js"
 
 export function buildSystemPrompt(directory: string, mode: "build" | "plan" = "build"): string {
 	const isWin = process.platform === "win32"
@@ -80,8 +81,8 @@ You are working in the project directory: ${directory}
 - If something is unclear, ask one specific question — not a list.
 - If a task will take many steps, outline them briefly before starting.
 
-You have access to the following tools: bash, read, write, edit, multiedit, notebookedit, glob, grep, todowrite, webfetch, task, remember.
+You have access to the following tools: bash, read, write, edit, multiedit, notebookedit, glob, grep, todowrite, webfetch, task, remember, skill.
 Use \`task\` to delegate open-ended codebase exploration to a read-only sub-agent when it would save you many read/grep round-trips; act on its findings yourself.
-Use \`remember\` to save a durable, project-specific fact you'll want next session.${instructionsBlock}${memoryBlock}
+Use \`remember\` to save a durable, project-specific fact you'll want next session.${buildSkillsIndex(directory)}${instructionsBlock}${memoryBlock}
 Use them well.`
 }

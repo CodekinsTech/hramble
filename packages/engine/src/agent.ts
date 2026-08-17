@@ -16,6 +16,7 @@ import { todoToolDefinition, normalizeTodos, type TodoWriteInput } from "./tools
 import { webFetch, webFetchToolDefinition } from "./tools/webfetch.js"
 import { taskToolDefinition, type TaskInput } from "./tools/task.js"
 import { rememberToolDefinition, appendMemory } from "./tools/memory.js"
+import { skillToolDefinition, readSkill, type SkillInput } from "./skills.js"
 import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
@@ -40,6 +41,7 @@ const TOOLS: Tool[] = [
 	webFetchToolDefinition,
 	taskToolDefinition,
 	rememberToolDefinition,
+	skillToolDefinition,
 ]
 
 /** Tools a read-only research sub-agent may use. */
@@ -56,7 +58,7 @@ const OPENAI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t)
 }))
 
 // Plan mode is read-only — the model can inspect the codebase but not change it.
-const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob", "todowrite", "webfetch"])
+const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob", "todowrite", "webfetch", "skill"])
 const PLAN_TOOLS: Tool[] = TOOLS.filter((t) => READ_ONLY_TOOL_NAMES.has(t.name))
 const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) => t.type === "function" && READ_ONLY_TOOL_NAMES.has(t.function.name))
 
@@ -467,6 +469,10 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 			return webFetch({ url: String(input.url ?? "") })
 		case "remember":
 			return appendMemory(directory, String(input.memory ?? ""))
+		case "skill": {
+			const loaded = readSkill(directory, String((input as unknown as SkillInput).name ?? ""))
+			return loaded ?? `No skill named "${String(input.name ?? "")}" found.`
+		}
 		default:
 			throw new Error(`Unknown tool: ${name}`)
 	}
