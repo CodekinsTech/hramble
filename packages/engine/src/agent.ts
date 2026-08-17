@@ -20,7 +20,7 @@ import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
 import { addMessage, recordSnapshot } from "./sessions.js"
 import { checkPermission, permissionKey } from "./permissions.js"
-import { matchesPermissionRule, addPermissionRule, setTodos } from "./sessions.js"
+import { matchesPermissionRule, addPermissionRule, setTodos, addUsage } from "./sessions.js"
 import { resolveMaxOutputTokens } from "./limits.js"
 import { getModel } from "./providers.js"
 import { isTransientError, backoffDelay, sleep, MAX_RETRIES } from "./retry.js"
@@ -60,6 +60,11 @@ const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) => t.type === "function" && RE
 
 export type AgentMode = "build" | "plan"
 
+interface TurnResult {
+	fullText: string
+	usage?: { inputTokens: number; outputTokens: number }
+}
+
 export type EventEmitter = (event: EngineEvent) => void
 
 interface RunOptions {
@@ -95,6 +100,7 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 
 		let fullText = ""
 		let toolCalls: Array<{ id: string; name: string; inputJson: string }> = []
+		let turnUsage: TurnResult["usage"]
 
 		// Attempt the model turn, retrying transient failures (429/5xx/network)
 		// with backoff. Only retry when nothing has streamed to the user yet —
@@ -111,9 +117,9 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 			}
 			try {
 				if (useAnthropic) {
-					;({ fullText } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
+					;({ fullText, usage: turnUsage } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
 				} else {
-					;({ fullText } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
+					;({ fullText, usage: turnUsage } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
 				}
 				break
 			} catch (err) {
@@ -133,6 +139,12 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 		if (signal.aborted) break
 
 		emit({ type: "message.complete", messageId, sessionId })
+
+		// Record token usage for this turn (both provider paths report it).
+		if (turnUsage && (turnUsage.inputTokens > 0 || turnUsage.outputTokens > 0)) {
+			const total = addUsage(sessionId, turnUsage.inputTokens, turnUsage.outputTokens)
+			emit({ type: "usage", sessionId, inputTokens: total.inputTokens, outputTokens: total.outputTokens })
+		}
 
 		// Build the assistant turn (text + any tool calls) and persist it verbatim
 		// so the full transcript — not just the prose — survives across turns.
@@ -259,7 +271,7 @@ async function runAnthropicTurn(
 	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
 	signal: AbortSignal,
 	mode: AgentMode = "build",
-): Promise<{ fullText: string }> {
+): Promise<TurnResult> {
 	const client = new Anthropic({ apiKey: model.apiKey })
 	const maxTokens = resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000)
 
@@ -275,10 +287,18 @@ async function runAnthropicTurn(
 	)
 
 	let fullText = ""
+	let inputTokens = 0
+	let outputTokens = 0
 
 	for await (const event of stream) {
 		if (signal.aborted) break
-		if (event.type === "content_block_start") {
+		if (event.type === "message_start") {
+			inputTokens = event.message.usage?.input_tokens ?? 0
+			outputTokens = event.message.usage?.output_tokens ?? 0
+		} else if (event.type === "message_delta") {
+			// output_tokens on message_delta is cumulative — latest wins.
+			outputTokens = event.usage?.output_tokens ?? outputTokens
+		} else if (event.type === "content_block_start") {
 			if (event.content_block.type === "tool_use") {
 				toolCalls.push({ id: event.content_block.id, name: event.content_block.name, inputJson: "" })
 			}
@@ -293,7 +313,7 @@ async function runAnthropicTurn(
 		}
 	}
 
-	return { fullText }
+	return { fullText, usage: { inputTokens, outputTokens } }
 }
 
 // ── OpenAI-compat streaming turn ──────────────────────────────────────────
@@ -309,7 +329,7 @@ async function runOpenAICompatTurn(
 	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
 	signal: AbortSignal,
 	mode: AgentMode = "build",
-): Promise<{ fullText: string }> {
+): Promise<TurnResult> {
 	// Keyless free tiers (e.g. OpenCode Zen "-free" models) 401 on a bogus
 	// bearer, so omit the Authorization header entirely when we have no key.
 	const hasKey = Boolean(model.apiKey?.trim())
@@ -369,15 +389,23 @@ async function runOpenAICompatTurn(
 			tool_choice: "auto",
 			max_tokens: resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000),
 			stream: true,
+			stream_options: { include_usage: true },
 		},
 		{ signal },
 	)
 
 	let fullText = ""
+	let inputTokens = 0
+	let outputTokens = 0
 	const activeToolCalls: Record<number, { id: string; name: string; inputJson: string }> = {}
 
 	for await (const chunk of stream) {
 		if (signal.aborted) break
+		// The final usage chunk (when supported) carries usage with empty choices.
+		if (chunk.usage) {
+			inputTokens = chunk.usage.prompt_tokens ?? inputTokens
+			outputTokens = chunk.usage.completion_tokens ?? outputTokens
+		}
 		const delta = chunk.choices[0]?.delta
 		if (!delta) continue
 
@@ -400,7 +428,7 @@ async function runOpenAICompatTurn(
 		}
 	}
 
-	return { fullText }
+	return { fullText, usage: { inputTokens, outputTokens } }
 }
 
 // ── Tool execution ────────────────────────────────────────────────────────

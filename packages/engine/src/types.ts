@@ -39,6 +39,12 @@ export interface ToolCall {
 	input: Record<string, unknown>
 }
 
+/** Cumulative token usage for a session. */
+export interface Usage {
+	inputTokens: number
+	outputTokens: number
+}
+
 /** A single task in the agent's todo list (Claude-Code-style task tracking). */
 export interface Todo {
 	content: string
@@ -80,5 +86,6 @@ export type EngineEvent =
 	| { type: "tool.start"; toolCallId: string; sessionId: string; tool: string; input: Record<string, unknown> }
 	| { type: "tool.result"; toolCallId: string; sessionId: string; output: string; isError: boolean }
 	| { type: "todo.updated"; sessionId: string; todos: Todo[] }
+	| { type: "usage"; sessionId: string; inputTokens: number; outputTokens: number }
 	| { type: "permission.request"; permissionId: string; sessionId: string; tool: string; input: Record<string, unknown>; description: string }
 	| { type: "permission.resolved"; permissionId: string; resolution: PermissionResolution }

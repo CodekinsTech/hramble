@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
 import { nanoid } from "nanoid"
-import type { Session, Message, ContentBlock, Todo } from "./types.js"
+import type { Session, Message, ContentBlock, Todo, Usage } from "./types.js"
 
 const DATA_DIR = process.env.ENGINE_DATA_DIR || path.join(os.homedir(), ".local", "share", "hramble", "engine")
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
@@ -35,9 +35,11 @@ interface Store {
 	permissionRules: Record<string, string[]>
 	// Current todo list per session.
 	todos: Record<string, Todo[]>
+	// Cumulative token usage per session.
+	usage: Record<string, Usage>
 }
 
-let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {} }
+let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {}, usage: {} }
 
 export function initDb(): void {
 	fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -49,8 +51,9 @@ export function initDb(): void {
 			if (!store.redo) store.redo = {}
 			if (!store.permissionRules) store.permissionRules = {}
 			if (!store.todos) store.todos = {}
+			if (!store.usage) store.usage = {}
 		} catch {
-			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {} }
+			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {}, usage: {} }
 		}
 	}
 	// Boot reconciliation: a restart orphans any session left "running" (its
@@ -124,6 +127,7 @@ export function deleteSession(id: string): boolean {
 	delete store.checkpoints[id]
 	delete store.redo[id]
 	delete store.todos[id]
+	delete store.usage[id]
 	persist()
 	return true
 }
@@ -332,6 +336,20 @@ export function setTodos(sessionId: string, todos: Todo[]): void {
 
 export function getTodos(sessionId: string): Todo[] {
 	return store.todos[sessionId] ?? []
+}
+
+/** Add a turn's token usage to the session total and return the new total. */
+export function addUsage(sessionId: string, inputTokens: number, outputTokens: number): Usage {
+	const current = store.usage[sessionId] ?? { inputTokens: 0, outputTokens: 0 }
+	current.inputTokens += inputTokens
+	current.outputTokens += outputTokens
+	store.usage[sessionId] = current
+	persist()
+	return current
+}
+
+export function getUsage(sessionId: string): Usage {
+	return store.usage[sessionId] ?? { inputTokens: 0, outputTokens: 0 }
 }
 
 /** True if the user previously chose "always allow" for this action in this project. */

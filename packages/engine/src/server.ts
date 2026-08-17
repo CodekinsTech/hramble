@@ -15,6 +15,7 @@ import {
 	addMessage,
 	getMessages,
 	getTodos,
+	getUsage,
 	getSessionDiff,
 	renameSession,
 	deleteSession,
@@ -168,6 +169,11 @@ export async function startServer(): Promise<void> {
 	app.get<{ Params: { id: string } }>("/sessions/:id/todos", async (req, reply) => {
 		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
 		return getTodos(req.params.id)
+	})
+
+	app.get<{ Params: { id: string } }>("/sessions/:id/usage", async (req, reply) => {
+		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		return getUsage(req.params.id)
 	})
 
 	// Files changed during this session (from edit checkpoints).
