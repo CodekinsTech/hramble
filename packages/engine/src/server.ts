@@ -426,11 +426,28 @@ export async function startServer(): Promise<void> {
 		return { ok: true }
 	})
 
-	// ── CORS preflight ───────────────────────────────────────────────────
-	app.addHook("onSend", async (req, reply) => {
+	// ── CORS ─────────────────────────────────────────────────────────────
+	const CORS_METHODS = "GET,POST,PATCH,DELETE,OPTIONS"
+	app.addHook("onSend", async (_req, reply) => {
 		reply.header("Access-Control-Allow-Origin", "*")
-		reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+		reply.header("Access-Control-Allow-Methods", CORS_METHODS)
 		reply.header("Access-Control-Allow-Headers", "Content-Type,Authorization")
+		reply.header("Access-Control-Allow-Private-Network", "true")
+	})
+
+	// Preflight: a GET/POST with Content-Type: application/json (or any custom
+	// header) triggers a CORS preflight in the Electron renderer. Without a 2xx
+	// OPTIONS response the browser blocks the real request — so answer every
+	// preflight here, incl. Chromium's Private-Network-Access requirement.
+	app.options("/*", async (_req, reply) => {
+		reply
+			.header("Access-Control-Allow-Origin", "*")
+			.header("Access-Control-Allow-Methods", CORS_METHODS)
+			.header("Access-Control-Allow-Headers", "Content-Type,Authorization")
+			.header("Access-Control-Allow-Private-Network", "true")
+			.header("Access-Control-Max-Age", "86400")
+			.code(204)
+			.send()
 	})
 
 	await app.listen({ port: PORT, host: "127.0.0.1" })
