@@ -100,15 +100,17 @@ export async function startServer(): Promise<void> {
 		app.get("/config", async () => ({ default: DEFAULT_MODEL }))
 
 		// File search by name — replaces OpenCode's find.files for the picker.
+		// We glob everything then substring-filter, so a query containing glob
+		// metacharacters ([ { * ?) can't break or inject into the pattern.
 		app.get("/find", async (req, reply) => {
 			const { directory, query } = req.query as { directory?: string; query?: string }
 			if (!directory) return reply.code(400).send({ error: "directory is required" })
-			const q = (query ?? "").trim()
-			const pattern = q ? `**/*${q}*` : "**/*"
-			const result = await globFiles({ pattern }, directory)
+			const q = (query ?? "").trim().toLowerCase()
+			const result = await globFiles({ pattern: "**/*" }, directory)
 			if (result.startsWith("No files")) return { files: [] }
-			const files = result.split("\n").filter((l) => l && !l.startsWith("["))
-			return { files }
+			let files = result.split("\n").filter((l) => l && !l.startsWith("["))
+			if (q) files = files.filter((f) => f.toLowerCase().includes(q))
+			return { files: files.slice(0, 200) }
 		})
 
 	// ── SSE event stream ─────────────────────────────────────────────────
