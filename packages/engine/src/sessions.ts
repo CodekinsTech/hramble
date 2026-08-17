@@ -297,6 +297,34 @@ export function unrevertSession(sessionId: string): { restored: number } | null 
 	return { restored: batch.messages.length }
 }
 
+export interface FileDiff {
+	path: string
+	before: string | null
+	after: string | null
+	status: "created" | "modified" | "deleted"
+}
+
+/**
+ * The net file changes made during a session, derived from the edit checkpoints:
+ * earliest `before` vs latest `after` per file.
+ */
+export function getSessionDiff(sessionId: string): FileDiff[] {
+	const snaps = (store.checkpoints[sessionId] ?? []).slice().sort((a, b) => a.ts - b.ts)
+	const byPath = new Map<string, { before: string | null; after: string | null }>()
+	for (const s of snaps) {
+		const existing = byPath.get(s.path)
+		if (existing) existing.after = s.after
+		else byPath.set(s.path, { before: s.before, after: s.after })
+	}
+	const diffs: FileDiff[] = []
+	for (const [path, { before, after }] of byPath) {
+		if (before === after) continue
+		const status = before === null ? "created" : after === null ? "deleted" : "modified"
+		diffs.push({ path, before, after, status })
+	}
+	return diffs
+}
+
 export function setTodos(sessionId: string, todos: Todo[]): void {
 	store.todos[sessionId] = todos
 	persist()

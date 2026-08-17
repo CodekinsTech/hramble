@@ -15,6 +15,7 @@ import {
 	addMessage,
 	getMessages,
 	getTodos,
+	getSessionDiff,
 	renameSession,
 	deleteSession,
 	deleteMessage,
@@ -25,6 +26,7 @@ import {
 } from "./sessions.js"
 import { summarizeConversation } from "./summarize.js"
 import { buildAttachmentContext, type Attachment } from "./attachments.js"
+import { globFiles } from "./tools/glob.js"
 
 const PORT = Number(process.env.ENGINE_PORT) || 4200
 
@@ -97,6 +99,18 @@ export async function startServer(): Promise<void> {
 
 		app.get("/config", async () => ({ default: DEFAULT_MODEL }))
 
+		// File search by name — replaces OpenCode's find.files for the picker.
+		app.get("/find", async (req, reply) => {
+			const { directory, query } = req.query as { directory?: string; query?: string }
+			if (!directory) return reply.code(400).send({ error: "directory is required" })
+			const q = (query ?? "").trim()
+			const pattern = q ? `**/*${q}*` : "**/*"
+			const result = await globFiles({ pattern }, directory)
+			if (result.startsWith("No files")) return { files: [] }
+			const files = result.split("\n").filter((l) => l && !l.startsWith("["))
+			return { files }
+		})
+
 	// ── SSE event stream ─────────────────────────────────────────────────
 	app.get("/events", (req, reply) => {
 		reply.raw.setHeader("Content-Type", "text/event-stream")
@@ -152,6 +166,12 @@ export async function startServer(): Promise<void> {
 	app.get<{ Params: { id: string } }>("/sessions/:id/todos", async (req, reply) => {
 		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
 		return getTodos(req.params.id)
+	})
+
+	// Files changed during this session (from edit checkpoints).
+	app.get<{ Params: { id: string } }>("/sessions/:id/diff", async (req, reply) => {
+		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		return getSessionDiff(req.params.id)
 	})
 
 	// Rename a session's title.
