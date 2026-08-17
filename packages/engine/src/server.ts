@@ -18,7 +18,11 @@ import {
 	deleteSession,
 	deleteMessage,
 	forkSession,
+	compactSession,
+	revertSession,
+	unrevertSession,
 } from "./sessions.js"
+import { summarizeConversation } from "./summarize.js"
 
 const PORT = 4200
 
@@ -183,6 +187,56 @@ export async function startServer(): Promise<void> {
 		if (!fork) return reply.code(404).send({ error: "Session or message not found" })
 		broadcast({ type: "session.created", sessionId: fork.id, title: fork.title, directory: fork.directory })
 		return fork
+	})
+
+	// Revert a session to a message, rolling back file edits made after it.
+	app.post<{ Params: { id: string } }>("/sessions/:id/revert", async (req, reply) => {
+		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		const { messageId } = req.body as { messageId?: string }
+		if (!messageId) return reply.code(400).send({ error: "messageId is required" })
+		const result = revertSession(req.params.id, messageId)
+		if (!result) return reply.code(404).send({ error: "Message not found" })
+		broadcast({ type: "session.reverted", sessionId: req.params.id })
+		return { ok: true, ...result }
+	})
+
+	// Unrevert — replay the most recently reverted batch (redo).
+	app.post<{ Params: { id: string } }>("/sessions/:id/unrevert", async (req, reply) => {
+		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		const result = unrevertSession(req.params.id)
+		if (!result) return reply.code(400).send({ error: "Nothing to unrevert" })
+		broadcast({ type: "session.reverted", sessionId: req.params.id })
+		return { ok: true, ...result }
+	})
+
+	// Summarize / compact a session — replace the transcript with a summary.
+	app.post<{ Params: { id: string } }>("/sessions/:id/summarize", async (req, reply) => {
+		const session = getSession(req.params.id)
+		if (!session) return reply.code(404).send({ error: "Session not found" })
+
+		const { model } = req.body as { model?: ModelRef }
+		const requested = model ?? { ...DEFAULT_MODEL, apiKey: "" }
+		const provider = getProvider(requested.provider)
+		const apiKey = resolveApiKey(requested.provider, requested.apiKey)
+		if (!apiKey && !provider?.keyless) {
+			return reply.code(400).send({ error: `No API key for provider "${requested.provider}".` })
+		}
+
+		const history = getMessages(req.params.id)
+		if (history.length < 2) return reply.code(400).send({ error: "Not enough history to summarize." })
+
+		const rawMessages: MessageParam[] = history.map((m) => ({
+			role: m.role,
+			content: m.content as MessageParam["content"],
+		}))
+		try {
+			const summary = await summarizeConversation({ ...requested, apiKey }, rawMessages)
+			const message = compactSession(req.params.id, summary)
+			broadcast({ type: "session.updated", sessionId: req.params.id, status: session.status })
+			return { ok: true, summary, message }
+		} catch (err) {
+			return reply.code(502).send({ error: err instanceof Error ? err.message : String(err) })
+		}
 	})
 
 	app.post("/sessions", async (req, reply) => {

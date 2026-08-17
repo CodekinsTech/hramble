@@ -11,7 +11,9 @@ import { editFile, editToolDefinition } from "./tools/edit.js"
 import { globFiles, globToolDefinition } from "./tools/glob.js"
 import { grepFiles, grepToolDefinition } from "./tools/grep.js"
 import { getProvider } from "./providers.js"
-import { addMessage } from "./sessions.js"
+import path from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { addMessage, recordSnapshot } from "./sessions.js"
 import { checkPermission } from "./permissions.js"
 import { resolveMaxOutputTokens } from "./limits.js"
 import { getModel } from "./providers.js"
@@ -119,8 +121,9 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 				input: JSON.parse(tc.inputJson || "{}") as Record<string, unknown>,
 			})
 		}
+		let assistantMessageId = ""
 		if (assistantBlocks.length > 0) {
-			addMessage(sessionId, "assistant", assistantBlocks)
+			assistantMessageId = addMessage(sessionId, "assistant", assistantBlocks).id
 			messages.push({ role: "assistant", content: assistantBlocks as MessageParam["content"] })
 		}
 
@@ -156,10 +159,25 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 				}
 			}
 
+			// Snapshot files touched by write/edit so the turn can be reverted.
+			const snapshotPath =
+				(tc.name === "write" || tc.name === "edit") && typeof input.filePath === "string"
+					? path.resolve(directory, input.filePath)
+					: null
+			const beforeContent = snapshotPath
+				? existsSync(snapshotPath)
+					? readFileSync(snapshotPath, "utf-8")
+					: null
+				: null
+
 			let output: string
 			let isError = false
 			try {
 				output = await executeTool(tc.name, input, directory)
+				if (snapshotPath && assistantMessageId && !isError) {
+					const afterContent = existsSync(snapshotPath) ? readFileSync(snapshotPath, "utf-8") : null
+					recordSnapshot(sessionId, assistantMessageId, snapshotPath, beforeContent, afterContent)
+				}
 			} catch (err) {
 				output = err instanceof Error ? err.message : String(err)
 				isError = true

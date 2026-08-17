@@ -8,12 +8,32 @@ const DATA_DIR = path.join(os.homedir(), ".local", "share", "hramble", "engine")
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
 const MESSAGES_FILE = path.join(DATA_DIR, "messages.json")
 
+/**
+ * A file's content captured around an engine edit, so a revert can restore it.
+ * `before`/`after` are null when the file did not exist at that point.
+ */
+export interface FileSnapshot {
+	messageId: string
+	path: string
+	before: string | null
+	after: string | null
+	ts: number
+}
+
+interface RevertBatch {
+	messages: Message[]
+	snapshots: FileSnapshot[]
+}
+
 interface Store {
 	sessions: Record<string, Session>
 	messages: Record<string, Message[]>
+	// File snapshots per session (undo history) and a redo stack for unrevert.
+	checkpoints: Record<string, FileSnapshot[]>
+	redo: Record<string, RevertBatch[]>
 }
 
-let store: Store = { sessions: {}, messages: {} }
+let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {} }
 
 export function initDb(): void {
 	fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -21,8 +41,10 @@ export function initDb(): void {
 		try {
 			store = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8"))
 			if (!store.messages) store.messages = {}
+			if (!store.checkpoints) store.checkpoints = {}
+			if (!store.redo) store.redo = {}
 		} catch {
-			store = { sessions: {}, messages: {} }
+			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {} }
 		}
 	}
 	// Boot reconciliation: a restart orphans any session left "running" (its
@@ -93,6 +115,8 @@ export function deleteSession(id: string): boolean {
 	if (!store.sessions[id]) return false
 	delete store.sessions[id]
 	delete store.messages[id]
+	delete store.checkpoints[id]
+	delete store.redo[id]
 	persist()
 	return true
 }
@@ -159,6 +183,109 @@ export function addMessage(
 
 export function getMessages(sessionId: string): Message[] {
 	return (store.messages[sessionId] ?? []).sort((a, b) => a.createdAt - b.createdAt)
+}
+
+/**
+ * Replace a session's transcript with a single summary message (compaction).
+ * The next turn continues with the summary as its only prior context.
+ */
+export function compactSession(sessionId: string, summary: string): Message | null {
+	if (!store.sessions[sessionId]) return null
+	const message: Message = {
+		id: nanoid(),
+		sessionId,
+		role: "assistant",
+		content: `Summary of the conversation so far:\n\n${summary}`,
+		createdAt: Date.now(),
+	}
+	store.messages[sessionId] = [message]
+	store.sessions[sessionId].updatedAt = Date.now()
+	persist()
+	return message
+}
+
+/** Record a file's before/after content around an engine edit for undo. */
+export function recordSnapshot(
+	sessionId: string,
+	messageId: string,
+	filePath: string,
+	before: string | null,
+	after: string | null,
+): void {
+	if (!store.checkpoints[sessionId]) store.checkpoints[sessionId] = []
+	store.checkpoints[sessionId].push({ messageId, path: filePath, before, after, ts: Date.now() })
+	// A fresh edit invalidates the redo stack.
+	store.redo[sessionId] = []
+	persist()
+}
+
+function applyFileState(filePath: string, content: string | null): void {
+	if (content === null) {
+		try {
+			fs.rmSync(filePath, { force: true })
+		} catch {
+			// already gone
+		}
+		return
+	}
+	fs.mkdirSync(path.dirname(filePath), { recursive: true })
+	fs.writeFileSync(filePath, content, "utf-8")
+}
+
+/**
+ * Revert a session back to (and including) `messageId`: undo every file change
+ * made by that turn and later (restoring `before`), drop those messages, and
+ * push them onto the redo stack so unrevert can replay them.
+ */
+export function revertSession(sessionId: string, messageId: string): { reverted: number } | null {
+	const list = store.messages[sessionId]
+	if (!list) return null
+	const ordered = [...list].sort((a, b) => a.createdAt - b.createdAt)
+	const idx = ordered.findIndex((m) => m.id === messageId)
+	if (idx === -1) return null
+
+	const removed = ordered.slice(idx)
+	const removedIds = new Set(removed.map((m) => m.id))
+	const snaps = store.checkpoints[sessionId] ?? []
+	const affected = snaps.filter((s) => removedIds.has(s.messageId))
+
+	// Restore files newest-first so a file edited repeatedly ends at its earliest `before`.
+	for (const snap of [...affected].sort((a, b) => b.ts - a.ts)) {
+		applyFileState(snap.path, snap.before)
+	}
+
+	store.messages[sessionId] = ordered.slice(0, idx)
+	store.checkpoints[sessionId] = snaps.filter((s) => !removedIds.has(s.messageId))
+	if (!store.redo[sessionId]) store.redo[sessionId] = []
+	store.redo[sessionId].push({ messages: removed, snapshots: affected })
+
+	const session = store.sessions[sessionId]
+	if (session) session.updatedAt = Date.now()
+	persist()
+	return { reverted: removed.length }
+}
+
+/** Replay the most recently reverted batch: re-apply files (`after`) and messages. */
+export function unrevertSession(sessionId: string): { restored: number } | null {
+	const stack = store.redo[sessionId]
+	if (!stack || stack.length === 0) return null
+	const batch = stack.pop()
+	if (!batch) return null
+
+	// Re-apply oldest-first so a file's final state matches its latest `after`.
+	for (const snap of [...batch.snapshots].sort((a, b) => a.ts - b.ts)) {
+		applyFileState(snap.path, snap.after)
+	}
+
+	if (!store.messages[sessionId]) store.messages[sessionId] = []
+	store.messages[sessionId].push(...batch.messages)
+	if (!store.checkpoints[sessionId]) store.checkpoints[sessionId] = []
+	store.checkpoints[sessionId].push(...batch.snapshots)
+
+	const session = store.sessions[sessionId]
+	if (session) session.updatedAt = Date.now()
+	persist()
+	return { restored: batch.messages.length }
 }
 
 export function closeDb(): void {

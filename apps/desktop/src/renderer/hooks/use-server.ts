@@ -27,6 +27,9 @@ import {
 	deleteEngineSession,
 	deleteEnginePart,
 	forkEngineSession,
+	revertEngineSession,
+	unrevertEngineSession,
+	summarizeEngineSession,
 	type EngineModelRef,
 } from "../services/engine-client"
 
@@ -611,9 +614,15 @@ export function useAgentActions() {
 	}, [])
 
 	const revert = useCallback(async (directory: string, sessionId: string, messageId: string) => {
+		log.debug("revert", { sessionId, messageId })
+
+		if (appStore.get(engineConnectedAtom)) {
+			await revertEngineSession(sessionId, messageId)
+			return
+		}
+
 		const client = getProjectClient(directory)
 		if (!client) throw new Error("Not connected to server")
-		log.debug("revert", { sessionId, messageId })
 		try {
 			const entry = appStore.get(sessionFamily(sessionId))
 			if (entry?.status?.type === "busy") {
@@ -628,9 +637,15 @@ export function useAgentActions() {
 	}, [])
 
 	const unrevert = useCallback(async (directory: string, sessionId: string) => {
+		log.debug("unrevert", { sessionId })
+
+		if (appStore.get(engineConnectedAtom)) {
+			await unrevertEngineSession(sessionId)
+			return
+		}
+
 		const client = getProjectClient(directory)
 		if (!client) throw new Error("Not connected to server")
-		log.debug("unrevert", { sessionId })
 		try {
 			await client.session.unrevert({ sessionID: sessionId })
 		} catch (err) {
@@ -659,9 +674,15 @@ export function useAgentActions() {
 	)
 
 	const summarize = useCallback(async (directory: string, sessionId: string) => {
+		log.debug("summarize", { sessionId })
+
+		if (appStore.get(engineConnectedAtom)) {
+			await summarizeEngineSession(sessionId)
+			return
+		}
+
 		const client = getProjectClient(directory)
 		if (!client) throw new Error("Not connected to server")
-		log.debug("summarize", { sessionId })
 		try {
 			await client.session.summarize({ sessionID: sessionId })
 		} catch (err) {

@@ -12,6 +12,7 @@ import { enginePermissionsAtom, type EnginePermissionRequest } from "../atoms/en
 import { upsertMessageAtom } from "../atoms/messages"
 import { applyPartDeltaAtom, partsFamily, upsertPartAtom } from "../atoms/parts"
 import {
+	removeSessionAtom,
 	setSessionErrorAtom,
 	setSessionStatusAtom,
 	upsertSessionAtom,
@@ -28,6 +29,9 @@ type EngineEvent =
 	| { type: "session.created"; sessionId: string; title: string; directory: string }
 	| { type: "session.updated"; sessionId: string; status: "idle" | "running" | "error" }
 	| { type: "session.idle"; sessionId: string }
+	| { type: "session.deleted"; sessionId: string }
+	| { type: "session.reverted"; sessionId: string }
+	| { type: "session.retry"; sessionId: string; attempt: number; delayMs: number; error: string }
 	| { type: "session.error"; sessionId: string; error: string }
 	| { type: "message.start"; messageId: string; sessionId: string; role: "assistant" }
 	| { type: "message.delta"; messageId: string; sessionId: string; text: string }
@@ -159,6 +163,28 @@ export function processEngineEvent(event: EngineEvent): void {
 			set(setSessionStatusAtom, {
 				sessionId: event.sessionId,
 				status: { type: "idle" },
+			})
+			break
+		}
+
+		case "session.deleted": {
+			set(removeSessionAtom, event.sessionId)
+			currentMessageBySession.delete(event.sessionId)
+			break
+		}
+
+		case "session.reverted": {
+			// The transcript changed underneath us — bump the stream version so the
+			// view re-reads the (truncated/restored) message list on next render.
+			set(streamingVersionFamily(event.sessionId), (v) => v + 1)
+			break
+		}
+
+		case "session.retry": {
+			// Transient provider error being retried — keep the session busy.
+			set(setSessionStatusAtom, {
+				sessionId: event.sessionId,
+				status: { type: "busy" },
 			})
 			break
 		}

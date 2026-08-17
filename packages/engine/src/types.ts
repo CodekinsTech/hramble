@@ -55,6 +55,7 @@ export type EngineEvent =
 	| { type: "session.updated"; sessionId: string; status: Session["status"] }
 	| { type: "session.idle"; sessionId: string }
 	| { type: "session.deleted"; sessionId: string }
+	| { type: "session.reverted"; sessionId: string }
 	| { type: "session.error"; sessionId: string; error: string }
 	| { type: "session.retry"; sessionId: string; attempt: number; delayMs: number; error: string }
 	| { type: "message.start"; messageId: string; sessionId: string; role: "assistant" }

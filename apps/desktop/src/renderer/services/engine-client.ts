@@ -83,6 +83,21 @@ export async function forkEngineSession(id: string, throughMessageId?: string): 
 	})
 }
 
+export async function revertEngineSession(id: string, messageId: string): Promise<{ ok: boolean; reverted: number }> {
+	return request(`/sessions/${id}/revert`, { method: "POST", body: JSON.stringify({ messageId }) })
+}
+
+export async function unrevertEngineSession(id: string): Promise<{ ok: boolean; restored: number }> {
+	return request(`/sessions/${id}/unrevert`, { method: "POST" })
+}
+
+export async function summarizeEngineSession(
+	id: string,
+	model?: EngineModelRef,
+): Promise<{ ok: boolean; summary: string }> {
+	return request(`/sessions/${id}/summarize`, { method: "POST", body: JSON.stringify({ model }) })
+}
+
 export interface EngineModelInfo {
 	provider: string
 	providerName: string
