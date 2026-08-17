@@ -23,6 +23,7 @@ import {
 	unrevertSession,
 } from "./sessions.js"
 import { summarizeConversation } from "./summarize.js"
+import { buildAttachmentContext, type Attachment } from "./attachments.js"
 
 const PORT = Number(process.env.ENGINE_PORT) || 4200
 
@@ -260,11 +261,12 @@ export async function startServer(): Promise<void> {
 		const session = getSession(req.params.id)
 		if (!session) return reply.code(404).send({ error: "Session not found" })
 
-		const { text, model, agent, planMode } = req.body as {
+		const { text, model, agent, planMode, attachments } = req.body as {
 			text: string
 			model?: ModelRef
 			agent?: string
 			planMode?: boolean
+			attachments?: Attachment[]
 		}
 		if (!text?.trim()) return reply.code(400).send({ error: "text is required" })
 
@@ -287,8 +289,12 @@ export async function startServer(): Promise<void> {
 
 		const resolvedModel: ModelRef = { ...requested, apiKey }
 
+		// Prepend any attached file context so the model sees it inline.
+		const attachmentContext = buildAttachmentContext(attachments, session.directory)
+		const userContent = attachmentContext ? `${attachmentContext}${text}` : text
+
 		// Save user message
-		addMessage(session.id, "user", text)
+		addMessage(session.id, "user", userContent)
 		updateSessionStatus(session.id, "running")
 		broadcast({ type: "session.updated", sessionId: session.id, status: "running" })
 

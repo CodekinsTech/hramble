@@ -294,9 +294,13 @@ export function useAgentActions() {
 					.filter((p): p is { type: "text"; text: string } => p.type === "text")
 					.map((p) => p.text)
 					.join("\n\n")
+				const engineAttachments = parts
+					.filter((p): p is FilePartInput => p.type === "file")
+					.map((p) => ({ filename: p.filename, mime: p.mime, url: p.url }))
 				await sendEnginePrompt(sessionId, promptText || text, engineModel, {
 					agent: options?.agent,
 					planMode: options?.planMode,
+					attachments: engineAttachments.length ? engineAttachments : undefined,
 				})
 				return
 			}
