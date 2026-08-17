@@ -12,6 +12,7 @@ import { globFiles, globToolDefinition } from "./tools/glob.js"
 import { grepFiles, grepToolDefinition } from "./tools/grep.js"
 import { todoToolDefinition, normalizeTodos, type TodoWriteInput } from "./tools/todo.js"
 import { webFetch, webFetchToolDefinition } from "./tools/webfetch.js"
+import { taskToolDefinition, type TaskInput } from "./tools/task.js"
 import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
@@ -32,7 +33,11 @@ const TOOLS: Tool[] = [
 	grepToolDefinition,
 	todoToolDefinition,
 	webFetchToolDefinition,
+	taskToolDefinition,
 ]
+
+/** Tools a read-only research sub-agent may use. */
+const SUBAGENT_TOOL_NAMES = new Set(["read", "grep", "glob", "webfetch"])
 
 // OpenAI-compat tool format (same schema, different wrapper)
 const OPENAI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t) => ({
@@ -208,6 +213,10 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 					emit({ type: "todo.updated", sessionId, todos })
 					const done = todos.filter((t) => t.status === "completed").length
 					output = `Todo list updated: ${done}/${todos.length} completed.`
+				} else if (tc.name === "task") {
+					// Delegate to a read-only research sub-agent (needs model/dir/signal).
+					const taskInput = input as unknown as TaskInput
+					output = await runSubAgent(model, directory, String(taskInput.prompt ?? ""), signal)
 				} else {
 					output = await executeTool(tc.name, input, directory)
 					if (snapshotPath && assistantMessageId && !isError) {
@@ -418,4 +427,71 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 		default:
 			throw new Error(`Unknown tool: ${name}`)
 	}
+}
+
+/**
+ * Run a read-only research sub-agent to completion and return its final text.
+ * It reuses the streaming turn functions in plan mode (read-only tool set) but
+ * runs silently — no UI events, no store writes — and is capped hard so a
+ * runaway sub-agent can't stall the parent turn.
+ */
+const SUBAGENT_MAX_ITERATIONS = 15
+
+async function runSubAgent(model: ModelRef, directory: string, prompt: string, signal: AbortSignal): Promise<string> {
+	const provider = getProvider(model.provider)
+	const useAnthropic = !provider || provider.type === "anthropic"
+	// Frame the task: the turn runs in plan mode (read-only tools), so orient the
+	// sub-agent as a researcher rather than a planner, and ask for a direct report.
+	const framedPrompt = `You are a read-only research sub-agent. Use read, grep, glob, and webfetch to investigate, then report your findings directly and concisely — you cannot modify files or run commands, and your answer goes to another agent, not the user.\n\nTask:\n${prompt}`
+	const messages: MessageParam[] = [{ role: "user", content: framedPrompt }]
+	const silent: EventEmitter = () => {}
+	let finalText = ""
+
+	for (let i = 0; i < SUBAGENT_MAX_ITERATIONS; i++) {
+		if (signal.aborted) break
+		const toolCalls: Array<{ id: string; name: string; inputJson: string }> = []
+		let text = ""
+		try {
+			if (useAnthropic) {
+				;({ fullText: text } = await runAnthropicTurn(model, messages, directory, silent, nanoid(), "subagent", toolCalls, signal, "plan"))
+			} else {
+				;({ fullText: text } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, silent, nanoid(), "subagent", toolCalls, signal, "plan"))
+			}
+		} catch (err) {
+			return `Sub-agent error: ${err instanceof Error ? err.message : String(err)}`
+		}
+
+		const blocks: ContentBlock[] = []
+		if (text) blocks.push({ type: "text", text })
+		for (const tc of toolCalls) blocks.push({ type: "tool_use", id: tc.id, name: tc.name, input: JSON.parse(tc.inputJson || "{}") as Record<string, unknown> })
+		if (blocks.length > 0) messages.push({ role: "assistant", content: blocks as MessageParam["content"] })
+
+		if (toolCalls.length === 0) {
+			finalText = text
+			break
+		}
+
+		const results: ContentBlock[] = []
+		for (const tc of toolCalls) {
+			if (signal.aborted) break
+			const input = JSON.parse(tc.inputJson || "{}") as Record<string, unknown>
+			let out: string
+			let isError = false
+			if (SUBAGENT_TOOL_NAMES.has(tc.name)) {
+				try {
+					out = await executeTool(tc.name, input, directory)
+				} catch (err) {
+					out = err instanceof Error ? err.message : String(err)
+					isError = true
+				}
+			} else {
+				out = `Tool "${tc.name}" is not available to sub-agents (read-only research only).`
+				isError = true
+			}
+			results.push({ type: "tool_result", tool_use_id: tc.id, content: isError ? `Error: ${out}` : out, is_error: isError || undefined })
+		}
+		messages.push({ role: "user", content: results as MessageParam["content"] })
+	}
+
+	return finalText.trim() || "(sub-agent produced no findings)"
 }
