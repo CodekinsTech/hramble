@@ -294,7 +294,10 @@ export function useAgentActions() {
 					.filter((p): p is { type: "text"; text: string } => p.type === "text")
 					.map((p) => p.text)
 					.join("\n\n")
-				await sendEnginePrompt(sessionId, promptText || text, engineModel)
+				await sendEnginePrompt(sessionId, promptText || text, engineModel, {
+					agent: options?.agent,
+					planMode: options?.planMode,
+				})
 				return
 			}
 

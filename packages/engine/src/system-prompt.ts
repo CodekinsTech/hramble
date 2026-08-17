@@ -1,9 +1,17 @@
-export function buildSystemPrompt(directory: string): string {
+export function buildSystemPrompt(directory: string, mode: "build" | "plan" = "build"): string {
 	const isWin = process.platform === "win32"
 	const shell = isWin ? "cmd.exe (Windows)" : "/bin/bash"
 	const today = new Date().toISOString().slice(0, 10)
 
-	return `You are Hramble Coder — an expert AI coding assistant running inside the Hramble desktop app.
+	const planBlock =
+		mode === "plan"
+			? `
+
+## PLAN MODE (read-only)
+You are in plan mode. You can read, search, and inspect the codebase, but you CANNOT modify anything — write, edit, and bash tools are disabled this turn. Produce a clear, numbered plan of the exact steps and file changes required. Do not claim to have made changes. End by telling the user to switch to build mode to execute.`
+			: ""
+
+	return `You are Hramble Coder — an expert AI coding assistant running inside the Hramble desktop app.${planBlock}
 
 You are working in the project directory: ${directory}
 

@@ -260,7 +260,12 @@ export async function startServer(): Promise<void> {
 		const session = getSession(req.params.id)
 		if (!session) return reply.code(404).send({ error: "Session not found" })
 
-		const { text, model } = req.body as { text: string; model?: ModelRef }
+		const { text, model, agent, planMode } = req.body as {
+			text: string
+			model?: ModelRef
+			agent?: string
+			planMode?: boolean
+		}
 		if (!text?.trim()) return reply.code(400).send({ error: "text is required" })
 
 		if (activeAgents.has(session.id)) {
@@ -300,29 +305,47 @@ export async function startServer(): Promise<void> {
 		const abortController = new AbortController()
 		activeAgents.set(session.id, abortController)
 
-		// Run agent loop in background — don't await here so HTTP response returns immediately
-		runAgentLoop({
-			sessionId: session.id,
-			directory: session.directory,
-			messages: apiMessages,
-			model: resolvedModel,
-			signal: abortController.signal,
-			emit: (event) => {
-				broadcast(event)
-			},
-			onPermissionRequest: async (req: PermissionRequest) => {
-				return new Promise<PermissionResolution>((resolve) => {
-					pendingPermissions.set(req.id, { resolve })
-					// Auto-reject after 5 minutes if no response
-					setTimeout(() => {
-						if (pendingPermissions.has(req.id)) {
-							pendingPermissions.delete(req.id)
-							resolve("reject")
-						}
-					}, 5 * 60 * 1000)
-				})
-			},
-		})
+		const onPermissionRequest = async (req: PermissionRequest) =>
+			new Promise<PermissionResolution>((resolve) => {
+				pendingPermissions.set(req.id, { resolve })
+				// Auto-reject after 5 minutes if no response
+				setTimeout(() => {
+					if (pendingPermissions.has(req.id)) {
+						pendingPermissions.delete(req.id)
+						resolve("reject")
+					}
+				}, 5 * 60 * 1000)
+			})
+
+		// Run one agent phase over the current stored transcript.
+		const runPhase = (msgs: MessageParam[], mode: "build" | "plan") =>
+			runAgentLoop({
+				sessionId: session.id,
+				directory: session.directory,
+				messages: msgs,
+				model: resolvedModel,
+				signal: abortController.signal,
+				mode,
+				emit: (event) => broadcast(event),
+				onPermissionRequest,
+			})
+
+		// planMode = plan (read-only) then build (execute) in one request.
+		// agent "plan" = a single read-only planning turn.
+		const orchestrate = async () => {
+			if (planMode) {
+				await runPhase(apiMessages, "plan")
+				if (abortController.signal.aborted) return
+				addMessage(session.id, "user", "Now carry out that plan exactly — make all the file edits and run any commands needed.")
+				const hist2 = getMessages(session.id).map((m) => ({ role: m.role, content: m.content as MessageParam["content"] }))
+				await runPhase(trimHistory(hist2, contextWindow), "build")
+			} else {
+				await runPhase(apiMessages, agent === "plan" ? "plan" : "build")
+			}
+		}
+
+		// Run in background — don't await so the HTTP response returns immediately.
+		orchestrate()
 			.then(() => {
 				activeAgents.delete(session.id)
 				updateSessionStatus(session.id, "idle")

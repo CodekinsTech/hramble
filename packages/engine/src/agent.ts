@@ -40,6 +40,13 @@ const OPENAI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t)
 	},
 }))
 
+// Plan mode is read-only — the model can inspect the codebase but not change it.
+const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob"])
+const PLAN_TOOLS: Tool[] = TOOLS.filter((t) => READ_ONLY_TOOL_NAMES.has(t.name))
+const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) => t.type === "function" && READ_ONLY_TOOL_NAMES.has(t.function.name))
+
+export type AgentMode = "build" | "plan"
+
 export type EventEmitter = (event: EngineEvent) => void
 
 interface RunOptions {
@@ -50,10 +57,12 @@ interface RunOptions {
 	emit: EventEmitter
 	signal: AbortSignal
 	onPermissionRequest: (req: PermissionRequest) => Promise<PermissionResolution>
+	mode?: AgentMode
 }
 
 export async function runAgentLoop(options: RunOptions): Promise<void> {
 	const { sessionId, directory, model, emit, signal, onPermissionRequest } = options
+	const mode: AgentMode = options.mode ?? "build"
 	const messages: MessageParam[] = [...options.messages]
 
 	const provider = getProvider(model.provider)
@@ -87,9 +96,9 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 			}
 			try {
 				if (useAnthropic) {
-					;({ fullText } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal))
+					;({ fullText } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
 				} else {
-					;({ fullText } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal))
+					;({ fullText } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
 				}
 				break
 			} catch (err) {
@@ -138,6 +147,15 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 
 			const input = JSON.parse(tc.inputJson || "{}") as Record<string, unknown>
 			emit({ type: "tool.start", toolCallId: tc.id, sessionId, tool: tc.name, input })
+
+			// Enforce plan mode HARD: some gateways don't honor the offered tool
+			// list, so reject any mutating tool the model calls anyway.
+			if (mode === "plan" && !READ_ONLY_TOOL_NAMES.has(tc.name)) {
+				const msg = `Tool "${tc.name}" is disabled in plan mode — only read, grep, and glob are available. Do not attempt changes; produce a plan instead.`
+				emit({ type: "tool.result", toolCallId: tc.id, sessionId, output: msg, isError: true })
+				toolResults.push({ type: "tool_result", tool_use_id: tc.id, content: msg, is_error: true })
+				continue
+			}
 
 			const perm = checkPermission(tc.name, input, directory)
 			if (perm.needs) {
@@ -212,6 +230,7 @@ async function runAnthropicTurn(
 	sessionId: string,
 	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
 	signal: AbortSignal,
+	mode: AgentMode = "build",
 ): Promise<{ fullText: string }> {
 	const client = new Anthropic({ apiKey: model.apiKey })
 	const maxTokens = resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000)
@@ -220,8 +239,8 @@ async function runAnthropicTurn(
 		{
 			model: model.model,
 			max_tokens: maxTokens,
-			system: buildSystemPrompt(directory),
-			tools: TOOLS,
+			system: buildSystemPrompt(directory, mode),
+			tools: mode === "plan" ? PLAN_TOOLS : TOOLS,
 			messages,
 		},
 		{ signal },
@@ -261,6 +280,7 @@ async function runOpenAICompatTurn(
 	sessionId: string,
 	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
 	signal: AbortSignal,
+	mode: AgentMode = "build",
 ): Promise<{ fullText: string }> {
 	// Keyless free tiers (e.g. OpenCode Zen "-free" models) 401 on a bogus
 	// bearer, so omit the Authorization header entirely when we have no key.
@@ -273,7 +293,7 @@ async function runOpenAICompatTurn(
 
 	const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
 		role: "system",
-		content: buildSystemPrompt(directory),
+		content: buildSystemPrompt(directory, mode),
 	}
 
 	// Convert Anthropic-style messages to OpenAI format
@@ -317,7 +337,7 @@ async function runOpenAICompatTurn(
 		{
 			model: model.model,
 			messages: [systemMessage, ...openaiMessages],
-			tools: OPENAI_TOOLS,
+			tools: mode === "plan" ? PLAN_OPENAI_TOOLS : OPENAI_TOOLS,
 			tool_choice: "auto",
 			max_tokens: resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000),
 			stream: true,

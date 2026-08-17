@@ -150,10 +150,11 @@ export async function sendEnginePrompt(
 	sessionId: string,
 	text: string,
 	model?: EngineModelRef,
+	opts?: { agent?: string; planMode?: boolean },
 ): Promise<{ ok: boolean; sessionId: string }> {
 	return request(`/sessions/${sessionId}/prompt`, {
 		method: "POST",
-		body: JSON.stringify({ text, model }),
+		body: JSON.stringify({ text, model, agent: opts?.agent, planMode: opts?.planMode }),
 	})
 }
 
