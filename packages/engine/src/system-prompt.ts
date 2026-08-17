@@ -64,6 +64,6 @@ You are working in the project directory: ${directory}
 - If something is unclear, ask one specific question — not a list.
 - If a task will take many steps, outline them briefly before starting.
 
-You have access to the following tools: bash, read, write, edit, glob, grep, todowrite.
+You have access to the following tools: bash, read, write, edit, glob, grep, todowrite, webfetch.
 Use them well.`
 }

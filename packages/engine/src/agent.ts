@@ -11,6 +11,7 @@ import { editFile, editToolDefinition } from "./tools/edit.js"
 import { globFiles, globToolDefinition } from "./tools/glob.js"
 import { grepFiles, grepToolDefinition } from "./tools/grep.js"
 import { todoToolDefinition, normalizeTodos, type TodoWriteInput } from "./tools/todo.js"
+import { webFetch, webFetchToolDefinition } from "./tools/webfetch.js"
 import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
@@ -30,6 +31,7 @@ const TOOLS: Tool[] = [
 	globToolDefinition,
 	grepToolDefinition,
 	todoToolDefinition,
+	webFetchToolDefinition,
 ]
 
 // OpenAI-compat tool format (same schema, different wrapper)
@@ -43,7 +45,7 @@ const OPENAI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t)
 }))
 
 // Plan mode is read-only — the model can inspect the codebase but not change it.
-const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob", "todowrite"])
+const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob", "todowrite", "webfetch"])
 const PLAN_TOOLS: Tool[] = TOOLS.filter((t) => READ_ONLY_TOOL_NAMES.has(t.name))
 const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) => t.type === "function" && READ_ONLY_TOOL_NAMES.has(t.function.name))
 
@@ -411,6 +413,8 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 			return globFiles({ pattern: String(input.pattern ?? "**/*"), exclude: Array.isArray(input.exclude) ? (input.exclude as string[]) : undefined }, directory)
 		case "grep":
 			return grepFiles({ pattern: String(input.pattern ?? ""), path: input.path ? String(input.path) : undefined, glob: input.glob ? String(input.glob) : undefined, caseSensitive: Boolean(input.caseSensitive) }, directory)
+		case "webfetch":
+			return webFetch({ url: String(input.url ?? "") })
 		default:
 			throw new Error(`Unknown tool: ${name}`)
 	}
