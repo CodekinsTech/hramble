@@ -42,11 +42,12 @@ export function checkPermission(
 	if (mode === "bypass") return proceed
 	if (NEVER_PROMPT.has(tool)) return proceed
 
-	if (tool === "write" || tool === "edit" || tool === "multiedit") {
+	if (tool === "write" || tool === "edit" || tool === "multiedit" || tool === "notebookedit") {
 		const resolved = path.resolve(directory, String(input.filePath ?? ""))
 		const outside = !isInsideProject(directory, resolved)
 		if (mode === "manual") {
-			const verb = tool === "write" ? "Write" : tool === "multiedit" ? "Multi-edit" : "Edit"
+			const verb =
+				tool === "write" ? "Write" : tool === "multiedit" ? "Multi-edit" : tool === "notebookedit" ? "Edit notebook" : "Edit"
 			return { needs: true, description: `${verb} ${String(input.filePath ?? resolved)}` }
 		}
 		// accept-edits & auto: apply in-project edits automatically, confirm outside.
@@ -81,7 +82,7 @@ export function permissionKey(tool: string, input: Record<string, unknown>, dire
 		const bin = String(input.command ?? "").trim().split(/\s+/)[0] ?? ""
 		return `bash:${bin}`
 	}
-	if (tool === "write" || tool === "edit" || tool === "multiedit" || tool === "read") {
+	if (tool === "write" || tool === "edit" || tool === "multiedit" || tool === "notebookedit" || tool === "read") {
 		const resolved = path.resolve(directory, String(input.filePath ?? ""))
 		return `${tool}:${path.dirname(resolved)}`
 	}
