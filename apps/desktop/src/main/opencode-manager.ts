@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process"
+import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -309,7 +310,25 @@ async function spawnServer(
 	// Build PATH with ~/.opencode/bin prepended so we find the opencode binary
 	const opencodeBinDir = path.join(homedir(), ".opencode", "bin")
 	const sep = process.platform === "win32" ? ";" : ":"
-	const augmentedPath = `${opencodeBinDir}${sep}${process.env.PATH ?? ""}`
+	// Ensure git + core tools are reachable — a GUI-launched Electron can inherit a
+		// PATH that omits them, surfacing as "git is not recognized".
+		const currentPath = process.env.PATH ?? ""
+		const extraToolDirs = (
+			process.platform === "win32"
+				? [
+						path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "cmd"),
+						path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "bin"),
+						path.join(process.env.SystemRoot ?? "C:\\Windows", "System32"),
+					]
+				: ["/usr/local/bin", "/opt/homebrew/bin"]
+		).filter((dir) => {
+			try {
+				return existsSync(dir) && !currentPath.toLowerCase().includes(dir.toLowerCase())
+			} catch {
+				return false
+			}
+		})
+		const augmentedPath = [opencodeBinDir, ...extraToolDirs, currentPath].filter(Boolean).join(sep)
 
 	// Build CLI args
 	const args = ["serve", `--hostname=${hostname}`, `--port=${port}`]
