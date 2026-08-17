@@ -4,6 +4,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js"
 import type { ModelRef } from "./types.js"
 import { getProvider, getModel } from "./providers.js"
 import { resolveMaxOutputTokens } from "./limits.js"
+import { isTransientError, backoffDelay, sleep, MAX_RETRIES } from "./retry.js"
 
 const SUMMARY_INSTRUCTION =
 	"You are compacting a coding-assistant conversation. Write a concise but complete " +
@@ -45,33 +46,55 @@ export async function summarizeConversation(model: ModelRef, messages: MessagePa
 	const maxChars = Math.floor(window * 0.6) * 3
 	let transcript = flatten(messages)
 	if (transcript.length > maxChars) {
-		transcript = `[... earlier conversation truncated ...]\n${transcript.slice(transcript.length - maxChars)}`
+		// Keep the HEAD (the user's original goal/instructions) and the TAIL (recent
+		// work) — dropping only the middle. Tail-only lost the objective the summary
+		// is supposed to preserve.
+		const headChars = Math.floor(maxChars * 0.25)
+		const tailChars = maxChars - headChars
+		transcript = `${transcript.slice(0, headChars)}\n\n[... middle of the conversation truncated ...]\n\n${transcript.slice(transcript.length - tailChars)}`
 	}
 	const userPrompt = `${SUMMARY_INSTRUCTION}\n\n--- CONVERSATION ---\n${transcript}\n--- END ---`
 
-	if (useAnthropic) {
-		const client = new Anthropic({ apiKey: model.apiKey })
-		const res = await client.messages.create({
+	// Retry transient failures (429/5xx) so one blip during compaction doesn't fail it.
+	return await withRetry(async () => {
+		if (useAnthropic) {
+			const client = new Anthropic({ apiKey: model.apiKey })
+			const res = await client.messages.create({
+				model: model.model,
+				max_tokens: maxTokens,
+				messages: [{ role: "user", content: userPrompt }],
+			})
+			return res.content
+				.map((b) => (b.type === "text" ? b.text : ""))
+				.join("")
+				.trim()
+		}
+		const hasKey = Boolean(model.apiKey?.trim())
+		const client = new OpenAI({
+			apiKey: hasKey ? model.apiKey : "unused",
+			baseURL: model.baseURL ?? provider?.baseURL,
+			...(hasKey ? {} : { defaultHeaders: { Authorization: null } }),
+		})
+		const res = await client.chat.completions.create({
 			model: model.model,
 			max_tokens: maxTokens,
 			messages: [{ role: "user", content: userPrompt }],
 		})
-		return res.content
-			.map((b) => (b.type === "text" ? b.text : ""))
-			.join("")
-			.trim()
-	}
+		return (res.choices[0]?.message?.content ?? "").trim()
+	})
+}
 
-	const hasKey = Boolean(model.apiKey?.trim())
-	const client = new OpenAI({
-		apiKey: hasKey ? model.apiKey : "unused",
-		baseURL: model.baseURL ?? provider?.baseURL,
-		...(hasKey ? {} : { defaultHeaders: { Authorization: null } }),
-	})
-	const res = await client.chat.completions.create({
-		model: model.model,
-		max_tokens: maxTokens,
-		messages: [{ role: "user", content: userPrompt }],
-	})
-	return (res.choices[0]?.message?.content ?? "").trim()
+/** Run an operation with transient-error backoff (up to MAX_RETRIES). */
+async function withRetry<T>(op: () => Promise<T>): Promise<T> {
+	let lastErr: unknown
+	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+		try {
+			return await op()
+		} catch (err) {
+			lastErr = err
+			if (!isTransientError(err) || attempt === MAX_RETRIES) break
+			await sleep(backoffDelay(attempt + 1, err))
+		}
+	}
+	throw lastErr
 }

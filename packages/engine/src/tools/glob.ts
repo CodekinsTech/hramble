@@ -7,9 +7,12 @@ export interface GlobInput {
 }
 
 export async function globFiles(input: GlobInput, workingDir: string): Promise<string> {
+	// Always ignore the heavy dirs; a caller-supplied exclude ADDS to these rather
+	// than replacing them (so passing exclude can't accidentally traverse node_modules).
+	const ignore = ["**/node_modules/**", "**/.git/**", "**/dist/**", ...(input.exclude ?? [])]
 	const files = await globFn(input.pattern, {
 		cwd: workingDir,
-		ignore: input.exclude ?? ["**/node_modules/**", "**/.git/**", "**/dist/**"],
+		ignore,
 		dot: false,
 	})
 

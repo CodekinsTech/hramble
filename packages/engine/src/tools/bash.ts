@@ -70,14 +70,18 @@ export async function runBash(input: BashInput, workingDir: string): Promise<Bas
 		})
 		return { stdout: truncateOutput(stdout ?? ""), stderr: truncateOutput(stderr ?? ""), exitCode: 0, timedOut: false }
 	} catch (err: unknown) {
-		const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: number; killed?: boolean }
-		if (e.killed) {
-			return { stdout: truncateOutput(e.stdout ?? ""), stderr: "Command timed out", exitCode: 124, timedOut: true }
+		const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string; code?: number | string; killed?: boolean; signal?: string }
+		// maxBuffer overflow also sets killed=true — distinguish it from a timeout.
+		if (e.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+			return { stdout: truncateOutput(e.stdout ?? ""), stderr: "Command output exceeded the 10MB limit and was stopped.", exitCode: 1, timedOut: false }
+		}
+		if (e.killed && e.signal === "SIGTERM") {
+			return { stdout: truncateOutput(e.stdout ?? ""), stderr: `Command timed out after ${timeout / 1000}s and was terminated.`, exitCode: 124, timedOut: true }
 		}
 		return {
 			stdout: truncateOutput(e.stdout ?? ""),
 			stderr: truncateOutput(e.stderr ?? String(err)),
-			exitCode: e.code ?? 1,
+			exitCode: typeof e.code === "number" ? e.code : 1,
 			timedOut: false,
 		}
 	}

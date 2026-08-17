@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { nanoid } from "nanoid"
 import { atomicWrite } from "../fsutil.js"
 
 export interface NotebookEditInput {
@@ -63,6 +64,7 @@ export async function notebookEdit(input: NotebookEditInput, workingDir: string)
 		const cellType = input.cellType ?? "code"
 		const cell: NotebookCell = {
 			cell_type: cellType,
+			id: nanoid(8),
 			source: toSourceLines(input.newSource),
 			metadata: {},
 			...(cellType === "code" ? { outputs: [], execution_count: null } : {}),

@@ -1,7 +1,43 @@
 # Engine Production Audit (vs Claude Code)
 
-Five parallel adversarial reviews of `packages/engine/src`. Findings below are being
-verified against the code and fixed in priority order. Status: ⬜ todo · 🔧 fixing · ✅ fixed · 📝 noted (design decision / deferred).
+Five parallel adversarial reviews of `packages/engine/src`. Every finding was verified
+against the code; the real ones are fixed + tested. Status: ✅ fixed · 📝 noted (deferred).
+
+## FIXED (verified + tested)
+**Security:** S1 drive-by-RCE Origin guard · S2 MCP secret-env scrub · S3 webfetch SSRF
+(private/metadata block, redirect re-validation, streamed byte cap) · S4 Windows
+destructive-command detection · S5 destructive-bash always prompts (chain-bypass closed) ·
+S6 out-of-project reads prompt (exfil closed).
+**Correctness:** C1 abort no longer orphans tool_use · C2 abort unblocks permission
+prompt + clears pending · C3 `$`-mangling in edit/multiedit · C4 malformed tool JSON →
+tool error · C5 OpenAI empty tool_calls omitted · C6 atomic writes (files + store) ·
+C7 store boot-crash guard + corrupt-file backup.
+**Robustness:** M1 sub-agent read-only tools · M2 MCP timeouts/leaks/race · M3 checkpoint
++ redo cleanup (compact/delete) · M4 permission timer cleanup · M5 /find restricted to
+projects · M6 webfetch download cap · M7 bash maxBuffer/timeout labels · M8 summarize
+head+tail + retry · M9 read size guard + binary detection · L1 nbformat cell id · L2 glob
+exclude merges defaults.
+
+## 📝 Noted / deferred (design decisions, not blocking)
+- **S7** malicious-repo prompt injection via CLAUDE.md/AGENTS.md/skills — trusted by
+  design (Claude Code trusts project files too); consider opt-in loading for untrusted repos.
+- **S2 (residual)** repo `.hramble/mcp.json` still auto-spawns its command (secrets scrubbed).
+  Full fix: user must approve MCP servers (add during cutover UI).
+- **M7 (residual)** bash timeout doesn't kill the whole process tree (backgrounded children
+  survive) — needs OS-specific tree-kill; low risk for local single-user.
+- **M10** grep Node-fallback ReDoS (only when ripgrep absent) — add a line-length/time guard.
+- **M11** azure/vertex/bedrock/cloudflare providers are non-functional as shipped (blank
+  baseURL / non-bearer auth) — remove from the catalog or gate as "needs config" (product decision).
+- **M12** SSE broadcasts all sessions to every client — irrelevant for single-user local +
+  now behind the Origin guard; add per-session filtering if multi-user.
+- **Storage** move flat-JSON store → SQLite (atomic writes shipped now; SQLite is the scale fix — see Compozy note).
+- Low: L3 PATH prepend order, L4 tiny-window last-2 rule, L5 token-estimate overhead, L6 data:-URL
+  attachment cap, L7 unknown-tool default-allow, L8 explicit request-size/rate limits.
+
+---
+_Original findings (verified against code) below._
+
+## CRITICAL — Security
 
 ## CRITICAL — Security
 - ⬜ **S1. Open CORS + no auth → any webpage can drive the engine (RCE).** `server.ts` sets `ACAO:*` + PNA, no Origin check, no token; binds 127.0.0.1 but a browser can still cross-origin `POST /prompt` (auto mode) → bash/file tools. Fix: require a per-run auth token and/or Origin allow-list (localhost/app only).
