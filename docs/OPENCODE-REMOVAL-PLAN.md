@@ -1,10 +1,14 @@
 # OpenCode Removal & Engine Cutover — Roadmap
 
-> **Progress:** Phase 0 (partial: discovery endpoints + boot reconciliation ✅),
-> Phase 1 (session lifecycle ✅ verified live), Phase 2 (providers/config UI reads
-> from engine ✅ typecheck; needs in-app smoke test). Remaining: 3–10.
-> Engine endpoints are verified against live models; renderer wiring is typecheck-
-> only and keeps OpenCode as a fallback, so nothing is broken during transition.
+> **Progress:** Phase 0 (discovery + boot reconciliation ✅), Phase 1 (session
+> lifecycle incl. summarize + revert/unrevert w/ file rollback ✅), Phase 2
+> (providers/config UI ✅), Phase 3 (once/always/reject permissions + persisted
+> allow-list ✅), Phase 4 (plan mode, hard-enforced read-only + agent selection ✅;
+> file attachments deferred). Remaining: 4-attachments, 5–10.
+> Engine features are verified against live models each phase; renderer wiring is
+> typecheck-only and keeps OpenCode as a fallback, so nothing breaks in transition.
+> Audit has already caught + fixed real bugs (redo-clear, revert-during-run,
+> orphan tool pairs, plan-mode enforcement).
 
 Goal: make the local **engine** (`packages/engine`, port 4200) the app's *only* backend, then
 delete OpenCode entirely (the `@opencode-ai/sdk` dependency, `opencode-manager`, the bundled
