@@ -4,7 +4,7 @@ import { nanoid } from "nanoid"
 import type { EngineEvent, ModelRef, PermissionRequest } from "./types.js"
 import { runAgentLoop } from "./agent.js"
 import { resolveApiKey } from "./auth.js"
-import { getProvider, getModel } from "./providers.js"
+import { getProvider, getModel, getAllProviders } from "./providers.js"
 import { trimHistory } from "./limits.js"
 import {
 	initDb,
@@ -17,6 +17,9 @@ import {
 } from "./sessions.js"
 
 const PORT = 4200
+
+// Zero-setup default: the free, keyless OpenCode Zen tier so chat works with no keys.
+const DEFAULT_MODEL = { provider: "opencode", model: "nemotron-3.5-lightning-free" }
 
 // Active SSE clients — broadcast all events to every connected client
 const sseClients = new Set<{ sessionId?: string; write: (event: EngineEvent) => void }>()
@@ -47,6 +50,42 @@ export async function startServer(): Promise<void> {
 
 	// ── Health ──────────────────────────────────────────────────────────
 	app.get("/health", async () => ({ ok: true, engine: "xot", version: "0.1.0" }))
+
+		app.get("/providers", async () => {
+			const providers = getAllProviders().map((p) => ({
+				id: p.id,
+				name: p.name,
+				type: p.type,
+				keyless: p.keyless ?? false,
+				connected: (p.keyless ?? false) || resolveApiKey(p.id) !== "",
+				models: p.models.map((m) => ({
+					id: m.id,
+					name: m.name,
+					contextWindow: m.contextWindow,
+					supportsVision: m.supportsVision ?? false,
+					supportsTools: m.supportsTools ?? false,
+				})),
+			}))
+			return { providers, default: DEFAULT_MODEL }
+		})
+
+		app.get("/models", async () => {
+			const models = getAllProviders().flatMap((p) =>
+				p.models.map((m) => ({
+					provider: p.id,
+					providerName: p.name,
+					id: m.id,
+					name: m.name,
+					contextWindow: m.contextWindow,
+					supportsVision: m.supportsVision ?? false,
+					supportsTools: m.supportsTools ?? false,
+					connected: (p.keyless ?? false) || resolveApiKey(p.id) !== "",
+				})),
+			)
+			return { models, default: DEFAULT_MODEL }
+		})
+
+		app.get("/config", async () => ({ default: DEFAULT_MODEL }))
 
 	// ── SSE event stream ─────────────────────────────────────────────────
 	app.get("/events", (req, reply) => {
@@ -118,7 +157,7 @@ export async function startServer(): Promise<void> {
 		// Resolve model — provider/model from the request, key looked up from
 		// the request, OpenCode's auth store, or the provider env var. Falls back
 		// to the free, keyless OpenCode Zen tier so chat works with no setup.
-		const requested = model ?? { provider: "opencode", model: "nemotron-3.5-lightning-free", apiKey: "" }
+		const requested = model ?? { ...DEFAULT_MODEL, apiKey: "" }
 		const provider = getProvider(requested.provider)
 		const apiKey = resolveApiKey(requested.provider, requested.apiKey)
 
