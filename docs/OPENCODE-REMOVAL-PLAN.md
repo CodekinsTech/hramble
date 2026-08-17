@@ -17,14 +17,24 @@
 > task, remember. Full engine integration smoke-tested (all endpoints 200,
 > end-to-end edit + diff, no errors).
 >
-> **Not yet done (need the running desktop app to build+verify — not doable
-> headlessly, so NOT attempted blind):** browser/artifact/preview panes (need the
-> app's browser bridge), OS notifications, background tasks + schedule + monitor
-> (need persistent UI), worktrees, the automation runner + tray rewire (Phase 7),
-> onboarding decouple (Phase 8), the final OpenCode deletion (Phase 9), and
-> rebrand (Phase 10). WebSearch needs a search API key. These are the remaining
-> real work — the engine core + coding toolset is now Claude-Code-shaped and
-> verified; the shell integration + teardown is what's left.
+> **Also done (engine-side, headless, verified):** Claude-style permission modes
+> (plan/manual/accept-edits/auto/bypass — reads never prompt, external writes do),
+> git-on-PATH robustness (engine + OpenCode spawn), project-instructions ingestion
+> (CLAUDE.md/AGENTS.md — verified a model followed an injected rule end-to-end),
+> token usage tracking, NotebookEdit tool, skills system (SKILL.md discovery + load).
+> Engine tools: bash, read, write, edit, multiedit, notebookedit, glob, grep,
+> todowrite, webfetch, task, remember, skill. All endpoints smoke-tested together.
+>
+> **Also fixed:** CORS preflight (renderer can reach the engine); the app is on
+> the working OpenCode path via `ENGINE_UI_ENABLED=false` (renderer engine routing
+> was half-integrated and broke the app — gated off until the full cutover).
+>
+> **Not yet done (need the running desktop app to build+verify — NOT attempted
+> blind):** THE UI CUTOVER (engine drives discovery + session list + prompts
+> together — flip ENGINE_UI_ENABLED and wire live), then browser/artifact/preview
+> panes, OS notifications, background tasks + schedule + monitor, worktrees, the
+> automation runner + tray (Phase 7), onboarding decouple (Phase 8), the final
+> OpenCode deletion (Phase 9), rebrand (Phase 10). WebSearch needs a search key.
 
 Goal: make the local **engine** (`packages/engine`, port 4200) the app's *only* backend, then
 delete OpenCode entirely (the `@opencode-ai/sdk` dependency, `opencode-manager`, the bundled
