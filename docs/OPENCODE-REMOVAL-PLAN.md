@@ -10,11 +10,21 @@
 > Audit has already caught + fixed real bugs (redo-clear, revert-during-run,
 > orphan tool pairs, plan-mode enforcement).
 >
-> **Phase 5 in progress** (rebuilding capabilities Claude-Code-style):
-> 5.1 TodoWrite ✅, 5.2 WebFetch ✅. Remaining 5.x: subagents/Task (workflow +
-> tasks plugins), memory (scoped/opt-in this time), skills, browser/artifact/
-> preview, schedule/monitor, notify/messages/notebook, repomap, plus WebSearch.
-> Engine tool set now: bash, read, write, edit, glob, grep, todowrite, webfetch.
+> **Phase 5 (rebuild Claude-Code-style), done + verified:** 5.1 TodoWrite ✅,
+> 5.2 WebFetch ✅, 5.3 Task/subagent (read-only research) ✅, 5.4 project-scoped
+> memory (leak-safe) ✅. **Phase 6 (partial):** /find + per-session diff ✅.
+> Engine tool set now: bash, read, write, edit, glob, grep, todowrite, webfetch,
+> task, remember. Full engine integration smoke-tested (all endpoints 200,
+> end-to-end edit + diff, no errors).
+>
+> **Not yet done (need the running desktop app to build+verify — not doable
+> headlessly, so NOT attempted blind):** browser/artifact/preview panes (need the
+> app's browser bridge), OS notifications, background tasks + schedule + monitor
+> (need persistent UI), worktrees, the automation runner + tray rewire (Phase 7),
+> onboarding decouple (Phase 8), the final OpenCode deletion (Phase 9), and
+> rebrand (Phase 10). WebSearch needs a search API key. These are the remaining
+> real work — the engine core + coding toolset is now Claude-Code-shaped and
+> verified; the shell integration + teardown is what's left.
 
 Goal: make the local **engine** (`packages/engine`, port 4200) the app's *only* backend, then
 delete OpenCode entirely (the `@opencode-ai/sdk` dependency, `opencode-manager`, the bundled
