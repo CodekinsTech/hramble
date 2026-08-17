@@ -49,6 +49,12 @@ export interface Todo {
 /** How a user resolved a permission prompt. */
 export type PermissionResolution = "once" | "always" | "reject"
 
+/**
+ * Permission mode for a turn — the Claude-Code-style escalation.
+ * (plan is handled separately as a read-only agent mode.)
+ */
+export type PermissionMode = "manual" | "accept-edits" | "auto" | "bypass"
+
 export interface PermissionRequest {
 	id: string
 	sessionId: string

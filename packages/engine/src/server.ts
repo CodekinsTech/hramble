@@ -1,7 +1,7 @@
 import Fastify from "fastify"
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js"
 import { nanoid } from "nanoid"
-import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution } from "./types.js"
+import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode } from "./types.js"
 import { runAgentLoop } from "./agent.js"
 import { resolveApiKey } from "./auth.js"
 import { getProvider, getModel, getAllProviders } from "./providers.js"
@@ -289,12 +289,13 @@ export async function startServer(): Promise<void> {
 		const session = getSession(req.params.id)
 		if (!session) return reply.code(404).send({ error: "Session not found" })
 
-		const { text, model, agent, planMode, attachments } = req.body as {
+		const { text, model, agent, planMode, attachments, permissionMode } = req.body as {
 			text: string
 			model?: ModelRef
 			agent?: string
 			planMode?: boolean
 			attachments?: Attachment[]
+			permissionMode?: PermissionMode
 		}
 		if (!text?.trim()) return reply.code(400).send({ error: "text is required" })
 
@@ -360,6 +361,7 @@ export async function startServer(): Promise<void> {
 				model: resolvedModel,
 				signal: abortController.signal,
 				mode,
+				permissionMode: permissionMode ?? "auto",
 				emit: (event) => broadcast(event),
 				onPermissionRequest,
 			})

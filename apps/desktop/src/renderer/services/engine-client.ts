@@ -153,6 +153,7 @@ export async function sendEnginePrompt(
 	opts?: {
 		agent?: string
 		planMode?: boolean
+		permissionMode?: "manual" | "accept-edits" | "auto" | "bypass"
 		attachments?: Array<{ filename?: string; mime?: string; url?: string }>
 	},
 ): Promise<{ ok: boolean; sessionId: string }> {
@@ -163,6 +164,7 @@ export async function sendEnginePrompt(
 			model,
 			agent: opts?.agent,
 			planMode: opts?.planMode,
+			permissionMode: opts?.permissionMode,
 			attachments: opts?.attachments,
 		}),
 	})

@@ -17,6 +17,7 @@ import type {
 } from "../lib/types"
 import { getProjectClient } from "../services/connection-manager"
 import { engineConnectedAtom } from "../atoms/engine"
+import { chatModeAtom } from "../atoms/chat-mode"
 import {
 	createEngineSession,
 	sendEnginePrompt,
@@ -297,9 +298,16 @@ export function useAgentActions() {
 				const engineAttachments = parts
 					.filter((p): p is FilePartInput => p.type === "file")
 					.map((p) => ({ filename: p.filename, mime: p.mime, url: p.url }))
+				// Map the chat-mode selector to the engine: plan -> read-only agent,
+				// the other four -> permission mode.
+				const chatMode = appStore.get(chatModeAtom)
+				const enginePlan = chatMode === "plan" || options?.planMode
+				const enginePermMode =
+					chatMode === "plan" ? "auto" : (chatMode as "manual" | "accept-edits" | "auto" | "bypass")
 				await sendEnginePrompt(sessionId, promptText || text, engineModel, {
-					agent: options?.agent,
-					planMode: options?.planMode,
+					agent: enginePlan ? "plan" : options?.agent,
+					planMode: enginePlan,
+					permissionMode: enginePermMode,
 					attachments: engineAttachments.length ? engineAttachments : undefined,
 				})
 				return

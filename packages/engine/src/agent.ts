@@ -3,7 +3,7 @@ import type { MessageParam, Tool } from "@anthropic-ai/sdk/resources/messages.js
 import OpenAI from "openai"
 import { nanoid } from "nanoid"
 import { buildSystemPrompt } from "./system-prompt.js"
-import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution } from "./types.js"
+import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode } from "./types.js"
 import { runBash, bashToolDefinition } from "./tools/bash.js"
 import { readFile, readToolDefinition } from "./tools/read.js"
 import { writeFile, writeToolDefinition } from "./tools/write.js"
@@ -71,11 +71,13 @@ interface RunOptions {
 	signal: AbortSignal
 	onPermissionRequest: (req: PermissionRequest) => Promise<PermissionResolution>
 	mode?: AgentMode
+	permissionMode?: PermissionMode
 }
 
 export async function runAgentLoop(options: RunOptions): Promise<void> {
 	const { sessionId, directory, model, emit, signal, onPermissionRequest } = options
 	const mode: AgentMode = options.mode ?? "build"
+	const permissionMode: PermissionMode = options.permissionMode ?? "auto"
 	const messages: MessageParam[] = [...options.messages]
 
 	const provider = getProvider(model.provider)
@@ -170,7 +172,7 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 				continue
 			}
 
-			const perm = checkPermission(tc.name, input, directory)
+			const perm = checkPermission(tc.name, input, directory, permissionMode)
 			if (perm.needs) {
 				const key = permissionKey(tc.name, input, directory)
 				// Skip the prompt if the user previously chose "always allow" here.
