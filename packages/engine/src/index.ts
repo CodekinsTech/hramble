@@ -1,5 +1,9 @@
 import { startServer, stopServer } from "./server.js"
 import { closeDb } from "./sessions.js"
+import { ensureToolsOnPath } from "./path-setup.js"
+
+// Guarantee git + core tools are on PATH before we run any bash command.
+ensureToolsOnPath()
 
 startServer().catch((err) => {
 	console.error("[xot-engine] failed to start:", err)
