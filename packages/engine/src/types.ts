@@ -39,6 +39,9 @@ export interface ToolCall {
 	input: Record<string, unknown>
 }
 
+/** How a user resolved a permission prompt. */
+export type PermissionResolution = "once" | "always" | "reject"
+
 export interface PermissionRequest {
 	id: string
 	sessionId: string
@@ -46,7 +49,7 @@ export interface PermissionRequest {
 	input: Record<string, unknown>
 	description: string
 	resolvedAt?: number
-	resolution?: "allow" | "deny"
+	resolution?: PermissionResolution
 }
 
 // SSE event types streamed to the UI
@@ -64,4 +67,4 @@ export type EngineEvent =
 	| { type: "tool.start"; toolCallId: string; sessionId: string; tool: string; input: Record<string, unknown> }
 	| { type: "tool.result"; toolCallId: string; sessionId: string; output: string; isError: boolean }
 	| { type: "permission.request"; permissionId: string; sessionId: string; tool: string; input: Record<string, unknown>; description: string }
-	| { type: "permission.resolved"; permissionId: string; resolution: "allow" | "deny" }
+	| { type: "permission.resolved"; permissionId: string; resolution: PermissionResolution }

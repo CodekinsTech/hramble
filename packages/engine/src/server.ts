@@ -1,7 +1,7 @@
 import Fastify from "fastify"
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js"
 import { nanoid } from "nanoid"
-import type { EngineEvent, ModelRef, PermissionRequest } from "./types.js"
+import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution } from "./types.js"
 import { runAgentLoop } from "./agent.js"
 import { resolveApiKey } from "./auth.js"
 import { getProvider, getModel, getAllProviders } from "./providers.js"
@@ -24,7 +24,7 @@ import {
 } from "./sessions.js"
 import { summarizeConversation } from "./summarize.js"
 
-const PORT = 4200
+const PORT = Number(process.env.ENGINE_PORT) || 4200
 
 // Zero-setup default: the free, keyless OpenCode Zen tier so chat works with no keys.
 const DEFAULT_MODEL = { provider: "opencode", model: "nemotron-3.5-lightning-free" }
@@ -38,7 +38,7 @@ const activeAgents = new Map<string, AbortController>()
 // Pending permission requests — keyed by permissionId
 const pendingPermissions = new Map<
 	string,
-	{ resolve: (resolution: "allow" | "deny") => void }
+	{ resolve: (resolution: PermissionResolution) => void }
 >()
 
 function broadcast(event: EngineEvent): void {
@@ -311,13 +311,13 @@ export async function startServer(): Promise<void> {
 				broadcast(event)
 			},
 			onPermissionRequest: async (req: PermissionRequest) => {
-				return new Promise<"allow" | "deny">((resolve) => {
+				return new Promise<PermissionResolution>((resolve) => {
 					pendingPermissions.set(req.id, { resolve })
-					// Auto-deny after 5 minutes if no response
+					// Auto-reject after 5 minutes if no response
 					setTimeout(() => {
 						if (pendingPermissions.has(req.id)) {
 							pendingPermissions.delete(req.id)
-							resolve("deny")
+							resolve("reject")
 						}
 					}, 5 * 60 * 1000)
 				})
@@ -355,8 +355,9 @@ export async function startServer(): Promise<void> {
 	app.post<{ Params: { id: string } }>("/permissions/:id/allow", async (req, reply) => {
 		const pending = pendingPermissions.get(req.params.id)
 		if (!pending) return reply.code(404).send({ error: "Permission request not found or already resolved" })
+		const { always } = (req.body ?? {}) as { always?: boolean }
 		pendingPermissions.delete(req.params.id)
-		pending.resolve("allow")
+		pending.resolve(always ? "always" : "once")
 		return { ok: true }
 	})
 
@@ -364,7 +365,7 @@ export async function startServer(): Promise<void> {
 		const pending = pendingPermissions.get(req.params.id)
 		if (!pending) return reply.code(404).send({ error: "Permission request not found or already resolved" })
 		pendingPermissions.delete(req.params.id)
-		pending.resolve("deny")
+		pending.resolve("reject")
 		return { ok: true }
 	})
 

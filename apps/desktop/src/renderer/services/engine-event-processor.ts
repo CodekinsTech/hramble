@@ -39,7 +39,7 @@ type EngineEvent =
 	| { type: "tool.start"; toolCallId: string; sessionId: string; tool: string; input: Record<string, unknown> }
 	| { type: "tool.result"; toolCallId: string; sessionId: string; output: string; isError: boolean }
 	| { type: "permission.request"; permissionId: string; sessionId: string; tool: string; input: Record<string, unknown>; description: string }
-	| { type: "permission.resolved"; permissionId: string; resolution: "allow" | "deny" }
+	| { type: "permission.resolved"; permissionId: string; resolution: "once" | "always" | "reject" }
 
 /** Tracks the current assistant message ID per session (for attaching tool parts). */
 const currentMessageBySession = new Map<string, string>()

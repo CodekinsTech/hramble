@@ -45,3 +45,21 @@ export function checkPermission(
 
 	return { needs: false, description: "" }
 }
+
+/**
+ * A stable key identifying "this kind of action" for the persisted allow-list.
+ * "Always allow" remembers this key so future matching calls skip the prompt:
+ *   - bash  → the binary invoked (e.g. `bash:npm`), not the full command
+ *   - file  → the parent directory being touched (e.g. `write:/abs/dir`)
+ */
+export function permissionKey(tool: string, input: Record<string, unknown>, directory: string): string {
+	if (tool === "bash") {
+		const bin = String(input.command ?? "").trim().split(/\s+/)[0] ?? ""
+		return `bash:${bin}`
+	}
+	if (tool === "write" || tool === "edit" || tool === "read") {
+		const resolved = path.resolve(directory, String(input.filePath ?? ""))
+		return `${tool}:${path.dirname(resolved)}`
+	}
+	return tool
+}

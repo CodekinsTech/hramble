@@ -3,7 +3,7 @@ import type { MessageParam, Tool } from "@anthropic-ai/sdk/resources/messages.js
 import OpenAI from "openai"
 import { nanoid } from "nanoid"
 import { buildSystemPrompt } from "./system-prompt.js"
-import type { EngineEvent, ModelRef, PermissionRequest } from "./types.js"
+import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution } from "./types.js"
 import { runBash, bashToolDefinition } from "./tools/bash.js"
 import { readFile, readToolDefinition } from "./tools/read.js"
 import { writeFile, writeToolDefinition } from "./tools/write.js"
@@ -14,7 +14,8 @@ import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
 import { addMessage, recordSnapshot } from "./sessions.js"
-import { checkPermission } from "./permissions.js"
+import { checkPermission, permissionKey } from "./permissions.js"
+import { matchesPermissionRule, addPermissionRule } from "./sessions.js"
 import { resolveMaxOutputTokens } from "./limits.js"
 import { getModel } from "./providers.js"
 import { isTransientError, backoffDelay, sleep, MAX_RETRIES } from "./retry.js"
@@ -48,7 +49,7 @@ interface RunOptions {
 	model: ModelRef
 	emit: EventEmitter
 	signal: AbortSignal
-	onPermissionRequest: (req: PermissionRequest) => Promise<"allow" | "deny">
+	onPermissionRequest: (req: PermissionRequest) => Promise<PermissionResolution>
 }
 
 export async function runAgentLoop(options: RunOptions): Promise<void> {
@@ -140,22 +141,27 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 
 			const perm = checkPermission(tc.name, input, directory)
 			if (perm.needs) {
-				const permissionId = nanoid()
-				const req: PermissionRequest = {
-					id: permissionId,
-					sessionId,
-					tool: tc.name,
-					input,
-					description: perm.description,
-				}
-				emit({ type: "permission.request", permissionId, sessionId, tool: tc.name, input, description: perm.description })
-				const resolution = await onPermissionRequest(req)
-				emit({ type: "permission.resolved", permissionId, resolution })
+				const key = permissionKey(tc.name, input, directory)
+				// Skip the prompt if the user previously chose "always allow" here.
+				if (!matchesPermissionRule(directory, key)) {
+					const permissionId = nanoid()
+					const req: PermissionRequest = {
+						id: permissionId,
+						sessionId,
+						tool: tc.name,
+						input,
+						description: perm.description,
+					}
+					emit({ type: "permission.request", permissionId, sessionId, tool: tc.name, input, description: perm.description })
+					const resolution = await onPermissionRequest(req)
+					emit({ type: "permission.resolved", permissionId, resolution })
 
-				if (resolution === "deny") {
-					emit({ type: "tool.result", toolCallId: tc.id, sessionId, output: "Permission denied by user.", isError: true })
-					toolResults.push({ type: "tool_result", tool_use_id: tc.id, content: "Permission denied by user.", is_error: true })
-					continue
+					if (resolution === "reject") {
+						emit({ type: "tool.result", toolCallId: tc.id, sessionId, output: "Permission denied by user.", isError: true })
+						toolResults.push({ type: "tool_result", tool_use_id: tc.id, content: "Permission denied by user.", is_error: true })
+						continue
+					}
+					if (resolution === "always") addPermissionRule(directory, key)
 				}
 			}
 

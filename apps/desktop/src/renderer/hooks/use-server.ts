@@ -567,7 +567,7 @@ export function useAgentActions() {
 					if (response === "reject") {
 						await denyEnginePermission(permissionId)
 					} else {
-						await allowEnginePermission(permissionId)
+						await allowEnginePermission(permissionId, response === "always")
 					}
 					return
 				}

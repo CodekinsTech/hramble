@@ -161,8 +161,14 @@ export async function abortEngineSession(sessionId: string): Promise<{ ok: boole
 	return request(`/sessions/${sessionId}/abort`, { method: "POST" })
 }
 
-export async function allowEnginePermission(permissionId: string): Promise<{ ok: boolean }> {
-	return request(`/permissions/${permissionId}/allow`, { method: "POST" })
+export async function allowEnginePermission(
+	permissionId: string,
+	always = false,
+): Promise<{ ok: boolean }> {
+	return request(`/permissions/${permissionId}/allow`, {
+		method: "POST",
+		body: JSON.stringify({ always }),
+	})
 }
 
 export async function denyEnginePermission(permissionId: string): Promise<{ ok: boolean }> {

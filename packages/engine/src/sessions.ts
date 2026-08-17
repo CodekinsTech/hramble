@@ -4,7 +4,7 @@ import os from "node:os"
 import { nanoid } from "nanoid"
 import type { Session, Message, ContentBlock } from "./types.js"
 
-const DATA_DIR = path.join(os.homedir(), ".local", "share", "hramble", "engine")
+const DATA_DIR = process.env.ENGINE_DATA_DIR || path.join(os.homedir(), ".local", "share", "hramble", "engine")
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
 const MESSAGES_FILE = path.join(DATA_DIR, "messages.json")
 
@@ -31,9 +31,11 @@ interface Store {
 	// File snapshots per session (undo history) and a redo stack for unrevert.
 	checkpoints: Record<string, FileSnapshot[]>
 	redo: Record<string, RevertBatch[]>
+	// "Always allow" rules, keyed by project directory -> permission keys.
+	permissionRules: Record<string, string[]>
 }
 
-let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {} }
+let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {} }
 
 export function initDb(): void {
 	fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -43,8 +45,9 @@ export function initDb(): void {
 			if (!store.messages) store.messages = {}
 			if (!store.checkpoints) store.checkpoints = {}
 			if (!store.redo) store.redo = {}
+			if (!store.permissionRules) store.permissionRules = {}
 		} catch {
-			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {} }
+			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {} }
 		}
 	}
 	// Boot reconciliation: a restart orphans any session left "running" (its
@@ -288,6 +291,20 @@ export function unrevertSession(sessionId: string): { restored: number } | null 
 	if (session) session.updatedAt = Date.now()
 	persist()
 	return { restored: batch.messages.length }
+}
+
+/** True if the user previously chose "always allow" for this action in this project. */
+export function matchesPermissionRule(directory: string, key: string): boolean {
+	return store.permissionRules[directory]?.includes(key) ?? false
+}
+
+/** Remember an "always allow" decision for this project + action. */
+export function addPermissionRule(directory: string, key: string): void {
+	if (!store.permissionRules[directory]) store.permissionRules[directory] = []
+	if (!store.permissionRules[directory].includes(key)) {
+		store.permissionRules[directory].push(key)
+		persist()
+	}
 }
 
 export function closeDb(): void {
