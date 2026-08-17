@@ -1,3 +1,4 @@
+import path from "node:path"
 import Fastify from "fastify"
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js"
 import { nanoid } from "nanoid"
@@ -43,8 +44,48 @@ const activeAgents = new Map<string, AbortController>()
 // Pending permission requests — keyed by permissionId
 const pendingPermissions = new Map<
 	string,
-	{ resolve: (resolution: PermissionResolution) => void }
+	{ resolve: (resolution: PermissionResolution) => void; timer: NodeJS.Timeout; sessionId: string }
 >()
+
+/** True if `directory` is (or is inside) a project the engine already tracks. */
+function isKnownProjectDir(directory: string): boolean {
+	const target = path.resolve(directory)
+	for (const s of listSessions()) {
+		const dir = path.resolve(s.directory)
+		if (target === dir || target.startsWith(dir + path.sep)) return true
+	}
+	return false
+}
+
+/** True for the desktop renderer / local origins; false for real remote sites. */
+function isLocalOrigin(origin: string): boolean {
+	if (origin === "null") return true // sandboxed/file pages report a null origin
+	try {
+		const u = new URL(origin)
+		if (u.protocol === "file:" || u.protocol === "app:" || u.protocol === "tauri:") return true
+		const h = u.hostname
+		return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]" || h.endsWith(".localhost")
+	} catch {
+		return false
+	}
+}
+
+/** Resolve + clean up a pending permission (clears its auto-reject timer). */
+function settlePermission(permissionId: string, resolution: PermissionResolution): boolean {
+	const pending = pendingPermissions.get(permissionId)
+	if (!pending) return false
+	clearTimeout(pending.timer)
+	pendingPermissions.delete(permissionId)
+	pending.resolve(resolution)
+	return true
+}
+
+/** Reject every pending permission for a session (e.g. on abort/delete). */
+function rejectSessionPermissions(sessionId: string): void {
+	for (const [id, p] of pendingPermissions) {
+		if (p.sessionId === sessionId) settlePermission(id, "reject")
+	}
+}
 
 function broadcast(event: EngineEvent): void {
 	for (const client of sseClients) {
@@ -106,6 +147,11 @@ export async function startServer(): Promise<void> {
 		app.get("/find", async (req, reply) => {
 			const { directory, query } = req.query as { directory?: string; query?: string }
 			if (!directory) return reply.code(400).send({ error: "directory is required" })
+			// Only search directories the engine already knows as projects — never an
+			// arbitrary path like C:\ (info-disclosure + whole-disk-glob DoS).
+			if (!isKnownProjectDir(directory)) {
+				return reply.code(403).send({ error: "directory is not an open project" })
+			}
 			const q = (query ?? "").trim().toLowerCase()
 			const result = await globFiles({ pattern: "**/*" }, directory)
 			if (result.startsWith("No files")) return { files: [] }
@@ -198,6 +244,7 @@ export async function startServer(): Promise<void> {
 		if (active) {
 			active.abort()
 			activeAgents.delete(req.params.id)
+			rejectSessionPermissions(req.params.id)
 		}
 		if (!deleteSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
 		broadcast({ type: "session.deleted", sessionId: req.params.id })
@@ -348,14 +395,9 @@ export async function startServer(): Promise<void> {
 
 		const onPermissionRequest = async (req: PermissionRequest) =>
 			new Promise<PermissionResolution>((resolve) => {
-				pendingPermissions.set(req.id, { resolve })
-				// Auto-reject after 5 minutes if no response
-				setTimeout(() => {
-					if (pendingPermissions.has(req.id)) {
-						pendingPermissions.delete(req.id)
-						resolve("reject")
-					}
-				}, 5 * 60 * 1000)
+				// Auto-reject after 5 minutes if no response (timer cleared on resolve).
+				const timer = setTimeout(() => settlePermission(req.id, "reject"), 5 * 60 * 1000)
+				pendingPermissions.set(req.id, { resolve, timer, sessionId: session.id })
 			})
 
 		// Run one agent phase over the current stored transcript.
@@ -411,6 +453,7 @@ export async function startServer(): Promise<void> {
 		if (!controller) return reply.code(404).send({ error: "No active agent for this session" })
 		controller.abort()
 		activeAgents.delete(req.params.id)
+		rejectSessionPermissions(req.params.id)
 		updateSessionStatus(req.params.id, "idle")
 		broadcast({ type: "session.idle", sessionId: req.params.id })
 		return { ok: true }
@@ -418,26 +461,33 @@ export async function startServer(): Promise<void> {
 
 	// ── Permissions ──────────────────────────────────────────────────────
 	app.post<{ Params: { id: string } }>("/permissions/:id/allow", async (req, reply) => {
-		const pending = pendingPermissions.get(req.params.id)
-		if (!pending) return reply.code(404).send({ error: "Permission request not found or already resolved" })
 		const { always } = (req.body ?? {}) as { always?: boolean }
-		pendingPermissions.delete(req.params.id)
-		pending.resolve(always ? "always" : "once")
+		if (!settlePermission(req.params.id, always ? "always" : "once")) {
+			return reply.code(404).send({ error: "Permission request not found or already resolved" })
+		}
 		return { ok: true }
 	})
 
 	app.post<{ Params: { id: string } }>("/permissions/:id/deny", async (req, reply) => {
-		const pending = pendingPermissions.get(req.params.id)
-		if (!pending) return reply.code(404).send({ error: "Permission request not found or already resolved" })
-		pendingPermissions.delete(req.params.id)
-		pending.resolve("reject")
+		if (!settlePermission(req.params.id, "reject")) {
+			return reply.code(404).send({ error: "Permission request not found or already resolved" })
+		}
 		return { ok: true }
 	})
 
 	// ── CORS ─────────────────────────────────────────────────────────────
 	const CORS_METHODS = "GET,POST,PATCH,DELETE,OPTIONS"
-	app.addHook("onSend", async (_req, reply) => {
-		reply.header("Access-Control-Allow-Origin", "*")
+	app.addHook("onRequest", async (req, reply) => {
+		// Drive-by RCE guard: reject real remote origins; allow local/app origins
+		// and origin-less clients (native fetch, curl).
+		const origin = req.headers.origin
+		if (origin && !isLocalOrigin(origin)) {
+			await reply.code(403).send({ error: "Forbidden: cross-origin requests are not allowed" })
+		}
+	})
+	app.addHook("onSend", async (req, reply) => {
+		reply.header("Access-Control-Allow-Origin", req.headers.origin ?? "*")
+		reply.header("Vary", "Origin")
 		reply.header("Access-Control-Allow-Methods", CORS_METHODS)
 		reply.header("Access-Control-Allow-Headers", "Content-Type,Authorization")
 		reply.header("Access-Control-Allow-Private-Network", "true")
