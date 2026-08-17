@@ -68,6 +68,12 @@ export function checkPermission(
 		return proceed
 	}
 
+	// MCP tools reach external servers — confirm unless the user is on auto/bypass.
+	if (tool.startsWith("mcp__")) {
+		if (mode === "manual" || mode === "accept-edits") return { needs: true, description: `Run MCP tool: ${tool}` }
+		return proceed
+	}
+
 	return proceed
 }
 

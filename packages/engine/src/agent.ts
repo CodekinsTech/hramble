@@ -17,6 +17,7 @@ import { webFetch, webFetchToolDefinition } from "./tools/webfetch.js"
 import { taskToolDefinition, type TaskInput } from "./tools/task.js"
 import { rememberToolDefinition, appendMemory } from "./tools/memory.js"
 import { skillToolDefinition, readSkill, type SkillInput } from "./skills.js"
+import { getMcpTools, isMcpTool, callMcpTool } from "./mcp.js"
 import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
@@ -92,6 +93,11 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 	const provider = getProvider(model.provider)
 	const useAnthropic = !provider || provider.type === "anthropic"
 
+	// Combine built-in tools with this project's MCP-server tools. MCP tools are
+	// only offered in build mode (plan stays read-only, local-only).
+	const mcpTools = mode === "plan" ? [] : await getMcpTools(directory)
+	const activeTools: Tool[] = mode === "plan" ? PLAN_TOOLS : [...TOOLS, ...mcpTools]
+
 	const MAX_ITERATIONS = 50
 	let iterations = 0
 
@@ -121,9 +127,9 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 			}
 			try {
 				if (useAnthropic) {
-					;({ fullText, usage: turnUsage } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
+					;({ fullText, usage: turnUsage } = await runAnthropicTurn(model, messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode, activeTools))
 				} else {
-					;({ fullText, usage: turnUsage } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode))
+					;({ fullText, usage: turnUsage } = await runOpenAICompatTurn(model, provider!.baseURL ?? "", messages, directory, attemptEmit, messageId, sessionId, toolCalls, signal, mode, activeTools))
 				}
 				break
 			} catch (err) {
@@ -276,6 +282,7 @@ async function runAnthropicTurn(
 	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
 	signal: AbortSignal,
 	mode: AgentMode = "build",
+	turnTools: Tool[] = TOOLS,
 ): Promise<TurnResult> {
 	const client = new Anthropic({ apiKey: model.apiKey })
 	const maxTokens = resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000)
@@ -285,7 +292,7 @@ async function runAnthropicTurn(
 			model: model.model,
 			max_tokens: maxTokens,
 			system: buildSystemPrompt(directory, mode),
-			tools: mode === "plan" ? PLAN_TOOLS : TOOLS,
+			tools: turnTools,
 			messages,
 		},
 		{ signal },
@@ -334,6 +341,7 @@ async function runOpenAICompatTurn(
 	toolCalls: Array<{ id: string; name: string; inputJson: string }>,
 	signal: AbortSignal,
 	mode: AgentMode = "build",
+	turnTools: Tool[] = TOOLS,
 ): Promise<TurnResult> {
 	// Keyless free tiers (e.g. OpenCode Zen "-free" models) 401 on a bogus
 	// bearer, so omit the Authorization header entirely when we have no key.
@@ -390,7 +398,10 @@ async function runOpenAICompatTurn(
 		{
 			model: model.model,
 			messages: [systemMessage, ...openaiMessages],
-			tools: mode === "plan" ? PLAN_OPENAI_TOOLS : OPENAI_TOOLS,
+			tools: turnTools.map((t) => ({
+				type: "function" as const,
+				function: { name: t.name, description: t.description, parameters: t.input_schema },
+			})),
 			tool_choice: "auto",
 			max_tokens: resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000),
 			stream: true,
@@ -439,6 +450,7 @@ async function runOpenAICompatTurn(
 // ── Tool execution ────────────────────────────────────────────────────────
 
 async function executeTool(name: string, input: Record<string, unknown>, directory: string): Promise<string> {
+	if (isMcpTool(name)) return callMcpTool(directory, name, input)
 	switch (name) {
 		case "bash": {
 			const result = await runBash(
