@@ -699,10 +699,26 @@ async function startEventLoop(
 let engineEventSource: EventSource | null = null
 
 /**
+ * Master switch for routing the UI to the xot engine.
+ *
+ * OFF for now: the engine is wired for prompts/sessions/permissions, but the
+ * session LIST and project discovery still come from OpenCode. With routing on,
+ * the app sent OpenCode session IDs to the engine (which doesn't have them),
+ * breaking sends on existing sessions. Until the engine is a COMPLETE backend
+ * (discovery + session list/load + prompts, all from the engine, verified with
+ * the app open), keep the UI on OpenCode. Flip to true to resume the cutover.
+ */
+const ENGINE_UI_ENABLED = false
+
+/**
  * Opens an SSE connection to the xot engine and processes events.
  * Safe to call multiple times — closes the previous stream first.
  */
 export function connectToEngine(): void {
+	if (!ENGINE_UI_ENABLED) {
+		appStore.set(engineConnectedAtom, false)
+		return
+	}
 	// Close any existing stream
 	if (engineEventSource) {
 		engineEventSource.close()
