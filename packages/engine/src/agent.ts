@@ -8,6 +8,7 @@ import { runBash, bashToolDefinition } from "./tools/bash.js"
 import { readFile, readToolDefinition } from "./tools/read.js"
 import { writeFile, writeToolDefinition } from "./tools/write.js"
 import { editFile, editToolDefinition } from "./tools/edit.js"
+import { multiEdit, multiEditToolDefinition, type MultiEditInput } from "./tools/multiedit.js"
 import { globFiles, globToolDefinition } from "./tools/glob.js"
 import { grepFiles, grepToolDefinition } from "./tools/grep.js"
 import { todoToolDefinition, normalizeTodos, type TodoWriteInput } from "./tools/todo.js"
@@ -30,6 +31,7 @@ const TOOLS: Tool[] = [
 	readToolDefinition,
 	writeToolDefinition,
 	editToolDefinition,
+	multiEditToolDefinition,
 	globToolDefinition,
 	grepToolDefinition,
 	todoToolDefinition,
@@ -196,7 +198,7 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 
 			// Snapshot files touched by write/edit so the turn can be reverted.
 			const snapshotPath =
-				(tc.name === "write" || tc.name === "edit") && typeof input.filePath === "string"
+				(tc.name === "write" || tc.name === "edit" || tc.name === "multiedit") && typeof input.filePath === "string"
 					? path.resolve(directory, input.filePath)
 					: null
 			const beforeContent = snapshotPath
@@ -424,6 +426,8 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 			return globFiles({ pattern: String(input.pattern ?? "**/*"), exclude: Array.isArray(input.exclude) ? (input.exclude as string[]) : undefined }, directory)
 		case "grep":
 			return grepFiles({ pattern: String(input.pattern ?? ""), path: input.path ? String(input.path) : undefined, glob: input.glob ? String(input.glob) : undefined, caseSensitive: Boolean(input.caseSensitive) }, directory)
+		case "multiedit":
+			return multiEdit(input as unknown as MultiEditInput, directory)
 		case "webfetch":
 			return webFetch({ url: String(input.url ?? "") })
 		case "remember":

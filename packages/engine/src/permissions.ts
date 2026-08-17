@@ -34,7 +34,7 @@ export function checkPermission(
 		return { needs: false, description: "" }
 	}
 
-	if (tool === "write" || tool === "edit" || tool === "read") {
+	if (tool === "write" || tool === "edit" || tool === "multiedit" || tool === "read") {
 		const filePath = String(input.filePath ?? "")
 		const resolved = path.resolve(directory, filePath)
 		if (!isInsideProject(directory, resolved)) {
@@ -57,7 +57,7 @@ export function permissionKey(tool: string, input: Record<string, unknown>, dire
 		const bin = String(input.command ?? "").trim().split(/\s+/)[0] ?? ""
 		return `bash:${bin}`
 	}
-	if (tool === "write" || tool === "edit" || tool === "read") {
+	if (tool === "write" || tool === "edit" || tool === "multiedit" || tool === "read") {
 		const resolved = path.resolve(directory, String(input.filePath ?? ""))
 		return `${tool}:${path.dirname(resolved)}`
 	}
