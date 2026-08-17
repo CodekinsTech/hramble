@@ -9,6 +9,12 @@
 > typecheck-only and keeps OpenCode as a fallback, so nothing breaks in transition.
 > Audit has already caught + fixed real bugs (redo-clear, revert-during-run,
 > orphan tool pairs, plan-mode enforcement).
+>
+> **Phase 5 in progress** (rebuilding capabilities Claude-Code-style):
+> 5.1 TodoWrite ✅, 5.2 WebFetch ✅. Remaining 5.x: subagents/Task (workflow +
+> tasks plugins), memory (scoped/opt-in this time), skills, browser/artifact/
+> preview, schedule/monitor, notify/messages/notebook, repomap, plus WebSearch.
+> Engine tool set now: bash, read, write, edit, glob, grep, todowrite, webfetch.
 
 Goal: make the local **engine** (`packages/engine`, port 4200) the app's *only* backend, then
 delete OpenCode entirely (the `@opencode-ai/sdk` dependency, `opencode-manager`, the bundled
