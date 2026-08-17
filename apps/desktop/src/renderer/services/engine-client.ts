@@ -114,6 +114,34 @@ export async function listEngineModels(): Promise<EngineModelInfo[]> {
 	return res.models
 }
 
+export interface EngineProviderInfo {
+	id: string
+	name: string
+	type: string
+	keyless: boolean
+	connected: boolean
+	models: Array<{
+		id: string
+		name: string
+		contextWindow: number
+		supportsVision: boolean
+		supportsTools: boolean
+	}>
+}
+
+export interface EngineProvidersResponse {
+	providers: EngineProviderInfo[]
+	default: { provider: string; model: string }
+}
+
+export async function listEngineProviders(): Promise<EngineProvidersResponse> {
+	return request("/providers")
+}
+
+export async function getEngineConfig(): Promise<{ default: { provider: string; model: string } }> {
+	return request("/config")
+}
+
 export async function getEngineSession(id: string): Promise<EngineSession & { messages: unknown[] }> {
 	return request(`/sessions/${id}`)
 }
