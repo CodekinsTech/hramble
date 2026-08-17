@@ -38,7 +38,15 @@ export async function summarizeConversation(model: ModelRef, messages: MessagePa
 	const provider = getProvider(model.provider)
 	const useAnthropic = !provider || provider.type === "anthropic"
 	const maxTokens = resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000)
-	const transcript = flatten(messages)
+	// Cap the transcript so a very long session can't overflow the summarizer's
+	// context. Budget ~3 chars/token against 60% of the window, keeping the tail
+	// (most recent, highest-signal) plus a truncation marker.
+	const window = getModel(model.provider, model.model)?.contextWindow ?? 128_000
+	const maxChars = Math.floor(window * 0.6) * 3
+	let transcript = flatten(messages)
+	if (transcript.length > maxChars) {
+		transcript = `[... earlier conversation truncated ...]\n${transcript.slice(transcript.length - maxChars)}`
+	}
 	const userPrompt = `${SUMMARY_INSTRUCTION}\n\n--- CONVERSATION ---\n${transcript}\n--- END ---`
 
 	if (useAnthropic) {

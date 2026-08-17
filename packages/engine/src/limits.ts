@@ -39,6 +39,41 @@ function estimateTokens(messages: MessageParam[]): number {
 	return Math.ceil(chars / 4)
 }
 
+/**
+ * Drop tool blocks that lost their partner — a tool_use with no matching
+ * tool_result, or a tool_result with no matching tool_use. Deleting a message
+ * (or any transcript edit) can orphan a pair, and the provider APIs reject an
+ * unmatched tool block. Messages left empty after filtering are removed.
+ */
+export function stripOrphanToolBlocks(messages: MessageParam[]): MessageParam[] {
+	const useIds = new Set<string>()
+	const resultIds = new Set<string>()
+	for (const m of messages) {
+		if (!Array.isArray(m.content)) continue
+		for (const b of m.content) {
+			if (typeof b !== "object" || b === null || !("type" in b)) continue
+			if (b.type === "tool_use") useIds.add((b as { id: string }).id)
+			else if (b.type === "tool_result") resultIds.add((b as { tool_use_id: string }).tool_use_id)
+		}
+	}
+
+	const out: MessageParam[] = []
+	for (const m of messages) {
+		if (!Array.isArray(m.content)) {
+			out.push(m)
+			continue
+		}
+		const kept = m.content.filter((b) => {
+			if (typeof b !== "object" || b === null || !("type" in b)) return true
+			if (b.type === "tool_use") return resultIds.has((b as { id: string }).id)
+			if (b.type === "tool_result") return useIds.has((b as { tool_use_id: string }).tool_use_id)
+			return true
+		})
+		if (kept.length > 0) out.push({ ...m, content: kept as MessageParam["content"] })
+	}
+	return out
+}
+
 function isOrphanToolResult(m: MessageParam): boolean {
 	return (
 		m.role === "user" &&
@@ -71,5 +106,7 @@ export function trimHistory(
 			trimmed.shift()
 		}
 	}
-	return trimmed
+	// Final safety net: remove any tool_use/tool_result left without a partner
+	// (e.g. by a deleted message) so the provider API never sees an orphan.
+	return stripOrphanToolBlocks(trimmed)
 }

@@ -194,6 +194,14 @@ export async function startServer(): Promise<void> {
 		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
 		const { messageId } = req.body as { messageId?: string }
 		if (!messageId) return reply.code(400).send({ error: "messageId is required" })
+		// Abort any in-flight run first — otherwise it keeps appending to the
+		// transcript we're about to rewind, corrupting the session.
+		const active = activeAgents.get(req.params.id)
+		if (active) {
+			active.abort()
+			activeAgents.delete(req.params.id)
+			updateSessionStatus(req.params.id, "idle")
+		}
 		const result = revertSession(req.params.id, messageId)
 		if (!result) return reply.code(404).send({ error: "Message not found" })
 		broadcast({ type: "session.reverted", sessionId: req.params.id })

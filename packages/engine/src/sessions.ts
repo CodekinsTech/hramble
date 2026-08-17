@@ -177,6 +177,8 @@ export function addMessage(
 	}
 	if (!store.messages[sessionId]) store.messages[sessionId] = []
 	store.messages[sessionId].push(message)
+	// Continuing the conversation invalidates any reverted branch (redo).
+	if (store.redo[sessionId]?.length) store.redo[sessionId] = []
 	persist()
 	return message
 }
