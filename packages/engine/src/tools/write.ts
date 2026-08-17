@@ -1,5 +1,5 @@
-import fs from "node:fs/promises"
 import path from "node:path"
+import { atomicWrite } from "../fsutil.js"
 
 export interface WriteInput {
 	filePath: string
@@ -8,8 +8,7 @@ export interface WriteInput {
 
 export async function writeFile(input: WriteInput, workingDir: string): Promise<string> {
 	const resolved = path.resolve(workingDir, input.filePath)
-	await fs.mkdir(path.dirname(resolved), { recursive: true })
-	await fs.writeFile(resolved, input.content, "utf-8")
+	await atomicWrite(resolved, input.content)
 	return `Written ${input.filePath}`
 }
 

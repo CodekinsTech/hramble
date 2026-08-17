@@ -6,21 +6,38 @@ import { truncateOutput } from "../limits.js"
 const execAsync = promisify(exec)
 
 const DANGEROUS_PATTERNS = [
-	/rm\s+-rf?\s/,
-	/rm\s+-fr?\s/,
-	/git\s+push.*--force/,
-	/git\s+reset\s+--hard/,
-	/git\s+clean\s+-f/,
+	// Unix destructive
+	/\brm\s+-[a-z]*r[a-z]*f|\brm\s+-[a-z]*f[a-z]*r|\brm\s+-r\b.*\s-f|\brm\s+-f\b.*\s-r/i, // rm with -r and -f in any order/spelling
+	/\brm\s+--recursive|\brm\s+--force/i,
+	/\bfind\b.*-delete/i,
+	/\bshred\b/i,
+	/\btruncate\s+-s\s*0/i,
+	/\bmkfs/i,
+	/\bdd\s+if=/i,
+	/>\s*\/dev\/(sd|nvme|disk|null)/i,
+	/:\(\)\s*\{.*\}\s*;/, // fork bomb :(){ :|:& };:
+	// Windows destructive (cmd.exe / powershell)
+	/\bdel\s+.*\/[sq]/i, // del /s /q ...
+	/\bdel\s+\/[sq]/i,
+	/\brd\s+.*\/s/i, // rd /s /q
+	/\brmdir\s+.*\/s/i,
+	/\bformat\s+[a-z]:/i,
+	/\bformat\s+\/|\bformat\s+[a-z]:/i,
+	/\bRemove-Item\b.*-Recurse.*-Force|-Force.*-Recurse/i, // PowerShell rm -rf
+	/\bri\s+.*-recurse.*-force/i,
+	/\bClear-Disk\b|\bClear-Content\b/i,
+	// VCS / DB / lifecycle (cross-platform)
+	/\bgit\s+push\b.*--force(?!-with-lease)/i,
+	/\bgit\s+reset\s+--hard/i,
+	/\bgit\s+clean\s+-[a-z]*f/i,
 	/DROP\s+TABLE/i,
 	/DROP\s+DATABASE/i,
 	/TRUNCATE\s+TABLE/i,
-	/mkfs/,
-	/dd\s+if=/,
-	/>\s*\/dev\//,
-	/shutdown/,
-	/reboot/,
-	/npm\s+publish/,
-	/yarn\s+publish/,
+	/\bshutdown\b/i,
+	/\breboot\b/i,
+	/\bnpm\s+publish/i,
+	/\byarn\s+publish/i,
+	/\bchmod\s+-R\s+777|\bchmod\s+777/i,
 ]
 
 export interface BashInput {

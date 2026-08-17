@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { atomicWrite } from "../fsutil.js"
 
 export interface NotebookEditInput {
 	filePath: string
@@ -53,7 +54,7 @@ export async function notebookEdit(input: NotebookEditInput, workingDir: string)
 	if (mode === "delete") {
 		if (idx < 0 || idx >= nb.cells.length) throw new Error(`Cell ${idx} out of range (0-${nb.cells.length - 1}).`)
 		nb.cells.splice(idx, 1)
-		await fs.writeFile(resolved, JSON.stringify(nb, null, 1), "utf-8")
+		await atomicWrite(resolved, JSON.stringify(nb, null, 1))
 		return `Deleted cell ${idx} from ${input.filePath}`
 	}
 
@@ -67,7 +68,7 @@ export async function notebookEdit(input: NotebookEditInput, workingDir: string)
 			...(cellType === "code" ? { outputs: [], execution_count: null } : {}),
 		}
 		nb.cells.splice(at, 0, cell)
-		await fs.writeFile(resolved, JSON.stringify(nb, null, 1), "utf-8")
+		await atomicWrite(resolved, JSON.stringify(nb, null, 1))
 		return `Inserted ${cellType} cell at ${at} in ${input.filePath}`
 	}
 
@@ -89,7 +90,7 @@ export async function notebookEdit(input: NotebookEditInput, workingDir: string)
 		cell.outputs = []
 		cell.execution_count = null
 	}
-	await fs.writeFile(resolved, JSON.stringify(nb, null, 1), "utf-8")
+	await atomicWrite(resolved, JSON.stringify(nb, null, 1))
 	return `Replaced cell ${idx} in ${input.filePath}`
 }
 

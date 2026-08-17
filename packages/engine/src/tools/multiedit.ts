@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { atomicWrite } from "../fsutil.js"
 
 export interface EditOp {
 	oldString: string
@@ -39,10 +40,16 @@ export async function multiEdit(input: MultiEditInput, workingDir: string): Prom
 		if (!replaceAll && occurrences > 1) {
 			throw new Error(`Edit ${i + 1}: ${occurrences} occurrences in ${input.filePath}. Add context or set replaceAll.`)
 		}
-		content = replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, newString)
+		// Literal replacement (String.replace would interpret $ sequences in newString).
+		if (replaceAll) {
+			content = content.split(oldString).join(newString)
+		} else {
+			const at = content.indexOf(oldString)
+			content = content.slice(0, at) + newString + content.slice(at + oldString.length)
+		}
 	}
 
-	await fs.writeFile(resolved, content, "utf-8")
+	await atomicWrite(resolved, content)
 	return `Applied ${edits.length} edit(s) to ${input.filePath}`
 }
 

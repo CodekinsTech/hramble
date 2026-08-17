@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { atomicWrite } from "../fsutil.js"
 
 export interface EditInput {
 	filePath: string
@@ -26,11 +27,14 @@ export async function editFile(input: EditInput, workingDir: string): Promise<st
 		)
 	}
 
+	// Literal replacement — String.replace would interpret $&, $1, $$ etc. in
+	// newString and silently corrupt the written text.
+	const idx = content.indexOf(input.oldString)
 	const updated = input.replaceAll
 		? content.split(input.oldString).join(input.newString)
-		: content.replace(input.oldString, input.newString)
+		: content.slice(0, idx) + input.newString + content.slice(idx + input.oldString.length)
 
-	await fs.writeFile(resolved, updated, "utf-8")
+	await atomicWrite(resolved, updated)
 	return `Edited ${input.filePath}`
 }
 

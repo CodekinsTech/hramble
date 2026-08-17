@@ -3,10 +3,14 @@ import path from "node:path"
 import os from "node:os"
 import { nanoid } from "nanoid"
 import type { Session, Message, ContentBlock, Todo, Usage } from "./types.js"
+import { atomicWriteSync } from "./fsutil.js"
 
 const DATA_DIR = process.env.ENGINE_DATA_DIR || path.join(os.homedir(), ".local", "share", "hramble", "engine")
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
-const MESSAGES_FILE = path.join(DATA_DIR, "messages.json")
+
+function emptyStore(): Store {
+	return { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {}, usage: {} }
+}
 
 /**
  * A file's content captured around an engine edit, so a revert can restore it.
@@ -39,21 +43,34 @@ interface Store {
 	usage: Record<string, Usage>
 }
 
-let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {}, usage: {} }
+let store: Store = emptyStore()
 
 export function initDb(): void {
 	fs.mkdirSync(DATA_DIR, { recursive: true })
 	if (fs.existsSync(SESSIONS_FILE)) {
 		try {
-			store = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8"))
-			if (!store.messages) store.messages = {}
-			if (!store.checkpoints) store.checkpoints = {}
-			if (!store.redo) store.redo = {}
-			if (!store.permissionRules) store.permissionRules = {}
-			if (!store.todos) store.todos = {}
-			if (!store.usage) store.usage = {}
-		} catch {
-			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {}, usage: {} }
+			const parsed = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8")) as Partial<Store>
+			// Backfill EVERY map (incl. sessions) so a valid-but-partial file can't
+			// throw downstream (Object.values(undefined)) and crash the engine.
+			store = {
+				sessions: parsed.sessions ?? {},
+				messages: parsed.messages ?? {},
+				checkpoints: parsed.checkpoints ?? {},
+				redo: parsed.redo ?? {},
+				permissionRules: parsed.permissionRules ?? {},
+				todos: parsed.todos ?? {},
+				usage: parsed.usage ?? {},
+			}
+		} catch (err) {
+			// Corrupt store — DON'T silently wipe. Preserve the bad file for recovery
+			// and start fresh, surfacing the loss loudly in the logs.
+			try {
+				fs.renameSync(SESSIONS_FILE, `${SESSIONS_FILE}.corrupt-${nanoid(6)}`)
+			} catch {
+				// ignore
+			}
+			console.error(`[xot-engine] sessions store was corrupt; backed it up and started fresh: ${err instanceof Error ? err.message : err}`)
+			store = emptyStore()
 		}
 	}
 	// Boot reconciliation: a restart orphans any session left "running" (its
@@ -70,7 +87,8 @@ export function initDb(): void {
 }
 
 function persist(): void {
-	fs.writeFileSync(SESSIONS_FILE, JSON.stringify(store, null, 2), "utf-8")
+	// Atomic (temp + rename) so a crash mid-write can't truncate/brick the store.
+	atomicWriteSync(SESSIONS_FILE, JSON.stringify(store))
 }
 
 export function createSession(title: string, directory: string): Session {
