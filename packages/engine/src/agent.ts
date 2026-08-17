@@ -4,7 +4,7 @@ import OpenAI from "openai"
 import { nanoid } from "nanoid"
 import { buildSystemPrompt } from "./system-prompt.js"
 import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode } from "./types.js"
-import { runBash, bashToolDefinition } from "./tools/bash.js"
+import { runBash, bashToolDefinition, isDangerous } from "./tools/bash.js"
 import { readFile, readToolDefinition } from "./tools/read.js"
 import { writeFile, writeToolDefinition } from "./tools/write.js"
 import { editFile, editToolDefinition } from "./tools/edit.js"
@@ -234,8 +234,12 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 			const perm = checkPermission(tc.name, input, directory, permissionMode)
 			if (perm.needs) {
 				const key = permissionKey(tc.name, input, directory)
-				// Skip the prompt if the user previously chose "always allow" here.
-				if (!matchesPermissionRule(directory, key)) {
+				// A destructive bash command ALWAYS prompts, even if an "always allow"
+				// rule matches its binary — so `git status; rm -rf ~` can't ride a
+				// `bash:git` rule past the destructive gate.
+				const dangerousBash = tc.name === "bash" && isDangerous(String(input.command ?? ""))
+				// Skip the prompt only if the user previously chose "always allow" here.
+				if (dangerousBash || !matchesPermissionRule(directory, key)) {
 					const permissionId = nanoid()
 					const req: PermissionRequest = { id: permissionId, sessionId, tool: tc.name, input, description: perm.description }
 					emit({ type: "permission.request", permissionId, sessionId, tool: tc.name, input, description: perm.description })
@@ -252,7 +256,7 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 						pushResult(tc.id, "Permission denied by user.", true)
 						continue
 					}
-					if (resolution === "always") addPermissionRule(directory, key)
+					if (resolution === "always" && !dangerousBash) addPermissionRule(directory, key)
 				}
 			}
 

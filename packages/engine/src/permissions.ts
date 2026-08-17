@@ -7,9 +7,10 @@ export interface PermissionCheck {
 	description: string
 }
 
-// Tools that only read or track state — low-risk, never prompt (Claude-style),
-// even for paths outside the project.
-const NEVER_PROMPT = new Set(["read", "grep", "glob", "task", "todowrite", "remember", "skill"])
+// Tools that only track state or search within the project — never prompt.
+// (read is handled specially below: in-project never prompts, out-of-project does,
+// so the agent can't silently read ~/.ssh and exfiltrate it.)
+const NEVER_PROMPT = new Set(["grep", "glob", "task", "todowrite", "remember", "skill"])
 
 /** True if `target` is the project dir itself or nested inside it. */
 export function isInsideProject(directory: string, target: string): boolean {
@@ -41,6 +42,15 @@ export function checkPermission(
 ): PermissionCheck {
 	if (mode === "bypass") return proceed
 	if (NEVER_PROMPT.has(tool)) return proceed
+
+	// Reads: free inside the project (Claude-style, no nag); confirm OUTSIDE it so
+	// the agent can't silently read secrets (~/.ssh, credentials) and exfiltrate.
+	// A user-attached file (UI) is injected separately and never hits this path.
+	if (tool === "read") {
+		const resolved = path.resolve(directory, String(input.filePath ?? ""))
+		if (isInsideProject(directory, resolved)) return proceed
+		return { needs: true, description: `Read file outside the project: ${resolved}` }
+	}
 
 	if (tool === "write" || tool === "edit" || tool === "multiedit" || tool === "notebookedit") {
 		const resolved = path.resolve(directory, String(input.filePath ?? ""))

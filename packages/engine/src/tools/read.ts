@@ -14,9 +14,24 @@ export interface ReadInput {
  * edits. Defaults to the first DEFAULT_READ_LINES lines; over-long lines are
  * clipped so one minified file can't blow up the context window.
  */
+const MAX_FILE_BYTES = 20 * 1024 * 1024 // don't slurp a multi-GB file into memory
+
 export async function readFile(input: ReadInput, workingDir: string): Promise<string> {
 	const resolved = path.resolve(workingDir, input.filePath)
-	const content = await fs.readFile(resolved, "utf-8")
+
+	const stat = await fs.stat(resolved)
+	if (stat.isDirectory()) return `${input.filePath} is a directory, not a file. Use glob or grep to list its contents.`
+	if (stat.size > MAX_FILE_BYTES) {
+		return `${input.filePath} is ${(stat.size / 1024 / 1024).toFixed(1)} MB — too large to read whole. Use grep to search it, or bash to inspect specific parts.`
+	}
+
+	const buf = await fs.readFile(resolved)
+	// Binary detection: a NUL byte in the first 8 KB reliably marks non-text.
+	const sample = buf.subarray(0, 8192)
+	if (sample.includes(0)) {
+		return `${input.filePath} appears to be a binary file (${stat.size} bytes) — not shown as text.`
+	}
+	const content = buf.toString("utf-8")
 	const allLines = content.split("\n")
 
 	const start = input.offset ?? 0

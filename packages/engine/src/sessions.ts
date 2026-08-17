@@ -157,6 +157,12 @@ export function deleteMessage(sessionId: string, messageId: string): boolean {
 	const next = list.filter((m) => m.id !== messageId)
 	if (next.length === list.length) return false
 	store.messages[sessionId] = next
+	// Drop the deleted message's file snapshots so they don't linger in the diff
+	// forever, and invalidate redo (its batch may reference the removed message).
+	if (store.checkpoints[sessionId]) {
+		store.checkpoints[sessionId] = store.checkpoints[sessionId].filter((s) => s.messageId !== messageId)
+	}
+	store.redo[sessionId] = []
 	const session = store.sessions[sessionId]
 	if (session) session.updatedAt = Date.now()
 	persist()
@@ -230,6 +236,10 @@ export function compactSession(sessionId: string, summary: string): Message | nu
 		createdAt: Date.now(),
 	}
 	store.messages[sessionId] = [message]
+	// The pre-compaction messages are gone, so their snapshots/redo are dead —
+	// clear them to avoid a leak and a stale diff/unrevert referencing vanished state.
+	store.checkpoints[sessionId] = []
+	store.redo[sessionId] = []
 	store.sessions[sessionId].updatedAt = Date.now()
 	persist()
 	return message
