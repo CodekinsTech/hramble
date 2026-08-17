@@ -10,12 +10,13 @@ import { writeFile, writeToolDefinition } from "./tools/write.js"
 import { editFile, editToolDefinition } from "./tools/edit.js"
 import { globFiles, globToolDefinition } from "./tools/glob.js"
 import { grepFiles, grepToolDefinition } from "./tools/grep.js"
+import { todoToolDefinition, normalizeTodos, type TodoWriteInput } from "./tools/todo.js"
 import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
 import { addMessage, recordSnapshot } from "./sessions.js"
 import { checkPermission, permissionKey } from "./permissions.js"
-import { matchesPermissionRule, addPermissionRule } from "./sessions.js"
+import { matchesPermissionRule, addPermissionRule, setTodos } from "./sessions.js"
 import { resolveMaxOutputTokens } from "./limits.js"
 import { getModel } from "./providers.js"
 import { isTransientError, backoffDelay, sleep, MAX_RETRIES } from "./retry.js"
@@ -28,6 +29,7 @@ const TOOLS: Tool[] = [
 	editToolDefinition,
 	globToolDefinition,
 	grepToolDefinition,
+	todoToolDefinition,
 ]
 
 // OpenAI-compat tool format (same schema, different wrapper)
@@ -41,7 +43,7 @@ const OPENAI_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = TOOLS.map((t)
 }))
 
 // Plan mode is read-only — the model can inspect the codebase but not change it.
-const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob"])
+const READ_ONLY_TOOL_NAMES = new Set(["read", "grep", "glob", "todowrite"])
 const PLAN_TOOLS: Tool[] = TOOLS.filter((t) => READ_ONLY_TOOL_NAMES.has(t.name))
 const PLAN_OPENAI_TOOLS = OPENAI_TOOLS.filter((t) => t.type === "function" && READ_ONLY_TOOL_NAMES.has(t.function.name))
 
@@ -197,10 +199,19 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 			let output: string
 			let isError = false
 			try {
-				output = await executeTool(tc.name, input, directory)
-				if (snapshotPath && assistantMessageId && !isError) {
-					const afterContent = existsSync(snapshotPath) ? readFileSync(snapshotPath, "utf-8") : null
-					recordSnapshot(sessionId, assistantMessageId, snapshotPath, beforeContent, afterContent)
+				if (tc.name === "todowrite") {
+					// Handled inline (needs session + emit): store the list and notify the UI.
+					const todos = normalizeTodos(input as unknown as TodoWriteInput)
+					setTodos(sessionId, todos)
+					emit({ type: "todo.updated", sessionId, todos })
+					const done = todos.filter((t) => t.status === "completed").length
+					output = `Todo list updated: ${done}/${todos.length} completed.`
+				} else {
+					output = await executeTool(tc.name, input, directory)
+					if (snapshotPath && assistantMessageId && !isError) {
+						const afterContent = existsSync(snapshotPath) ? readFileSync(snapshotPath, "utf-8") : null
+						recordSnapshot(sessionId, assistantMessageId, snapshotPath, beforeContent, afterContent)
+					}
 				}
 			} catch (err) {
 				output = err instanceof Error ? err.message : String(err)

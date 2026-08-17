@@ -39,6 +39,13 @@ export interface ToolCall {
 	input: Record<string, unknown>
 }
 
+/** A single task in the agent's todo list (Claude-Code-style task tracking). */
+export interface Todo {
+	content: string
+	status: "pending" | "in_progress" | "completed"
+	activeForm?: string
+}
+
 /** How a user resolved a permission prompt. */
 export type PermissionResolution = "once" | "always" | "reject"
 
@@ -66,5 +73,6 @@ export type EngineEvent =
 	| { type: "message.complete"; messageId: string; sessionId: string }
 	| { type: "tool.start"; toolCallId: string; sessionId: string; tool: string; input: Record<string, unknown> }
 	| { type: "tool.result"; toolCallId: string; sessionId: string; output: string; isError: boolean }
+	| { type: "todo.updated"; sessionId: string; todos: Todo[] }
 	| { type: "permission.request"; permissionId: string; sessionId: string; tool: string; input: Record<string, unknown>; description: string }
 	| { type: "permission.resolved"; permissionId: string; resolution: PermissionResolution }

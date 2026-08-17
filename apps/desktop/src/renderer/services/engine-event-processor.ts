@@ -19,6 +19,8 @@ import {
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import { streamingVersionFamily } from "../atoms/streaming"
+import { todosFamily } from "../atoms/todos"
+import type { Todo } from "../lib/types"
 import { createLogger } from "../lib/logger"
 
 const log = createLogger("engine-event-processor")
@@ -38,6 +40,7 @@ type EngineEvent =
 	| { type: "message.complete"; messageId: string; sessionId: string }
 	| { type: "tool.start"; toolCallId: string; sessionId: string; tool: string; input: Record<string, unknown> }
 	| { type: "tool.result"; toolCallId: string; sessionId: string; output: string; isError: boolean }
+	| { type: "todo.updated"; sessionId: string; todos: Array<{ content: string; status: "pending" | "in_progress" | "completed"; activeForm?: string }> }
 	| { type: "permission.request"; permissionId: string; sessionId: string; tool: string; input: Record<string, unknown>; description: string }
 	| { type: "permission.resolved"; permissionId: string; resolution: "once" | "always" | "reject" }
 
@@ -186,6 +189,16 @@ export function processEngineEvent(event: EngineEvent): void {
 				sessionId: event.sessionId,
 				status: { type: "busy" },
 			})
+			break
+		}
+
+		case "todo.updated": {
+			const todos = event.todos.map((t, i) => ({
+				id: String(i),
+				content: t.content,
+				status: t.status,
+			})) as unknown as Todo[]
+			set(todosFamily(event.sessionId), todos)
 			break
 		}
 

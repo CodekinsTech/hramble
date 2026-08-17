@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
 import { nanoid } from "nanoid"
-import type { Session, Message, ContentBlock } from "./types.js"
+import type { Session, Message, ContentBlock, Todo } from "./types.js"
 
 const DATA_DIR = process.env.ENGINE_DATA_DIR || path.join(os.homedir(), ".local", "share", "hramble", "engine")
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
@@ -33,9 +33,11 @@ interface Store {
 	redo: Record<string, RevertBatch[]>
 	// "Always allow" rules, keyed by project directory -> permission keys.
 	permissionRules: Record<string, string[]>
+	// Current todo list per session.
+	todos: Record<string, Todo[]>
 }
 
-let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {} }
+let store: Store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {} }
 
 export function initDb(): void {
 	fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -46,8 +48,9 @@ export function initDb(): void {
 			if (!store.checkpoints) store.checkpoints = {}
 			if (!store.redo) store.redo = {}
 			if (!store.permissionRules) store.permissionRules = {}
+			if (!store.todos) store.todos = {}
 		} catch {
-			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {} }
+			store = { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {} }
 		}
 	}
 	// Boot reconciliation: a restart orphans any session left "running" (its
@@ -120,6 +123,7 @@ export function deleteSession(id: string): boolean {
 	delete store.messages[id]
 	delete store.checkpoints[id]
 	delete store.redo[id]
+	delete store.todos[id]
 	persist()
 	return true
 }
@@ -291,6 +295,15 @@ export function unrevertSession(sessionId: string): { restored: number } | null 
 	if (session) session.updatedAt = Date.now()
 	persist()
 	return { restored: batch.messages.length }
+}
+
+export function setTodos(sessionId: string, todos: Todo[]): void {
+	store.todos[sessionId] = todos
+	persist()
+}
+
+export function getTodos(sessionId: string): Todo[] {
+	return store.todos[sessionId] ?? []
 }
 
 /** True if the user previously chose "always allow" for this action in this project. */

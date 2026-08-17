@@ -14,6 +14,7 @@ import {
 	updateSessionStatus,
 	addMessage,
 	getMessages,
+	getTodos,
 	renameSession,
 	deleteSession,
 	deleteMessage,
@@ -146,6 +147,11 @@ export async function startServer(): Promise<void> {
 	app.get<{ Params: { id: string } }>("/sessions/:id/messages", async (req, reply) => {
 		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
 		return getMessages(req.params.id)
+	})
+
+	app.get<{ Params: { id: string } }>("/sessions/:id/todos", async (req, reply) => {
+		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		return getTodos(req.params.id)
 	})
 
 	// Rename a session's title.
