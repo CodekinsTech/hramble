@@ -1,7 +1,16 @@
+import { readProjectMemory } from "./tools/memory.js"
+
 export function buildSystemPrompt(directory: string, mode: "build" | "plan" = "build"): string {
 	const isWin = process.platform === "win32"
 	const shell = isWin ? "cmd.exe (Windows)" : "/bin/bash"
 	const today = new Date().toISOString().slice(0, 10)
+
+	// Only THIS project's saved memory — never a global store — so unrelated past
+	// work can't leak into the current project.
+	const memory = readProjectMemory(directory)
+	const memoryBlock = memory
+		? `\n\n## Project memory\nNotes you saved for this project in earlier sessions (trusted context):\n\n${memory}`
+		: ""
 
 	const planBlock =
 		mode === "plan"
@@ -64,7 +73,8 @@ You are working in the project directory: ${directory}
 - If something is unclear, ask one specific question — not a list.
 - If a task will take many steps, outline them briefly before starting.
 
-You have access to the following tools: bash, read, write, edit, glob, grep, todowrite, webfetch, task.
+You have access to the following tools: bash, read, write, edit, glob, grep, todowrite, webfetch, task, remember.
 Use \`task\` to delegate open-ended codebase exploration to a read-only sub-agent when it would save you many read/grep round-trips; act on its findings yourself.
+Use \`remember\` to save a durable, project-specific fact you'll want next session.${memoryBlock}
 Use them well.`
 }

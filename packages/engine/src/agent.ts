@@ -13,6 +13,7 @@ import { grepFiles, grepToolDefinition } from "./tools/grep.js"
 import { todoToolDefinition, normalizeTodos, type TodoWriteInput } from "./tools/todo.js"
 import { webFetch, webFetchToolDefinition } from "./tools/webfetch.js"
 import { taskToolDefinition, type TaskInput } from "./tools/task.js"
+import { rememberToolDefinition, appendMemory } from "./tools/memory.js"
 import { getProvider } from "./providers.js"
 import path from "node:path"
 import { existsSync, readFileSync } from "node:fs"
@@ -34,6 +35,7 @@ const TOOLS: Tool[] = [
 	todoToolDefinition,
 	webFetchToolDefinition,
 	taskToolDefinition,
+	rememberToolDefinition,
 ]
 
 /** Tools a read-only research sub-agent may use. */
@@ -424,6 +426,8 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 			return grepFiles({ pattern: String(input.pattern ?? ""), path: input.path ? String(input.path) : undefined, glob: input.glob ? String(input.glob) : undefined, caseSensitive: Boolean(input.caseSensitive) }, directory)
 		case "webfetch":
 			return webFetch({ url: String(input.url ?? "") })
+		case "remember":
+			return appendMemory(directory, String(input.memory ?? ""))
 		default:
 			throw new Error(`Unknown tool: ${name}`)
 	}
