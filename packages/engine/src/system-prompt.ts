@@ -1,4 +1,5 @@
 import { readProjectMemory } from "./tools/memory.js"
+import { readProjectInstructions } from "./instructions.js"
 
 export function buildSystemPrompt(directory: string, mode: "build" | "plan" = "build"): string {
 	const isWin = process.platform === "win32"
@@ -10,6 +11,12 @@ export function buildSystemPrompt(directory: string, mode: "build" | "plan" = "b
 	const memory = readProjectMemory(directory)
 	const memoryBlock = memory
 		? `\n\n## Project memory\nNotes you saved for this project in earlier sessions (trusted context):\n\n${memory}`
+		: ""
+
+	// This project's own instruction files (CLAUDE.md/AGENTS.md/…) — follow them.
+	const instructions = readProjectInstructions(directory)
+	const instructionsBlock = instructions
+		? `\n\n## Project instructions\nThe project defines these instructions in its config files. Follow them — they take precedence over your defaults when they conflict:\n\n${instructions}`
 		: ""
 
 	const planBlock =
@@ -75,6 +82,6 @@ You are working in the project directory: ${directory}
 
 You have access to the following tools: bash, read, write, edit, multiedit, glob, grep, todowrite, webfetch, task, remember.
 Use \`task\` to delegate open-ended codebase exploration to a read-only sub-agent when it would save you many read/grep round-trips; act on its findings yourself.
-Use \`remember\` to save a durable, project-specific fact you'll want next session.${memoryBlock}
+Use \`remember\` to save a durable, project-specific fact you'll want next session.${instructionsBlock}${memoryBlock}
 Use them well.`
 }
