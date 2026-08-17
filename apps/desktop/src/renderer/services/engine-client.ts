@@ -53,9 +53,50 @@ export async function createEngineSession(
 	})
 }
 
-export async function listEngineSessions(directory?: string): Promise<EngineSession[]> {
-	const q = directory ? `?directory=${encodeURIComponent(directory)}` : ""
-	return request(`/sessions${q}`)
+export async function listEngineSessions(
+	opts: { directory?: string; search?: string; limit?: number } = {},
+): Promise<EngineSession[]> {
+	const params = new URLSearchParams()
+	if (opts.directory) params.set("directory", opts.directory)
+	if (opts.search) params.set("search", opts.search)
+	if (opts.limit) params.set("limit", String(opts.limit))
+	const q = params.toString()
+	return request(`/sessions${q ? `?${q}` : ""}`)
+}
+
+export async function renameEngineSession(id: string, title: string): Promise<EngineSession> {
+	return request(`/sessions/${id}`, { method: "PATCH", body: JSON.stringify({ title }) })
+}
+
+export async function deleteEngineSession(id: string): Promise<{ ok: boolean }> {
+	return request(`/sessions/${id}`, { method: "DELETE" })
+}
+
+export async function deleteEnginePart(sessionId: string, messageId: string): Promise<{ ok: boolean }> {
+	return request(`/sessions/${sessionId}/messages/${messageId}`, { method: "DELETE" })
+}
+
+export async function forkEngineSession(id: string, throughMessageId?: string): Promise<EngineSession> {
+	return request(`/sessions/${id}/fork`, {
+		method: "POST",
+		body: JSON.stringify({ throughMessageId }),
+	})
+}
+
+export interface EngineModelInfo {
+	provider: string
+	providerName: string
+	id: string
+	name: string
+	contextWindow: number
+	supportsVision: boolean
+	supportsTools: boolean
+	connected: boolean
+}
+
+export async function listEngineModels(): Promise<EngineModelInfo[]> {
+	const res = await request<{ models: EngineModelInfo[] }>("/models")
+	return res.models
 }
 
 export async function getEngineSession(id: string): Promise<EngineSession & { messages: unknown[] }> {

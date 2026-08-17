@@ -14,6 +14,10 @@ import {
 	updateSessionStatus,
 	addMessage,
 	getMessages,
+	renameSession,
+	deleteSession,
+	deleteMessage,
+	forkSession,
 } from "./sessions.js"
 
 const PORT = 4200
@@ -123,8 +127,8 @@ export async function startServer(): Promise<void> {
 
 	// ── Sessions ─────────────────────────────────────────────────────────
 	app.get("/sessions", async (req) => {
-		const { directory } = req.query as { directory?: string }
-		return listSessions(directory)
+		const { directory, search, limit } = req.query as { directory?: string; search?: string; limit?: string }
+		return listSessions({ directory, search, limit: limit ? Number(limit) : undefined })
 	})
 
 	app.get<{ Params: { id: string } }>("/sessions/:id", async (req, reply) => {
@@ -132,6 +136,53 @@ export async function startServer(): Promise<void> {
 		if (!session) return reply.code(404).send({ error: "Session not found" })
 		const messages = getMessages(req.params.id)
 		return { ...session, messages }
+	})
+
+	app.get<{ Params: { id: string } }>("/sessions/:id/messages", async (req, reply) => {
+		if (!getSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		return getMessages(req.params.id)
+	})
+
+	// Rename a session's title.
+	app.patch<{ Params: { id: string } }>("/sessions/:id", async (req, reply) => {
+		const { title } = req.body as { title?: string }
+		if (!title?.trim()) return reply.code(400).send({ error: "title is required" })
+		const session = renameSession(req.params.id, title.trim())
+		if (!session) return reply.code(404).send({ error: "Session not found" })
+		broadcast({ type: "session.updated", sessionId: session.id, status: session.status })
+		return session
+	})
+
+	// Delete a session and its transcript (aborting any active run first).
+	app.delete<{ Params: { id: string } }>("/sessions/:id", async (req, reply) => {
+		const active = activeAgents.get(req.params.id)
+		if (active) {
+			active.abort()
+			activeAgents.delete(req.params.id)
+		}
+		if (!deleteSession(req.params.id)) return reply.code(404).send({ error: "Session not found" })
+		broadcast({ type: "session.deleted", sessionId: req.params.id })
+		return { ok: true }
+	})
+
+	// Delete a single message ("part") from a session.
+	app.delete<{ Params: { id: string; messageId: string } }>(
+		"/sessions/:id/messages/:messageId",
+		async (req, reply) => {
+			if (!deleteMessage(req.params.id, req.params.messageId)) {
+				return reply.code(404).send({ error: "Message not found" })
+			}
+			return { ok: true }
+		},
+	)
+
+	// Fork a session (optionally up to a given message).
+	app.post<{ Params: { id: string } }>("/sessions/:id/fork", async (req, reply) => {
+		const { throughMessageId } = req.body as { throughMessageId?: string }
+		const fork = forkSession(req.params.id, throughMessageId)
+		if (!fork) return reply.code(404).send({ error: "Session or message not found" })
+		broadcast({ type: "session.created", sessionId: fork.id, title: fork.title, directory: fork.directory })
+		return fork
 	})
 
 	app.post("/sessions", async (req, reply) => {

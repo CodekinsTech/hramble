@@ -23,6 +23,10 @@ import {
 	abortEngineSession,
 	allowEnginePermission,
 	denyEnginePermission,
+	renameEngineSession,
+	deleteEngineSession,
+	deleteEnginePart,
+	forkEngineSession,
 	type EngineModelRef,
 } from "../services/engine-client"
 
@@ -503,8 +507,6 @@ export function useAgentActions() {
 		}, [])
 
 	const renameSession = useCallback(async (directory: string, sessionId: string, title: string) => {
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
 		log.debug("renameSession", { sessionId, title })
 
 		// Optimistic update
@@ -516,6 +518,13 @@ export function useAgentActions() {
 			})
 		}
 
+		if (appStore.get(engineConnectedAtom)) {
+			await renameEngineSession(sessionId, title)
+			return
+		}
+
+		const client = getProjectClient(directory)
+		if (!client) throw new Error("Not connected to server")
 		try {
 			await client.session.update({ sessionID: sessionId, title })
 		} catch (err) {
@@ -525,9 +534,15 @@ export function useAgentActions() {
 	}, [])
 
 	const deleteSession = useCallback(async (directory: string, sessionId: string) => {
+		log.debug("deleteSession", { sessionId })
+
+		if (appStore.get(engineConnectedAtom)) {
+			await deleteEngineSession(sessionId)
+			return
+		}
+
 		const client = getProjectClient(directory)
 		if (!client) throw new Error("Not connected to server")
-		log.debug("deleteSession", { sessionId })
 		try {
 			await client.session.delete({ sessionID: sessionId })
 		} catch (err) {
@@ -657,9 +672,16 @@ export function useAgentActions() {
 
 	const deletePart = useCallback(
 		async (directory: string, sessionId: string, messageId: string, partId: string) => {
+			log.debug("deletePart", { sessionId, messageId, partId })
+
+			if (appStore.get(engineConnectedAtom)) {
+				// The engine's transcript is message-grained (no separate parts).
+				await deleteEnginePart(sessionId, messageId)
+				return
+			}
+
 			const client = getProjectClient(directory)
 			if (!client) throw new Error("Not connected to server")
-			log.debug("deletePart", { sessionId, messageId, partId })
 			try {
 				await client.part.delete({ sessionID: sessionId, messageID: messageId, partID: partId })
 			} catch (err) {
@@ -672,9 +694,18 @@ export function useAgentActions() {
 
 	const forkSession = useCallback(
 		async (directory: string, sessionId: string, messageId?: string): Promise<Session> => {
+			log.debug("forkSession", { sessionId, messageId })
+
+			if (appStore.get(engineConnectedAtom)) {
+				const forked = await forkEngineSession(sessionId, messageId)
+				const session = forked as unknown as Session
+				appStore.set(upsertSessionAtom, { session, directory })
+				log.debug("forkSession succeeded (engine)", { forkedSessionId: forked.id })
+				return session
+			}
+
 			const client = getProjectClient(directory)
 			if (!client) throw new Error("Not connected to server")
-			log.debug("forkSession", { sessionId, messageId })
 			try {
 				const result = await client.session.fork({
 					sessionID: sessionId,
