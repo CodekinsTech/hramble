@@ -10,7 +10,8 @@ import { artifactsPanelOpenAtom } from "../atoms/ui"
 // Claude-Artifacts sense — something meant to be looked at, not read as code.
 const RENDERABLE = new Set(["html", "htm", "svg", "md", "markdown"])
 
-function extOf(path: string): string {
+function extOf(path: string | null | undefined): string {
+	if (!path) return ""
 	const dot = path.lastIndexOf(".")
 	return dot === -1 ? "" : path.slice(dot + 1).toLowerCase()
 }
@@ -42,7 +43,7 @@ export function ArtifactsPanel({ sessionId, directory }: { sessionId: string; di
 	const artifacts = useMemo(
 		() =>
 			diffs
-				.filter((d) => d.status !== "deleted" && RENDERABLE.has(extOf(d.file)))
+				.filter((d) => d.file && d.status !== "deleted" && RENDERABLE.has(extOf(d.file)))
 				.map((d) => ({ file: d.file, kind: kindOf(extOf(d.file)), content: d.after ?? "" })),
 		[diffs],
 	)

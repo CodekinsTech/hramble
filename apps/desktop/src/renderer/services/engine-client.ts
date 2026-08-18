@@ -59,6 +59,18 @@ export interface EngineProject {
 	sessionCount: number
 }
 
+export interface EngineFileDiff {
+	path: string
+	before: string | null
+	after: string | null
+	status: "created" | "modified" | "deleted"
+}
+
+/** Net file changes made during a session (from edit checkpoints). */
+export async function getEngineSessionDiff(sessionId: string): Promise<EngineFileDiff[]> {
+	return request(`/sessions/${sessionId}/diff`)
+}
+
 /** Fuzzy file search within an open project directory. */
 export async function findEngineFiles(directory: string, query: string): Promise<string[]> {
 	const params = new URLSearchParams({ directory })

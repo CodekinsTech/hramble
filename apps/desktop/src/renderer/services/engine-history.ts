@@ -5,8 +5,57 @@
  * like an OpenCode one. Live streaming is handled separately by
  * engine-event-processor; this is the one-time hydration on session open.
  */
-import type { Message, Part, Session, SessionStatus, TextPart, ToolPart, FilePart, UserMessage, AssistantMessage, OpenCodeProject } from "../lib/types"
-import type { EngineSession, EngineProject } from "./engine-client"
+import type { Message, Part, Session, SessionStatus, TextPart, ToolPart, FilePart, UserMessage, AssistantMessage, OpenCodeProject, FileDiff } from "../lib/types"
+import type { EngineSession, EngineProject, EngineFileDiff } from "./engine-client"
+
+/**
+ * Count added/removed lines between two file versions. Uses an LCS line diff for
+ * accuracy on modest files, falling back to a set-based estimate on very large
+ * ones to keep it O(n) instead of O(n²).
+ */
+function countChanges(before: string | null, after: string | null): { additions: number; deletions: number } {
+	if (before === null) return { additions: after ? after.split("\n").length : 0, deletions: 0 }
+	if (after === null) return { additions: 0, deletions: before.split("\n").length }
+	const b = before.split("\n")
+	const a = after.split("\n")
+	const LIMIT = 2000
+	if (b.length > LIMIT || a.length > LIMIT) {
+		const bSet = new Set(b)
+		const aSet = new Set(a)
+		return { additions: a.filter((l) => !bSet.has(l)).length, deletions: b.filter((l) => !aSet.has(l)).length }
+	}
+	// LCS length via DP.
+	const m = b.length
+	const n = a.length
+	let prev = new Int32Array(n + 1)
+	let cur = new Int32Array(n + 1)
+	for (let i = 1; i <= m; i++) {
+		for (let j = 1; j <= n; j++) {
+			cur[j] = b[i - 1] === a[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1])
+		}
+		;[prev, cur] = [cur, prev]
+		cur.fill(0)
+	}
+	const lcs = prev[n]
+	return { additions: n - lcs, deletions: m - lcs }
+}
+
+/** Map engine file diffs to the app's FileDiff shape (adds +/- line counts). */
+export function engineDiffsToFileDiffs(raw: EngineFileDiff[]): FileDiff[] {
+	return raw.map((d) => {
+		const { additions, deletions } = countChanges(d.before, d.after)
+		// The SDK FileDiff keys the path as `file` (forward slashes so the UI's
+		// path.split("/") / lastIndexOf(".") work); keep `path` too for safety.
+		const file = d.path.replace(/\\/g, "/")
+		// The UI's status vocabulary is added|modified|deleted; the engine emits
+		// created|modified|deleted, so map created -> added or the diff status
+		// badge lookup returns undefined and crashes the panel.
+		const status = d.status === "created" ? "added" : d.status
+		// The UI diff view calls before/after.split(...) directly, so never hand it
+		// null (created files have before=null, deleted have after=null).
+		return { file, path: d.path, before: d.before ?? "", after: d.after ?? "", status, additions, deletions } as unknown as FileDiff
+	})
+}
 
 /** Map an engine project directory to the app's Project (sidebar) shape. */
 export function engineProjectToProject(p: EngineProject): OpenCodeProject {
