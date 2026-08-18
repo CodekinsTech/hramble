@@ -108,6 +108,11 @@ export function initDb(): void {
 	db.exec("PRAGMA foreign_keys = OFF")
 	db.exec(SCHEMA)
 
+	// One-time normalization: collapse backslash directories to forward slashes so
+	// the same folder isn't split across two project entries. Idempotent (no-op
+	// once every row is already normalized).
+	db.exec("UPDATE sessions SET directory = REPLACE(directory, '\\', '/') WHERE directory LIKE '%\\%'")
+
 	// One-time migration from the old flat-JSON store, if present and not yet done.
 	if (fs.existsSync(LEGACY_JSON) && isEmpty()) {
 		try {
@@ -236,9 +241,19 @@ function migrateFromJson(file: string): void {
 
 // ── Sessions ──────────────────────────────────────────────────────────────
 
+/**
+ * Normalize a directory so the same folder always maps to one key regardless of
+ * slash direction (Windows backslashes vs forward slashes) or a trailing slash.
+ * Without this, an app-created session ("C:\\a\\b") and an imported one ("C:/a/b")
+ * split into two projects and hide each other's sessions.
+ */
+export function normalizeDir(dir: string): string {
+	return dir.replace(/\\/g, "/").replace(/\/+$/, "")
+}
+
 export function createSession(title: string, directory: string): Session {
 	const now = Date.now()
-	const session: Session = { id: nanoid(), title, directory, createdAt: now, updatedAt: now, status: "idle" }
+	const session: Session = { id: nanoid(), title, directory: normalizeDir(directory), createdAt: now, updatedAt: now, status: "idle" }
 	db.prepare("INSERT INTO sessions(id,title,directory,createdAt,updatedAt,status) VALUES(?,?,?,?,?,?)").run(
 		session.id,
 		session.title,
@@ -267,7 +282,7 @@ export function listSessions(opts: ListOptions = {}): Session[] {
 	const params: (string | number)[] = []
 	if (opts.directory) {
 		where.push("directory = ?")
-		params.push(opts.directory)
+		params.push(normalizeDir(opts.directory))
 	}
 	if (opts.search?.trim()) {
 		// Escape LIKE wildcards so a literal search can't act as a pattern.
@@ -317,7 +332,7 @@ export function importOpenCodeSessions(sessions: ImportSession[]): number {
 		const insS = db.prepare("INSERT OR IGNORE INTO sessions(id,title,directory,createdAt,updatedAt,status) VALUES(?,?,?,?,?,?)")
 		const insM = db.prepare("INSERT OR IGNORE INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)")
 		for (const s of sessions) {
-			const info = insS.run(s.id, s.title, s.directory, s.createdAt, s.updatedAt, "idle")
+			const info = insS.run(s.id, s.title, normalizeDir(s.directory), s.createdAt, s.updatedAt, "idle")
 			for (const m of s.messages) insM.run(m.id, s.id, m.role, JSON.stringify(m.content), m.createdAt)
 			if (Number(info.changes) > 0) imported++
 		}
