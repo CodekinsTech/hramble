@@ -739,14 +739,14 @@ let engineEventSource: EventSource | null = null
 /**
  * Master switch for routing the UI to the xot engine.
  *
- * OFF for now: the engine is wired for prompts/sessions/permissions, but the
- * session LIST and project discovery still come from OpenCode. With routing on,
- * the app sent OpenCode session IDs to the engine (which doesn't have them),
- * breaking sends on existing sessions. Until the engine is a COMPLETE backend
- * (discovery + session list/load + prompts, all from the engine, verified with
- * the app open), keep the UI on OpenCode. Flip to true to resume the cutover.
+ * ON: the engine is now a complete backend — discovery, session list/load, and
+ * history hydration all route to it (connection-manager loadProjectSessions +
+ * use-session-chat), alongside prompts/permissions/lifecycle (use-server) and
+ * live streaming (engine-event-processor). The earlier OpenCode/engine session-ID
+ * mismatch is closed. Every engine branch is still gated on engineConnectedAtom,
+ * so if the engine SSE never opens the app transparently falls back to OpenCode.
  */
-const ENGINE_UI_ENABLED = false
+const ENGINE_UI_ENABLED = true
 
 /**
  * Opens an SSE connection to the xot engine and processes events.
