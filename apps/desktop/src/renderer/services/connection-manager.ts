@@ -810,12 +810,15 @@ export function connectToEngine(): Promise<boolean> {
 		})
 
 		es.addEventListener("error", () => {
-			log.warn("xot engine SSE disconnected, will retry via EventSource reconnect")
+			// EventSource fires transient errors during connect/reconnect even when it
+			// will succeed, so DON'T resolve false here — just reflect status and let
+			// the "open" handler (or the timeout below) settle the promise. Resolving
+			// false on a transient error made discovery bail with no sessions.
+			log.warn("xot engine SSE error (will retry via EventSource reconnect)")
 			appStore.set(engineConnectedAtom, false)
-			settle(false)
 		})
 
-		// Don't block discovery indefinitely if the engine is unreachable.
+		// Don't block discovery indefinitely if the engine never opens.
 		setTimeout(() => settle(false), 4000)
 	})
 }
