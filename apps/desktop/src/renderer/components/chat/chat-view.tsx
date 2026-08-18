@@ -84,6 +84,8 @@ import { createLogger } from "../../lib/logger"
 import { computeTurnWorkTimeSplit, formatWorkDuration } from "../../lib/session-metrics"
 import type { Agent, FileAttachment, FilePart, QuestionAnswer, TextPart } from "../../lib/types"
 import { getProjectClient } from "../../services/connection-manager"
+import { getEngineSession, summarizeEngineSession } from "../../services/engine-client"
+import { mapEngineMessagesToEntries, type EngineMessage } from "../../services/engine-history"
 
 const log = createLogger("chat-view")
 
@@ -1321,19 +1323,11 @@ function ChatInputSection({
 					return true
 				case "compact":
 				case "summarize":
-					if (agent.directory && effectiveModel) {
-						const client = getProjectClient(agent.directory)
-						if (client) {
-							try {
-								await client.session.summarize({
-									sessionID: agent.sessionId,
-									providerID: effectiveModel.providerID,
-									modelID: effectiveModel.modelID,
-								})
-							} catch (err) {
-								log.error("session.summarize failed", { sessionId: agent.sessionId }, err)
-							}
-						}
+					try {
+						// The engine summarizes with its configured default model.
+						await summarizeEngineSession(agent.sessionId)
+					} catch (err) {
+						log.error("engine summarize failed", { sessionId: agent.sessionId }, err)
 					}
 					return true
 				default:
@@ -1372,34 +1366,27 @@ function ChatInputSection({
 	 * that real work was attempted.
 	 */
 	const verifyStepMessages = async (
-		client: NonNullable<ReturnType<typeof getProjectClient>>,
 		sessionID: string,
-		directory: string,
 		sinceIndex: number,
 	): Promise<{ ok: boolean; reason?: string }> => {
 		try {
-			const msgs = await client.session.messages({ sessionID, directory }).catch(() => null)
+			const es = await getEngineSession(sessionID).catch(() => null)
+			const all = (es?.messages ?? []) as EngineMessage[]
 			type ToolPart = { type: string; tool?: string; state?: { status?: string; output?: string; error?: string } }
-			const arr = ((msgs?.data as Array<{ parts: ToolPart[] }>) ?? []).slice(sinceIndex)
-			const toolParts = arr.flatMap((m) => m.parts ?? []).filter((p) => p.type === "tool")
+			// Slice in engine-message space (sinceIndex is a message count) before
+			// mapping, so we only inspect the tool parts this step produced.
+			const entries = mapEngineMessagesToEntries(all.slice(sinceIndex))
+			const toolParts = entries.flatMap((m) => (m.parts ?? []) as unknown as ToolPart[]).filter((p) => p.type === "tool")
 
-			// OpenCode represents "the model called a tool that doesn't exist" as a
-			// synthetic tool part named "invalid" with status "completed" (not
-			// "error") — so status alone won't catch it; check the tool name too.
-			const hallucinated = toolParts.find((p) => p.tool === "invalid")
-			if (hallucinated) {
-				return {
-					ok: false,
-					reason: (hallucinated.state?.output || hallucinated.state?.error || "Tried to call a tool that doesn't exist").slice(0, 300),
-				}
-			}
+			// A tool the engine couldn't run (unknown tool / no result) is recorded as
+			// an errored tool part — that covers hallucinated tool calls too.
 			const errored = toolParts.find((p) => p.state?.status === "error")
 			if (errored) {
 				return { ok: false, reason: `${errored.tool} failed: ${(errored.state?.error || "").slice(0, 250)}` }
 			}
 			return { ok: true }
 		} catch {
-			// Can't verify (server hiccup, etc.) — don't punish the step for our own fetch failure.
+			// Can't verify (engine hiccup, etc.) — don't punish the step for our own fetch failure.
 			return { ok: true }
 		}
 	}
@@ -1421,7 +1408,6 @@ function ChatInputSection({
 			const stepText = (stepsRef.current[i] ?? "").trim()
 			if (!stepText || !onSendMessage) return true
 			const hyperloop = workspaceMode === "hyperloop"
-			const client = getProjectClient(agent.directory)
 			setCurrentStep(i)
 			setFailedStep(-1)
 			const send = (text: string) =>
@@ -1435,11 +1421,9 @@ function ChatInputSection({
 			// All 7 steps share this one session, so "did this step's turn do
 			// real work" has to be checked against only the messages it just
 			// added — record the count before sending, diff against it after.
-			const beforeCount =
-				client && agent.directory
-					? ((await client.session.messages({ sessionID: agent.sessionId, directory: agent.directory }).catch(() => null))
-							?.data?.length ?? 0)
-					: 0
+			const beforeCount = agent.directory
+				? ((await getEngineSession(agent.sessionId).catch(() => null))?.messages?.length ?? 0)
+				: 0
 
 			await send(stepText)
 
@@ -1453,10 +1437,9 @@ function ChatInputSection({
 			for (let attempt = 0; attempt <= MAX_STEP_RETRIES; attempt++) {
 				if (stopStepsRef.current) break
 
-				const autoVerdict =
-					client && agent.directory
-						? await verifyStepMessages(client, agent.sessionId, agent.directory, beforeCount)
-						: { ok: true as const }
+				const autoVerdict = agent.directory
+					? await verifyStepMessages(agent.sessionId, beforeCount)
+					: { ok: true as const }
 				if (!autoVerdict.ok) {
 					if (attempt === MAX_STEP_RETRIES) break
 					await send(
