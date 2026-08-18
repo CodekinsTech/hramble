@@ -77,7 +77,7 @@ export interface PermissionRequest {
 // SSE event types streamed to the UI
 export type EngineEvent =
 	| { type: "session.created"; sessionId: string; title: string; directory: string }
-	| { type: "session.updated"; sessionId: string; status: Session["status"] }
+	| { type: "session.updated"; sessionId: string; status: Session["status"]; title?: string }
 	| { type: "session.idle"; sessionId: string }
 	| { type: "session.deleted"; sessionId: string }
 	| { type: "session.reverted"; sessionId: string }

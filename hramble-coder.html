@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hramble Coder</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --fg: #e8e8f0;
+      --muted: #4a4a5a;
+      --accent: #00d4aa;
+      --accent-glow: rgba(0, 212, 170, 0.4);
+      --card: #1a1a24;
+      --border: #2a2a3a;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background pattern - subtle circuit board */
+    .bg-pattern {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .hero-title {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 1rem;
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .hero-title h1 {
+      font-size: 5rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--fg) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+      transition: transform 0.3s ease;
+    }
+
+    .hero-title h1:hover {
+      transform: translateY(-4px) scale(1.05);
+    }
+
+    .coding-icon {
+      width: 80px;
+      height: 80px;
+      filter: drop-shadow(0 0 20px var(--accent-glow));
+    }
+
+    .subtitle {
+      margin-top: 1rem;
+      font-size: 1.2rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .hero-title .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: 0.8rem;
+      color: var(--accent);
+      margin-left: 1rem;
+    }
+
+    .hero-title .tag svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+
+    /* Glow effect below the title */
+    .glow-accent {
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      background: var(--accent-glow);
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* Code-like decorative lines */
+    .decor-line {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
+      height: 60%;
+      background: linear-gradient(to bottom, var(--accent), transparent);
+    }
+
+    .decor-line::before {
+      content: '';
+      position: absolute;
+      left: -20px;
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    .decor-line::after {
+      content: '';
+      position: absolute;
+      right: -20px;
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    @media (max-width: 768px) {
+      .hero-title h1 {
+        font-size: 3rem;
+      }
+      .coding-icon {
+        width: 60px;
+        height: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-pattern"></div>
+
+  <main class="hero">
+    <div class="glow-accent" style="top: -100px; left: 50%; transform: translateX(-50%);"></div>
+    <div class="glow-accent" style="bottom: -100px; right: 50%;"></div>
+
+    <div class="hero-title">
+      <h1>Hramble Coder</h1>
+      <svg class="coding-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 3h2v2H3V3zm5 16h2v2H5v-2zm6-8h2v2h-2V9zm-5-5h2v2H8v-2zm4 8h2v2h-2v-2zm5-7h2v2h-2V7zm-2 8h2v2h-2v-2zm6-13v2h-2V3zm2.75 3.75h-1.5v1.5h1.5v-1.5zm0 4h-1.5v1.5h1.5v-1.5zm0 4h-1.5v1.5h1.5v-1.5z"/>
+      </svg>
+      <span class="tag">Open Source</span>
+    </div>
+
+    <p class="subtitle">Building tools for developers</p>
+
+    <div class="decor-line"></div>
+  </main>
+</body>
+</html>

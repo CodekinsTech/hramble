@@ -112,6 +112,8 @@ export function initDb(): void {
 	// the same folder isn't split across two project entries. Idempotent (no-op
 	// once every row is already normalized).
 	db.exec("UPDATE sessions SET directory = REPLACE(directory, '\\', '/') WHERE directory LIKE '%\\%'")
+	// Give any still-"New chat" sessions a title from their first message.
+	backfillTitles()
 
 	// One-time migration from the old flat-JSON store, if present and not yet done.
 	if (fs.existsSync(LEGACY_JSON) && isEmpty()) {
@@ -249,6 +251,48 @@ function migrateFromJson(file: string): void {
  */
 export function normalizeDir(dir: string): string {
 	return dir.replace(/\\/g, "/").replace(/\/+$/, "")
+}
+
+/**
+ * Derive a short session title from the first user message (OpenCode-style
+ * fallback — no model call). Strips any leading bracketed context blocks the UI
+ * prepends (e.g. "[Brain memory …]") and caps to a few words.
+ */
+export function deriveTitle(text: string): string {
+	const clean = text.replace(/^(\s*\[[^\]]*\]\s*)+/g, "").replace(/\s+/g, " ").trim()
+	const source = clean || text.replace(/\s+/g, " ").trim()
+	return source.split(" ").slice(0, 8).join(" ").slice(0, 60)
+}
+
+const GENERIC_TITLE = /^(new chat|new session\b.*|untitled)?$/i
+
+/** True if a title still looks machine-assigned and is safe to replace. */
+export function isGenericTitle(title: string): boolean {
+	return GENERIC_TITLE.test(title.trim())
+}
+
+/**
+ * One-time backfill: give every still-"New chat" session a title derived from
+ * its first user message, so engine-created sessions are recognizable in the
+ * sidebar (auto-titling was never wired to the engine).
+ */
+export function backfillTitles(): void {
+	const rows = db.prepare("SELECT id, title FROM sessions").all() as unknown as Array<{ id: string; title: string }>
+	const upd = db.prepare("UPDATE sessions SET title = ? WHERE id = ?")
+	for (const r of rows) {
+		if (!isGenericTitle(r.title)) continue
+		const first = db.prepare("SELECT content FROM messages WHERE sessionId = ? AND role = 'user' ORDER BY createdAt ASC LIMIT 1").get(r.id) as { content: string } | undefined
+		if (!first) continue
+		let text = ""
+		try {
+			const c = JSON.parse(first.content)
+			text = typeof c === "string" ? c : Array.isArray(c) ? (c.find((b) => b?.type === "text")?.text ?? "") : ""
+		} catch {
+			// leave blank
+		}
+		const title = deriveTitle(text)
+		if (title) upd.run(title, r.id)
+	}
 }
 
 export function createSession(title: string, directory: string): Session {

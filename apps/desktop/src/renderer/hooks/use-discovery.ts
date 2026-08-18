@@ -85,8 +85,10 @@ export function useDiscovery() {
 					authenticated: !!authHeader,
 				})
 				await connectToOpenCode(url, authHeader)
-				// Also connect to the xot engine (runs in parallel with OpenCode)
-				connectToEngine()
+				// Connect to the xot engine and WAIT for it before loading projects/
+				// sessions — otherwise the loads race ahead while the engine is still
+				// connecting and fall back to OpenCode, hiding engine-only sessions.
+				await connectToEngine()
 
 				// --- Step 3b: Bail if server is unreachable ---
 				// connectToOpenCode runs a health check and sets serverConnectedAtom.

@@ -14,6 +14,7 @@ import { applyPartDeltaAtom, partsFamily, upsertPartAtom } from "../atoms/parts"
 import {
 	lastToolEventAtom,
 	removeSessionAtom,
+	sessionFamily,
 	setSessionErrorAtom,
 	setSessionStatusAtom,
 	upsertSessionAtom,
@@ -30,7 +31,7 @@ const log = createLogger("engine-event-processor")
 
 type EngineEvent =
 	| { type: "session.created"; sessionId: string; title: string; directory: string }
-	| { type: "session.updated"; sessionId: string; status: "idle" | "running" | "error" }
+	| { type: "session.updated"; sessionId: string; status: "idle" | "running" | "error"; title?: string }
 	| { type: "session.idle"; sessionId: string }
 	| { type: "session.deleted"; sessionId: string }
 	| { type: "session.reverted"; sessionId: string }
@@ -169,7 +170,18 @@ export function processEngineEvent(event: EngineEvent): void {
 			break
 		}
 
-		case "session.updated":
+		case "session.updated": {
+			set(setSessionStatusAtom, {
+				sessionId: event.sessionId,
+				status: { type: event.status === "running" ? "busy" : "idle" },
+			})
+			// Live title update (engine-side auto-title on first message).
+			if (event.title) {
+				const entry = appStore.get(sessionFamily(event.sessionId))
+				if (entry) set(upsertSessionAtom, { session: { ...entry.session, title: event.title }, directory: entry.directory })
+			}
+			break
+		}
 		case "session.idle": {
 			set(setSessionStatusAtom, {
 				sessionId: event.sessionId,

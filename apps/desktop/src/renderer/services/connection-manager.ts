@@ -764,10 +764,10 @@ const ENGINE_UI_ENABLED = true
  * Opens an SSE connection to the xot engine and processes events.
  * Safe to call multiple times — closes the previous stream first.
  */
-export function connectToEngine(): void {
+export function connectToEngine(): Promise<boolean> {
 	if (!ENGINE_UI_ENABLED) {
 		appStore.set(engineConnectedAtom, false)
-		return
+		return Promise.resolve(false)
 	}
 	// Close any existing stream
 	if (engineEventSource) {
@@ -781,23 +781,42 @@ export function connectToEngine(): void {
 	const es = openEngineEventStream()
 	engineEventSource = es
 
-	es.addEventListener("open", () => {
-		log.info("xot engine SSE connected")
-		appStore.set(engineConnectedAtom, true)
-	})
-
-	es.addEventListener("message", (evt) => {
-		try {
-			const event = JSON.parse(evt.data)
-			processEngineEvent(event)
-		} catch (err) {
-			log.error("Failed to parse engine event", err, evt.data)
+	// Resolve once the stream opens (or a short timeout) so discovery can WAIT for
+	// the engine before loading projects/sessions — otherwise the first load races
+	// ahead while engineConnectedAtom is still false and falls back to OpenCode,
+	// hiding engine-only sessions.
+	return new Promise<boolean>((resolve) => {
+		let settled = false
+		const settle = (v: boolean) => {
+			if (!settled) {
+				settled = true
+				resolve(v)
+			}
 		}
-	})
 
-	es.addEventListener("error", () => {
-		log.warn("xot engine SSE disconnected, will retry via EventSource reconnect")
-		appStore.set(engineConnectedAtom, false)
+		es.addEventListener("open", () => {
+			log.info("xot engine SSE connected")
+			appStore.set(engineConnectedAtom, true)
+			settle(true)
+		})
+
+		es.addEventListener("message", (evt) => {
+			try {
+				const event = JSON.parse(evt.data)
+				processEngineEvent(event)
+			} catch (err) {
+				log.error("Failed to parse engine event", err, evt.data)
+			}
+		})
+
+		es.addEventListener("error", () => {
+			log.warn("xot engine SSE disconnected, will retry via EventSource reconnect")
+			appStore.set(engineConnectedAtom, false)
+			settle(false)
+		})
+
+		// Don't block discovery indefinitely if the engine is unreachable.
+		setTimeout(() => settle(false), 4000)
 	})
 }
 

@@ -27,6 +27,8 @@ import {
 	compactSessionPreservingRecent,
 	revertSession,
 	unrevertSession,
+	deriveTitle,
+	isGenericTitle,
 } from "./sessions.js"
 import { summarizeConversation } from "./summarize.js"
 import { maybeImportOpenCode } from "./opencode-import.js"
@@ -396,7 +398,17 @@ export async function startServer(): Promise<void> {
 				: userText
 
 		// Save user message
+		const wasEmpty = getMessages(session.id).length === 0
 		addMessage(session.id, "user", userContent)
+		// Auto-title a fresh session from its first message (engine-side, no model
+		// call) so engine-created sessions are recognizable instead of "New chat".
+		if (wasEmpty && isGenericTitle(session.title)) {
+			const title = deriveTitle(text)
+			if (title) {
+				renameSession(session.id, title)
+				broadcast({ type: "session.updated", sessionId: session.id, status: "running", title })
+			}
+		}
 		updateSessionStatus(session.id, "running")
 		broadcast({ type: "session.updated", sessionId: session.id, status: "running" })
 
