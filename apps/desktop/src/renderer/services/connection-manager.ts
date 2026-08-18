@@ -1,790 +1,124 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client"
-import { processEvent } from "../atoms/actions/event-processor"
-import { authHeaderAtom, serverConnectedAtom, serverUrlAtom } from "../atoms/connection"
-import { batchUpsertPartsAtom } from "../atoms/parts"
+import { serverConnectedAtom } from "../atoms/connection"
 import {
-	lastToolEventAtom,
 	SESSIONS_PAGE_SIZE,
 	setProjectPaginationLoadingAtom,
 	setSessionsAtom,
 	updateProjectPaginationAtom,
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
-import {
-	applyStreamingDelta,
-	flushStreamingParts,
-	isStreamingField,
-	isStreamingPartType,
-	streamingVersionFamily,
-	updateStreamingPart,
-} from "../atoms/streaming"
 import { createLogger } from "../lib/logger"
-import type { Event } from "../lib/types"
-import { captureEpisode } from "./episode-capture"
-import {
-	connectToServer,
-	disposeAllInstances,
-	getSession,
-	getSessionStatuses,
-	listProjects,
-	listSessions,
-	subscribeToGlobalEvents,
-} from "./opencode"
+import type { OpenCodeProject, Session, SessionStatus } from "../lib/types"
 import { engineConnectedAtom } from "../atoms/engine"
 import { processEngineEvent } from "./engine-event-processor"
 import { openEngineEventStream, listEngineSessions, listEngineProjects } from "./engine-client"
 import { engineSessionToSession, engineSessionStatus, engineProjectToProject } from "./engine-history"
-import type { SessionStatus } from "../lib/types"
 
 const log = createLogger("connection-manager")
 
-// ============================================================
-// Health check
-// ============================================================
+// The xot engine is the sole backend. The legacy OpenCode server connection, its
+// SSE event loop, and the per-project client pool have been removed — the client
+// accessors below are inert stubs kept only until the last OpenCode call sites are
+// deleted (each already gates on engineConnectedAtom and ignores the result).
 
-/**
- * Lightweight health probe: a single GET to /global/health with a 3s timeout.
- * Uses plain browser fetch (bypasses the SDK's retry wrapper and IPC proxy)
- * to avoid spamming the main process with failing requests when a server is down.
- */
-async function checkHealth(url: string, authHeader: string | null): Promise<boolean> {
-	const controller = new AbortController()
-	const timeout = setTimeout(() => controller.abort(), 3000)
+// ── Projects / sessions (engine) ────────────────────────────────────────────
+
+export async function loadAllProjects(): Promise<OpenCodeProject[]> {
 	try {
-		const headers: Record<string, string> = {}
-		if (authHeader) headers.Authorization = authHeader
-		const res = await fetch(`${url}/global/health`, {
-			signal: controller.signal,
-			headers,
-		})
-		return res.ok
-	} catch {
-		return false
-	} finally {
-		clearTimeout(timeout)
-	}
-}
-
-// ============================================================
-// State — single server connection + per-project clients
-// ============================================================
-
-/** The single OpenCode server connection */
-let connection: {
-	url: string
-	/** Auth header for remote servers (null for local/unauthenticated). */
-	authHeader: string | null
-	/** Base client (no directory) — used for SSE subscription */
-	baseClient: OpencodeClient
-	abortController: AbortController
-} | null = null
-
-/** Per-project SDK clients, keyed by directory path */
-const projectClients = new Map<string, OpencodeClient>()
-
-/**
- * Monotonically increasing ID for event loop instances.
- */
-let eventLoopGeneration = 0
-
-/**
- * Global reference to the SSE AbortController that survives Vite HMR
- * module replacement. When HMR replaces this module, the old module's
- * `connection` variable is lost, but the old event loop keeps running
- * with an unreachable AbortController. By storing it on `window`, the
- * new module can abort the stale loop on reconnect.
- */
-const SSE_ABORT_KEY = "__hramble_sse_abort__" as const
-
-function getGlobalAbort(): AbortController | undefined {
-	// biome-ignore lint/suspicious/noExplicitAny: accessing dynamic window property for SSE abort controller
-	return (window as any)[SSE_ABORT_KEY]
-}
-
-function setGlobalAbort(controller: AbortController | null) {
-	// biome-ignore lint/suspicious/noExplicitAny: accessing dynamic window property for SSE abort controller
-	;(window as any)[SSE_ABORT_KEY] = controller
-}
-
-// ============================================================
-// Public API
-// ============================================================
-
-/**
- * Connect to an OpenCode server.
- * Starts SSE subscription for all-project events.
- *
- * @param url       Base URL of the OpenCode server
- * @param authHeader  Optional HTTP Authorization header for remote servers
- */
-export async function connectToOpenCode(url: string, authHeader?: string | null): Promise<void> {
-	// Disconnect existing connection if any
-	if (connection) {
-		log.info("Disconnecting previous connection", { url: connection.url })
-		connection.abortController.abort()
-		projectClients.clear()
-	}
-
-	// Also abort any stale SSE loop from a previous HMR module that we can't
-	// reach through the module-level `connection` variable.
-	const staleAbort = getGlobalAbort()
-	if (staleAbort && !staleAbort.signal.aborted) {
-		log.info("Aborting stale SSE connection from previous module")
-		staleAbort.abort()
-	}
-
-	// Bump generation — any previous event loop will see it's stale and exit
-	eventLoopGeneration++
-	const gen = eventLoopGeneration
-
-	const resolvedAuth = authHeader ?? null
-	appStore.set(serverUrlAtom, url)
-	appStore.set(authHeaderAtom, resolvedAuth)
-
-	// Base client has no directory — used for SSE events (which cover all projects)
-	const baseClient = connectToServer(url, { authHeader: resolvedAuth ?? undefined })
-	const abortController = new AbortController()
-
-	connection = { url, authHeader: resolvedAuth, baseClient, abortController }
-	setGlobalAbort(abortController)
-
-	log.info("Connecting to OpenCode server", { url, authenticated: !!resolvedAuth, generation: gen })
-
-	// Ping the server to check if it's reachable before starting the event loop.
-	// This sets the initial connected state accurately instead of optimistically.
-	const healthy = await checkHealth(url, resolvedAuth)
-	appStore.set(serverConnectedAtom, healthy)
-	if (healthy) {
-		log.info("Server health check passed", { url })
-	} else {
-		log.warn("Server health check failed, will retry via SSE loop", { url })
-	}
-
-	// Start SSE event loop in the background.
-	// Connected state is updated when the SSE stream opens or fails.
-	startEventLoop(baseClient, abortController.signal, gen)
-}
-
-/**
- * List all projects known to the OpenCode server via the API.
- * Uses the base client (no directory scope) since project.list() is global.
- */
-export async function loadAllProjects() {
-	// Engine path: projects are the distinct directories that have engine sessions.
-	if (appStore.get(engineConnectedAtom)) {
-		try {
-			const eps = await listEngineProjects()
-			log.info("Loaded projects from engine", { count: eps.length })
-			return eps.map(engineProjectToProject)
-		} catch (err) {
-			log.error("Failed to load engine projects", err)
-			return []
-		}
-	}
-
-	const client = getBaseClient()
-	if (!client) {
-		log.warn("Cannot load projects: not connected to server")
-		return []
-	}
-	try {
-		const projects = await listProjects(client)
-		log.info("Loaded projects from API", { count: projects.length })
-		return projects
+		const eps = await listEngineProjects()
+		log.info("Loaded projects from engine", { count: eps.length })
+		return eps.map(engineProjectToProject)
 	} catch (err) {
-		log.error("Failed to load projects from API", err)
+		log.error("Failed to load engine projects", err)
 		return []
 	}
 }
 
-/**
- * Load sessions for a specific project directory from the server.
- * Merges them into the Jotai store.
- *
- * @param directory    The project's main worktree directory
- * @param sandboxDirs  Known sandbox (worktree) directories for this project,
- *                     used to restore worktree metadata on sessions after reload
- * @param options      Optional filtering/pagination for session list
- */
 export async function loadProjectSessions(
 	directory: string,
 	sandboxDirs?: Set<string>,
 	options?: { limit?: number; roots?: boolean; search?: string },
 ): Promise<void> {
-	// Set loading state so the sidebar shows a spinner
-	if (options?.limit) {
-		appStore.set(setProjectPaginationLoadingAtom, directory)
-	}
-
-	// Engine path: list sessions for this directory from the engine store.
-	if (appStore.get(engineConnectedAtom)) {
-		try {
-			const es = await listEngineSessions({ directory, search: options?.search, limit: options?.limit })
-			const sessions = es.map(engineSessionToSession)
-			const statuses: Record<string, SessionStatus> = {}
-			for (const s of es) statuses[s.id] = engineSessionStatus(s)
-			appStore.set(setSessionsAtom, { sessions, statuses, directory, sandboxDirs })
-			if (options?.limit) {
-				appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: es.length, limit: options.limit })
-			}
-		} catch (err) {
-			log.error("Failed to load engine sessions", { directory }, err)
-			if (options?.limit) {
-				appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: 0, limit: options.limit })
-			}
-		}
-		return
-	}
-
-	const client = getProjectClient(directory)
-	if (!client) return
-
+	if (options?.limit) appStore.set(setProjectPaginationLoadingAtom, directory)
 	try {
-		const [sessions, statuses] = await Promise.all([
-			listSessions(client, options),
-			getSessionStatuses(client),
-		])
-		log.info("Loaded sessions for project", {
-			directory,
-			count: sessions.length,
-			limit: options?.limit,
-			roots: options?.roots,
-		})
+		const es = await listEngineSessions({ directory, search: options?.search, limit: options?.limit })
+		const sessions = es.map(engineSessionToSession)
+		const statuses: Record<string, SessionStatus> = {}
+		for (const s of es) statuses[s.id] = engineSessionStatus(s)
 		appStore.set(setSessionsAtom, { sessions, statuses, directory, sandboxDirs })
-
-		// Update pagination state if a limit was specified
-		if (options?.limit) {
-			appStore.set(updateProjectPaginationAtom, {
-				directory,
-				fetchedCount: sessions.length,
-				limit: options.limit,
-			})
-		}
+		if (options?.limit) appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: es.length, limit: options.limit })
 	} catch (err) {
-		log.error("Failed to load sessions", { directory }, err)
-		// Reset loading state on error
-		if (options?.limit) {
-			appStore.set(updateProjectPaginationAtom, {
-				directory,
-				fetchedCount: 0,
-				limit: options.limit,
-			})
-		}
+		log.error("Failed to load engine sessions", { directory }, err)
+		if (options?.limit) appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: 0, limit: options.limit })
 	}
 }
 
-/**
- * Load more sessions for a project by increasing the fetch limit.
- * Called when the user clicks "Load more" in the sidebar.
- *
- * @param directory    The project's main worktree directory
- * @param currentLimit The current limit (will be increased by SESSIONS_PAGE_SIZE)
- */
-export async function loadMoreProjectSessions(
-	directory: string,
-	currentLimit: number,
-): Promise<void> {
+export async function loadMoreProjectSessions(directory: string, currentLimit: number): Promise<void> {
 	const nextLimit = currentLimit + SESSIONS_PAGE_SIZE
 	log.info("Loading more sessions", { directory, currentLimit, nextLimit })
 	appStore.set(setProjectPaginationLoadingAtom, directory)
-
-	// Engine path: re-list with the larger limit.
-	if (appStore.get(engineConnectedAtom)) {
-		try {
-			const es = await listEngineSessions({ directory, limit: nextLimit })
-			const sessions = es.map(engineSessionToSession)
-			const statuses: Record<string, SessionStatus> = {}
-			for (const s of es) statuses[s.id] = engineSessionStatus(s)
-			appStore.set(setSessionsAtom, { sessions, statuses, directory })
-			appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: es.length, limit: nextLimit })
-		} catch (err) {
-			log.error("Failed to load more engine sessions", { directory }, err)
-			appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: currentLimit, limit: currentLimit })
-		}
-		return
-	}
-
-	const client = getProjectClient(directory)
-	if (!client) {
-		log.warn("Cannot load more sessions: no client for directory", { directory })
-		return
-	}
-
 	try {
-		const [sessions, statuses] = await Promise.all([
-			listSessions(client, { limit: nextLimit, roots: true }),
-			getSessionStatuses(client),
-		])
-		log.info("Loaded more sessions for project", {
-			directory,
-			count: sessions.length,
-			limit: nextLimit,
-		})
+		const es = await listEngineSessions({ directory, limit: nextLimit })
+		const sessions = es.map(engineSessionToSession)
+		const statuses: Record<string, SessionStatus> = {}
+		for (const s of es) statuses[s.id] = engineSessionStatus(s)
 		appStore.set(setSessionsAtom, { sessions, statuses, directory })
-		appStore.set(updateProjectPaginationAtom, {
-			directory,
-			fetchedCount: sessions.length,
-			limit: nextLimit,
-		})
+		appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: es.length, limit: nextLimit })
 	} catch (err) {
-		log.error("Failed to load more sessions", { directory }, err)
-		// Reset loading state on error
-		appStore.set(updateProjectPaginationAtom, {
-			directory,
-			fetchedCount: currentLimit,
-			limit: currentLimit,
-		})
+		log.error("Failed to load more engine sessions", { directory }, err)
+		appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: currentLimit, limit: currentLimit })
 	}
 }
 
-/**
- * Get or create a project-scoped SDK client.
- *
- * If the module-level connection was lost (e.g. Vite HMR wiped it) but
- * the Jotai store still knows the server URL, we transparently reconnect.
- */
-export function getProjectClient(directory: string): OpencodeClient | null {
-	if (!connection) {
-		// HMR recovery: module state is gone but the store remembers the URL
-		const storeUrl = appStore.get(serverUrlAtom)
-		if (storeUrl) {
-			log.warn("Connection lost (likely HMR), reconnecting to", { url: storeUrl })
+// ── Legacy OpenCode client accessors (inert stubs) ──────────────────────────
+// Return null now; every remaining call site gates on engineConnectedAtom (always
+// true) and never uses the result. Removed with the OpenCode call sites.
 
-			// Abort any stale SSE loop from the previous module
-			const staleAbort = getGlobalAbort()
-			if (staleAbort && !staleAbort.signal.aborted) {
-				log.info("Aborting stale SSE connection from previous module")
-				staleAbort.abort()
-			}
-
-			const storeAuth = appStore.get(authHeaderAtom)
-			const baseClient = connectToServer(storeUrl, { authHeader: storeAuth ?? undefined })
-			const abortController = new AbortController()
-			eventLoopGeneration++
-			connection = { url: storeUrl, authHeader: storeAuth, baseClient, abortController }
-			setGlobalAbort(abortController)
-			startEventLoop(baseClient, abortController.signal, eventLoopGeneration)
-			// Connected state is set by startEventLoop once SSE actually opens
-		} else {
-			return null
-		}
-	}
-
-	let client = projectClients.get(directory)
-	if (!client) {
-		client = connectToServer(connection.url, {
-			directory,
-			authHeader: connection.authHeader ?? undefined,
-		})
-		projectClients.set(directory, client)
-	}
-	return client
+export function getProjectClient(_directory: string): OpencodeClient | null {
+	return null
 }
 
-/**
- * Fetch a single session by ID using the global (non-directory-scoped) client.
- *
- * Used as a fallback when navigating directly to a session that is not yet in
- * the Jotai store — for example, subagent sessions that arrived while the SSE
- * stream was reconnecting, or sessions on a VPS where the initial batch load
- * only fetches root sessions.
- *
- * Returns `null` if the session is not found, the server is unreachable, or
- * no connection has been established.
- */
-export async function fetchSessionById(sessionId: string): Promise<import("../lib/types").Session | null> {
-	const client = getBaseClient()
-	if (!client) return null
-	return getSession(client, sessionId)
-}
-
-/**
- * Get the base SDK client (no directory scope).
- * Used for global operations like auth set/remove, provider list, global config.
- * Returns null if not connected.
- */
 export function getBaseClient(): OpencodeClient | null {
-	if (!connection) {
-		// HMR recovery
-		const storeUrl = appStore.get(serverUrlAtom)
-		if (storeUrl) {
-			const storeAuth = appStore.get(authHeaderAtom)
-			const baseClient = connectToServer(storeUrl, { authHeader: storeAuth ?? undefined })
-			const abortController = new AbortController()
-			eventLoopGeneration++
-			connection = { url: storeUrl, authHeader: storeAuth, baseClient, abortController }
-			setGlobalAbort(abortController)
-			startEventLoop(baseClient, abortController.signal, eventLoopGeneration)
-			// Connected state is set by startEventLoop once SSE actually opens
-		} else {
-			return null
-		}
-	}
-	return connection.baseClient
+	return null
 }
 
-/**
- * Check if we're connected to the OpenCode server.
- */
+export async function fetchSessionById(_sessionId: string): Promise<Session | null> {
+	return null
+}
+
 export function isConnected(): boolean {
-	return connection !== null
+	return appStore.get(engineConnectedAtom)
 }
 
-/**
- * Get the server URL, or null if not connected.
- */
 export function getServerUrl(): string | null {
-	return connection?.url ?? null
+	return null
 }
 
-/**
- * Reload all OpenCode configuration by disposing all server instances.
- * This forces the server to re-read config files, agents, skills, commands, etc.
- * The resulting SSE events automatically invalidate UI queries.
- */
 export async function reloadConfig(): Promise<void> {
-	if (!connection) {
-		log.warn("Cannot reload config: not connected to server")
-		return
-	}
-	log.info("Reloading OpenCode config (disposing all instances)")
-	await disposeAllInstances(connection.baseClient)
+	// No-op: the engine reads config per request; nothing to dispose.
 }
 
-/**
- * Disconnect from the OpenCode server.
- */
 export function disconnect(): void {
-	log.info("Disconnecting from OpenCode server")
-	if (connection) {
-		connection.abortController.abort()
-		connection = null
-		projectClients.clear()
-	}
-	setGlobalAbort(null)
-	eventLoopGeneration++
 	appStore.set(serverConnectedAtom, false)
 }
 
-// ============================================================
-// Event Batching (OpenCode-inspired 16ms flush with coalescing)
-// ============================================================
-
-const FRAME_BUDGET_MS = 16
-
-// ============================================================
-// Live tool-activity channel (companion narration)
-// ============================================================
-
-/** Tool part ids we've already fired a "running" event for (dedupe). */
-const seenRunningToolIds = new Set<string>()
-/** Monotonic counter so repeated identical tools register as new events. */
-let toolEventSeq = 0
-
-/**
- * Best-effort emit of a live tool event for the avatar companion. Fires at most
- * once per tool part, only on the pending→running transition. This is a hot path
- * during heavy tool activity, so it does the minimal work and never throws.
- */
-function maybeEmitToolEvent(event: Event): void {
-	try {
-		if (event.type !== "message.part.updated") return
-		const part = event.properties.part
-		if (part.type !== "tool") return
-		if (part.state.status !== "running") return
-		if (seenRunningToolIds.has(part.id)) return
-		seenRunningToolIds.add(part.id)
-		// Keep the dedupe set from growing unbounded across a long session.
-		if (seenRunningToolIds.size > 2000) seenRunningToolIds.clear()
-
-		const input = (part.state.input ?? {}) as Record<string, unknown>
-		const filePath = (input.filePath ?? input.path) as string | undefined
-		const command = input.command as string | undefined
-		appStore.set(lastToolEventAtom, {
-			id: part.id,
-			tool: part.tool,
-			filePath: typeof filePath === "string" ? filePath : undefined,
-			command: typeof command === "string" ? command : undefined,
-			seq: ++toolEventSeq,
-		})
-	} catch {
-		// Never disturb the event pipeline on narration bookkeeping.
-	}
-}
-
-function coalescingKey(event: Event): string | undefined {
-	switch (event.type) {
-		case "message.part.updated": {
-			const part = event.properties.part
-			return `part:${part.messageID}:${part.id}`
-		}
-		case "message.part.delta":
-			return `part:${event.properties.messageID}:${event.properties.partID}`
-		case "session.status":
-			return `status:${event.properties.sessionID}`
-		default:
-			return undefined
-	}
-}
-
-function createEventBatcher() {
-	let queue: Event[] = []
-	const coalesced = new Map<string, Event>()
-	let scheduled: number | undefined
-	let lastFlush = 0
-
-	function flush() {
-		const events = [...queue, ...coalesced.values()]
-		queue = []
-		coalesced.clear()
-		scheduled = undefined
-		lastFlush = performance.now()
-
-		if (events.length === 0) return
-
-		// Collect non-streaming parts across all events in the batch so we can
-		// write them in a single batchUpsertPartsAtom call instead of N individual
-		// upsertPartAtom calls. This significantly reduces Jotai atom writes and
-		// React reconciliation passes during heavy tool-call activity.
-		const batchedParts: import("../lib/types").Part[] = []
-		const batchedPartSessionIds = new Set<string>()
-
-		for (const event of events) {
-			if (event.type === "message.part.updated" && !isStreamingPartType(event.properties.part)) {
-				batchedParts.push(event.properties.part)
-				batchedPartSessionIds.add(event.properties.part.sessionID)
-			} else {
-				processEvent(event)
-			}
-		}
-
-		// Flush collected non-streaming parts in a single batch write
-		if (batchedParts.length > 0) {
-			appStore.set(batchUpsertPartsAtom, batchedParts)
-			// Bump per-session streaming version so the UI picks up the new parts
-			for (const sid of batchedPartSessionIds) {
-				appStore.set(streamingVersionFamily(sid), (v: number) => v + 1)
-			}
-		}
-	}
-
-	function enqueue(event: Event) {
-		// Companion narration: fire a live tool event on the pending→running
-		// transition (deduped, never throws). Cheap guards keep this off the
-		// streaming-delta hot path in practice.
-		maybeEmitToolEvent(event)
-
-		// Fast path: route high-frequency text/reasoning part updates to streaming buffer
-		if (event.type === "message.part.updated") {
-			const part = event.properties.part
-			if (isStreamingPartType(part)) {
-				updateStreamingPart(part)
-				const key = coalescingKey(event)
-				if (key) coalesced.set(key, event)
-				if (scheduled !== undefined) return
-				const elapsed = performance.now() - lastFlush
-				if (elapsed < FRAME_BUDGET_MS) {
-					scheduled = requestAnimationFrame(flush)
-				} else {
-					flush()
-				}
-				return
-			}
-		}
-
-		// Fast path: route incremental text/reasoning deltas to streaming buffer
-		if (event.type === "message.part.delta") {
-			const { messageID, partID, field, delta, sessionID } = event.properties
-			if (isStreamingField(field)) {
-				const applied = applyStreamingDelta(messageID, partID, field, delta, sessionID)
-				if (applied) {
-					const key = coalescingKey(event)
-					if (key) coalesced.set(key, event)
-					if (scheduled !== undefined) return
-					const elapsed = performance.now() - lastFlush
-					if (elapsed < FRAME_BUDGET_MS) {
-						scheduled = requestAnimationFrame(flush)
-					} else {
-						flush()
-					}
-					return
-				}
-				// Part not in streaming buffer yet, fall through to normal processing
-			}
-		}
-
-		// When a session goes idle, flush streaming parts to main store
-		if (event.type === "session.status" && event.properties.status.type === "idle") {
-			const flushedParts = flushStreamingParts()
-			if (flushedParts.length > 0) {
-				appStore.set(batchUpsertPartsAtom, flushedParts)
-			}
-			// Layer 3 — Episodic Memory: a task/round just finished, so snapshot this
-			// session as an episode (best-effort; main no-ops when the toggle is off).
-			// Runs after the flush so the latest assistant text is in the store.
-			captureEpisode(event.properties.sessionID)
-		}
-
-		const key = coalescingKey(event)
-		if (key) {
-			coalesced.set(key, event)
-		} else {
-			queue.push(event)
-		}
-
-		if (scheduled !== undefined) return
-
-		const elapsed = performance.now() - lastFlush
-		if (elapsed < FRAME_BUDGET_MS) {
-			scheduled = requestAnimationFrame(flush)
-		} else {
-			flush()
-		}
-	}
-
-	function dispose(discard = false) {
-		if (scheduled !== undefined) {
-			cancelAnimationFrame(scheduled)
-			scheduled = undefined
-		}
-		if (discard) {
-			// Stale connection — drop buffered events instead of flushing them.
-			// Flushing would re-add sessions to the store after sessionIdsAtom has
-			// already been cleared by triggerServerSwitch(), causing stale sessions
-			// from the previous server to reappear in the sidebar.
-			queue = []
-			coalesced.clear()
-		} else {
-			flush()
-		}
-	}
-
-	return { enqueue, dispose }
-}
-
-// ============================================================
-// SSE Event Loop
-// ============================================================
-
-async function startEventLoop(
-	client: OpencodeClient,
-	signal: AbortSignal,
-	generation: number,
-): Promise<void> {
-	let retryDelay = 1000
-
-	const isStale = () => signal.aborted || generation !== eventLoopGeneration
-
-	/** Only write serverConnectedAtom if this event loop is still the active one. */
-	const setConnected = (value: boolean) => {
-		if (!isStale()) appStore.set(serverConnectedAtom, value)
-	}
-
-	log.info("SSE event loop started", { generation })
-
-	while (!isStale()) {
-		// Before opening the SSE stream, check if the server is reachable.
-		// This avoids firing expensive IPC/SSE requests against a dead server.
-		// On the first iteration the caller already ran a health check, so
-		// we only probe when retrying (retryDelay > 1000 means we already failed once).
-		if (retryDelay > 1000 || !appStore.get(serverConnectedAtom)) {
-			const healthy = await checkHealth(connection?.url ?? "", connection?.authHeader ?? null)
-			if (isStale()) break
-			setConnected(healthy)
-			if (!healthy) {
-				log.warn("Server health check failed, backing off", { generation, retryDelay })
-				await new Promise((resolve) => setTimeout(resolve, retryDelay))
-				retryDelay = Math.min(retryDelay * 2, 30000)
-				continue
-			}
-		}
-
-		const batcher = createEventBatcher()
-
-		try {
-			log.debug("Opening SSE stream", { generation })
-			const stream = await subscribeToGlobalEvents(client)
-			if (isStale()) break
-			retryDelay = 1000
-			log.info("SSE stream connected", { generation })
-
-			// SSE stream opened successfully, server is reachable
-			setConnected(true)
-
-			for await (const globalEvent of stream) {
-				if (isStale()) break
-				const event = globalEvent.payload
-				if (event) {
-					batcher.enqueue(event)
-				}
-			}
-			if (!isStale()) {
-				log.warn("SSE stream ended (server closed connection)", { generation })
-				setConnected(false)
-			}
-		} catch (err) {
-			if (isStale()) break
-			log.error("SSE stream disconnected", { generation, retryDelay }, err)
-			setConnected(false)
-		} finally {
-			// Discard pending events when the loop is stale (server switched / disconnected).
-			// Flushing stale events would re-populate session atoms that were just cleared.
-			batcher.dispose(isStale())
-		}
-
-		if (isStale()) break
-
-		log.info("Reconnecting SSE in", { delayMs: retryDelay, generation })
-		await new Promise((resolve) => setTimeout(resolve, retryDelay))
-		retryDelay = Math.min(retryDelay * 2, 30000)
-	}
-
-	log.info("SSE event loop exited", { generation, stale: generation !== eventLoopGeneration })
-}
-
-// ============================================================
-// xot engine connection
-// ============================================================
+// ── xot engine connection ───────────────────────────────────────────────────
 
 let engineEventSource: EventSource | null = null
 
 /**
- * Master switch for routing the UI to the xot engine.
- *
- * ON: the engine is now a complete backend — discovery, session list/load, and
- * history hydration all route to it (connection-manager loadProjectSessions +
- * use-session-chat), alongside prompts/permissions/lifecycle (use-server) and
- * live streaming (engine-event-processor). The earlier OpenCode/engine session-ID
- * mismatch is closed. Every engine branch is still gated on engineConnectedAtom,
- * so if the engine SSE never opens the app transparently falls back to OpenCode.
- */
-const ENGINE_UI_ENABLED = true
-
-/**
- * Opens an SSE connection to the xot engine and processes events.
- * Safe to call multiple times — closes the previous stream first.
+ * Open the SSE connection to the xot engine and process its events. Resolves on
+ * open (or a 4s timeout) so discovery can await the engine before loading.
  */
 export function connectToEngine(): Promise<boolean> {
-	if (!ENGINE_UI_ENABLED) {
-		appStore.set(engineConnectedAtom, false)
-		return Promise.resolve(false)
-	}
-	// Close any existing stream
 	if (engineEventSource) {
 		engineEventSource.close()
 		engineEventSource = null
 		appStore.set(engineConnectedAtom, false)
 	}
-
 	log.info("Connecting to xot engine SSE stream")
-
 	const es = openEngineEventStream()
 	engineEventSource = es
-
-	// Resolve once the stream opens (or a short timeout) so discovery can WAIT for
-	// the engine before loading projects/sessions — otherwise the first load races
-	// ahead while engineConnectedAtom is still false and falls back to OpenCode,
-	// hiding engine-only sessions.
 	return new Promise<boolean>((resolve) => {
 		let settled = false
 		const settle = (v: boolean) => {
@@ -793,33 +127,22 @@ export function connectToEngine(): Promise<boolean> {
 				resolve(v)
 			}
 		}
-
 		es.addEventListener("open", () => {
 			log.info("xot engine SSE connected")
 			appStore.set(engineConnectedAtom, true)
 			settle(true)
 		})
-
 		es.addEventListener("message", (evt) => {
 			try {
-				const event = JSON.parse(evt.data)
-				processEngineEvent(event)
+				processEngineEvent(JSON.parse(evt.data))
 			} catch (err) {
 				log.error("Failed to parse engine event", err, evt.data)
 			}
 		})
-
 		es.addEventListener("error", () => {
-			// EventSource fires transient errors during connect/reconnect even when it
-			// will succeed and auto-reconnects itself, so DON'T flip engineConnectedAtom
-			// to false here — that briefly routed actions to the (now-removed) OpenCode
-			// fallback and failed with "Not connected". Once opened we stay connected;
-			// the engine's HTTP stays reachable across SSE reconnects. Only an explicit
-			// disconnect clears the flag.
+			// EventSource auto-reconnects; keep engineConnectedAtom true once opened.
 			log.warn("xot engine SSE error (auto-reconnecting)")
 		})
-
-		// Don't block discovery indefinitely if the engine never opens.
 		setTimeout(() => settle(false), 4000)
 	})
 }
