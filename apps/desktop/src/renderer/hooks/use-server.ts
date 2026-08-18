@@ -187,12 +187,14 @@ export function useAgentActions() {
 				hasFiles: !!(options?.files && options.files.length > 0),
 			})
 
+			// The engine path needs no OpenCode client. Only require one when the
+			// engine isn't connected (OpenCode fallback) — otherwise a null client
+			// (OpenCode removed) wrongly failed engine prompts with "Not connected".
 			const client = getProjectClient(directory)
-			if (!client) {
-				log.error("sendPrompt: no client for directory", { directory })
+			if (!client && !appStore.get(engineConnectedAtom)) {
+				log.error("sendPrompt: no backend for directory", { directory })
 				throw new Error("Not connected to server")
 			}
-			log.debug("sendPrompt: got client", { directory })
 
 			// Layer 2 — Auto-Recall runs on the FIRST message only (least-invasive
 			// v1). Capture this BEFORE the optimistic message is added, since that
@@ -312,6 +314,9 @@ export function useAgentActions() {
 				})
 				return
 			}
+
+			// OpenCode fallback path — needs a client.
+			if (!client) throw new Error("Not connected to server")
 
 			// One unit of work. When `withPlan`, it thinks first (plan agent, edits
 			// disabled) then executes (build agent) in the same session; otherwise a

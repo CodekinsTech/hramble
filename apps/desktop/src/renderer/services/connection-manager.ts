@@ -811,11 +811,12 @@ export function connectToEngine(): Promise<boolean> {
 
 		es.addEventListener("error", () => {
 			// EventSource fires transient errors during connect/reconnect even when it
-			// will succeed, so DON'T resolve false here — just reflect status and let
-			// the "open" handler (or the timeout below) settle the promise. Resolving
-			// false on a transient error made discovery bail with no sessions.
-			log.warn("xot engine SSE error (will retry via EventSource reconnect)")
-			appStore.set(engineConnectedAtom, false)
+			// will succeed and auto-reconnects itself, so DON'T flip engineConnectedAtom
+			// to false here — that briefly routed actions to the (now-removed) OpenCode
+			// fallback and failed with "Not connected". Once opened we stay connected;
+			// the engine's HTTP stays reachable across SSE reconnects. Only an explicit
+			// disconnect clears the flag.
+			log.warn("xot engine SSE error (auto-reconnecting)")
 		})
 
 		// Don't block discovery indefinitely if the engine never opens.
