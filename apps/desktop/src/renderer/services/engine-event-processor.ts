@@ -12,6 +12,7 @@ import { enginePermissionsAtom, type EnginePermissionRequest } from "../atoms/en
 import { upsertMessageAtom } from "../atoms/messages"
 import { applyPartDeltaAtom, partsFamily, upsertPartAtom } from "../atoms/parts"
 import {
+	lastToolEventAtom,
 	removeSessionAtom,
 	setSessionErrorAtom,
 	setSessionStatusAtom,
@@ -46,6 +47,9 @@ type EngineEvent =
 
 /** Tracks the current assistant message ID per session (for attaching tool parts). */
 const currentMessageBySession = new Map<string, string>()
+
+/** Monotonic counter so repeated identical tools register as new companion events. */
+let toolEventSeq = 0
 
 /** Build a minimal Session shape compatible with the existing atom. */
 function makeSession(sessionId: string, title: string, directory: string): Session {
@@ -256,6 +260,18 @@ export function processEngineEvent(event: EngineEvent): void {
 			)
 			set(upsertPartAtom, toolPart)
 			set(streamingVersionFamily(event.sessionId), (v) => v + 1)
+			// Feed the avatar-companion "process" narration (reading/running/…), the
+			// same channel the OpenCode path fires — otherwise the summary panel shows
+			// no live activity on the engine path.
+			const filePath = (event.input.filePath ?? event.input.path) as string | undefined
+			const command = event.input.command as string | undefined
+			set(lastToolEventAtom, {
+				id: event.toolCallId,
+				tool: event.tool,
+				filePath: typeof filePath === "string" ? filePath : undefined,
+				command: typeof command === "string" ? command : undefined,
+				seq: ++toolEventSeq,
+			})
 			break
 		}
 
