@@ -8,10 +8,6 @@ import {
 	setSessionDiffAtom,
 } from "../atoms/ui"
 import type { FileDiff } from "../lib/types"
-import { getProjectClient } from "../services/connection-manager"
-import { getSessionDiff } from "../services/opencode"
-import { appStore } from "../atoms/store"
-import { engineConnectedAtom } from "../atoms/engine"
 import { getEngineSessionDiff } from "../services/engine-client"
 import { engineDiffsToFileDiffs } from "../services/engine-history"
 
@@ -36,15 +32,8 @@ export function useSessionDiff(sessionId: string, directory: string) {
 		if (loadingRef.current) return
 		loadingRef.current = true
 		try {
-			if (appStore.get(engineConnectedAtom)) {
-				const raw = await getEngineSessionDiff(sessionId)
-				setDiffs({ sessionId, diffs: engineDiffsToFileDiffs(raw) })
-				return
-			}
-			const client = getProjectClient(directory)
-			if (!client) return
-			const result = await getSessionDiff(client, sessionId)
-			setDiffs({ sessionId, diffs: result })
+			const raw = await getEngineSessionDiff(sessionId)
+			setDiffs({ sessionId, diffs: engineDiffsToFileDiffs(raw) })
 		} catch {
 			// Silently fail, diffs will update via SSE
 		} finally {

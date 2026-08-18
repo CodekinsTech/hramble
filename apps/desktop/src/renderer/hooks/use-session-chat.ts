@@ -12,8 +12,7 @@ import { partsFamily } from "../atoms/parts"
 import { appStore } from "../atoms/store"
 import { streamingVersionFamily } from "../atoms/streaming"
 import type { Message, Part } from "../lib/types"
-import { getBaseClient, getProjectClient } from "../services/connection-manager"
-import { engineConnectedAtom } from "../atoms/engine"
+import { getProjectClient } from "../services/connection-manager"
 import { getEngineSession } from "../services/engine-client"
 import { mapEngineMessagesToEntries, type EngineMessage } from "../services/engine-history"
 
@@ -22,9 +21,6 @@ export type { ChatMessageEntry, ChatTurn }
 
 /** Sentinel empty array — stable reference */
 const EMPTY_ENTRIES: ChatMessageEntry[] = []
-
-/** How many messages to fetch on initial load. */
-const INITIAL_LIMIT = 30
 
 /**
  * Hook to load chat data for a session.
@@ -87,37 +83,14 @@ export function useSessionChat(
 				// Engine path: hydrate from the engine's stored transcript instead of
 				// the OpenCode SDK. The engine keeps the whole history, so there is no
 				// separate "load earlier".
-				if (appStore.get(engineConnectedAtom)) {
-					const es = await getEngineSession(sid)
-					const raw = mapEngineMessagesToEntries((es.messages ?? []) as EngineMessage[])
-					hasEarlierRef.current = false
-					const messages = raw.map((m) => m.info)
-					const parts: Record<string, Part[]> = {}
-					for (const m of raw) parts[m.info.id] = m.parts
-					appStore.set(setMessagesAtom, { sessionId: sid, messages, parts })
-					return
-				}
-
-				// Use a directory-scoped client when available, otherwise fall back to the base client
-				const client = (directory ? getProjectClient(directory) : null) ?? getBaseClient()
-				if (!client) {
-					setError("Not connected to server")
-					return
-				}
-
-				const result = await client.session.messages({
-					sessionID: sid,
-					limit: INITIAL_LIMIT,
-				})
-				const raw = (result.data ?? []) as Array<{ info: Message; parts: Part[] }>
-				hasEarlierRef.current = raw.length >= INITIAL_LIMIT
-
-				// Hydrate the Jotai store
+				// Hydrate from the engine's stored transcript. The engine keeps the
+				// whole history, so there is no separate "load earlier".
+				const es = await getEngineSession(sid)
+				const raw = mapEngineMessagesToEntries((es.messages ?? []) as EngineMessage[])
+				hasEarlierRef.current = false
 				const messages = raw.map((m) => m.info)
 				const parts: Record<string, Part[]> = {}
-				for (const m of raw) {
-					parts[m.info.id] = m.parts
-				}
+				for (const m of raw) parts[m.info.id] = m.parts
 				appStore.set(setMessagesAtom, { sessionId: sid, messages, parts })
 			} catch (err) {
 				console.error("Failed to fetch session messages:", err)

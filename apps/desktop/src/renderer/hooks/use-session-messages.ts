@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Activity } from "../lib/types"
-import { getBaseClient, getProjectClient } from "../services/connection-manager"
+import { getEngineSession } from "../services/engine-client"
+import { mapEngineMessagesToEntries, type EngineMessage } from "../services/engine-history"
 
 /**
  * SDK returns messages as { info: Message, parts: Part[] }
@@ -152,18 +153,11 @@ export function useSessionMessages(directory: string | null, sessionId: string |
 		setError(null)
 
 		try {
-			// Use a directory-scoped client when available, otherwise fall back to the base client
-			const client = (directory ? getProjectClient(directory) : null) ?? getBaseClient()
-			if (!client) {
-				setError("Not connected to server")
-				setActivities([])
-				return
-			}
-
-			const result = await client.session.messages({
-				sessionID: sessionId,
-			})
-			const messages = (result.data as unknown as MessageEntry[]) ?? []
+			// Hydrate the activity feed from the engine's stored transcript.
+			const es = await getEngineSession(sessionId)
+			const messages = mapEngineMessagesToEntries(
+				(es.messages ?? []) as EngineMessage[],
+			) as unknown as MessageEntry[]
 
 			if (abort.signal.aborted) return
 
