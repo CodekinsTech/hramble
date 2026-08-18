@@ -1,10 +1,11 @@
-// Import SDK types we reference in our own interfaces
+// Domain types we reference in our own interfaces. Vendored locally
+// (lib/opencode-types.ts) so the app no longer depends on @opencode-ai/sdk types.
 import type {
 	PermissionRequest as SdkPermissionRequest,
 	QuestionRequest as SdkQuestionRequest,
-} from "@opencode-ai/sdk/v2/client"
+} from "./opencode-types"
 
-// Re-export all SDK types from v2
+// Re-export the domain types the app consumes.
 export type {
 	AssistantMessage,
 	Event,
@@ -36,7 +37,7 @@ export type {
 	ToolState,
 	ToolStateCompleted,
 	UserMessage,
-} from "@opencode-ai/sdk/v2/client"
+} from "./opencode-types"
 
 // ============================================================
 // File attachment types
