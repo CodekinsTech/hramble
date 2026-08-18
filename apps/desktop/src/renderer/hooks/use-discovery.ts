@@ -5,23 +5,13 @@ import { discoveryAtom } from "../atoms/discovery"
 import { isMockModeAtom } from "../atoms/mock-mode"
 import { appStore } from "../atoms/store"
 import { createLogger } from "../lib/logger"
-import { resolveAuthHeader, resolveServerUrl } from "../services/backend"
 import {
-	connectToOpenCode,
 	connectToEngine,
 	loadAllProjects,
 	loadProjectSessions,
 } from "../services/connection-manager"
 
 const log = createLogger("discovery")
-
-/** Reject after `ms` so a hung backend probe can't block discovery forever. */
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-	return Promise.race([
-		p,
-		new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
-	])
-}
 
 // Module-level guard to prevent concurrent discovery runs.
 // The Jotai atom guard (loaded/loading) depends on a React re-render
@@ -75,40 +65,18 @@ export function useDiscovery() {
 
 		;(async () => {
 			try {
-				// --- Steps 1-3: Connect OpenCode (best-effort). The engine can back the
-				// app on its own, so an unavailable/slow OpenCode must not block discovery
-				// — resolve + connect under a timeout, and continue on any failure.
+				// Connect to the xot engine — the sole backend. Reflect its state on
+				// serverConnectedAtom so the connection indicator tracks the engine.
 				setPhase("connecting")
-				try {
-					const url = await withTimeout(resolveServerUrl(activeServer), 5000)
-					const authHeader = await resolveAuthHeader(activeServer).catch(() => null)
-					log.info("Connecting to OpenCode server", { url, server: activeServer.name, authenticated: !!authHeader })
-					await connectToOpenCode(url, authHeader)
-				} catch (err) {
-					log.warn("OpenCode unavailable — continuing on the engine", err)
-				}
-				// Connect to the xot engine and WAIT for it before loading projects/
-				// sessions — otherwise the loads race ahead while the engine is still
-				// connecting and fall back to OpenCode, hiding engine-only sessions.
 				const engineReady = await connectToEngine()
+				appStore.set(serverConnectedAtom, engineReady)
 
-				// --- Step 3b: Bail if server is unreachable ---
-				// connectToOpenCode runs a health check and sets serverConnectedAtom.
-				// If the server is offline, skip project/session loading so discovery
-				// stays in a non-loaded state, allowing the sidebar to show "Server offline".
-				// Keep discoveryInFlight = true to prevent an infinite retry loop;
-				// resetDiscoveryGuard() (called on server switch) clears it.
-				// Proceed if EITHER backend is reachable. The engine alone is enough to
-				// drive the app (projects/sessions come from it); only bail when both
-				// OpenCode and the engine are down.
-				if (!appStore.get(serverConnectedAtom) && !engineReady) {
-					log.warn("Neither OpenCode nor the engine is reachable, skipping discovery", {
-						server: activeServer.name,
-					})
+				if (!engineReady) {
+					log.warn("Engine is unreachable, skipping discovery", { server: activeServer.name })
 					appStore.set(discoveryAtom, (prev) => ({
 						...prev,
 						loading: false,
-						error: "Server offline",
+						error: "Engine offline",
 						phase: "error",
 					}))
 					return
