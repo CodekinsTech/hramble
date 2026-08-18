@@ -102,6 +102,11 @@ export const bashToolDefinition = {
 				type: "number",
 				description: "Timeout in milliseconds. Default 30000.",
 			},
+			run_in_background: {
+				type: "boolean",
+				description:
+					"Run the command in the background and return immediately with a shell id (for long-running processes like dev servers or watchers). Read its output later with bashoutput and stop it with killshell. Default false.",
+			},
 		},
 		required: ["command"],
 	},

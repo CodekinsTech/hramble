@@ -10,7 +10,7 @@ export interface PermissionCheck {
 // Tools that only track state or search within the project — never prompt.
 // (read is handled specially below: in-project never prompts, out-of-project does,
 // so the agent can't silently read ~/.ssh and exfiltrate it.)
-const NEVER_PROMPT = new Set(["grep", "glob", "task", "todowrite", "remember", "skill"])
+const NEVER_PROMPT = new Set(["grep", "glob", "task", "todowrite", "remember", "skill", "bashoutput", "killshell"])
 
 /** True if `target` is the project dir itself or nested inside it. */
 export function isInsideProject(directory: string, target: string): boolean {

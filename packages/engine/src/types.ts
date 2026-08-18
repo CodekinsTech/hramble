@@ -24,6 +24,9 @@ export type ContentBlock =
 	| { type: "text"; text: string }
 	| { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
 	| { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
+	// A provider-neutral image (base64 payload). Serialized to each provider's own
+	// shape at request time. mimeType is one of image/png|jpeg|gif|webp.
+	| { type: "image"; mimeType: string; data: string }
 
 export interface Message {
 	id: string

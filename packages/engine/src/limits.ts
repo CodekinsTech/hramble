@@ -31,7 +31,7 @@ export function truncateOutput(text: string, maxChars = MAX_TOOL_OUTPUT_CHARS): 
 }
 
 /** Rough token estimate (~4 chars/token) — good enough for budget decisions. */
-function estimateTokens(messages: MessageParam[]): number {
+export function estimateTokens(messages: MessageParam[]): number {
 	let chars = 0
 	for (const m of messages) {
 		chars += typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length

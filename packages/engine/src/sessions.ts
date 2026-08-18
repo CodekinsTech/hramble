@@ -245,6 +245,34 @@ export function compactSession(sessionId: string, summary: string): Message | nu
 	return message
 }
 
+/**
+ * Compact a session in place while preserving the most recent `keep` messages
+ * (the current turn). Everything older is replaced by a single summary message
+ * ordered just before the kept tail. Used by auto-compaction so a long session
+ * keeps its thread instead of silently losing the oldest turns to trimming.
+ */
+export function compactSessionPreservingRecent(sessionId: string, summary: string, keep = 1): boolean {
+	const list = store.messages[sessionId]
+	if (!list) return false
+	const ordered = [...list].sort((a, b) => a.createdAt - b.createdAt)
+	const tail = keep > 0 ? ordered.slice(-keep) : []
+	const anchor = tail.length > 0 ? tail[0].createdAt - 1 : Date.now()
+	const summaryMsg: Message = {
+		id: nanoid(),
+		sessionId,
+		role: "assistant",
+		content: `Summary of the conversation so far:\n\n${summary}`,
+		createdAt: anchor,
+	}
+	store.messages[sessionId] = [summaryMsg, ...tail]
+	// The pre-compaction messages are gone — their snapshots/redo are dead.
+	store.checkpoints[sessionId] = []
+	store.redo[sessionId] = []
+	if (store.sessions[sessionId]) store.sessions[sessionId].updatedAt = Date.now()
+	persist()
+	return true
+}
+
 /** Record a file's before/after content around an engine edit for undo. */
 export function recordSnapshot(
 	sessionId: string,

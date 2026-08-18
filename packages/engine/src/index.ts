@@ -2,6 +2,7 @@ import { startServer, stopServer } from "./server.js"
 import { closeDb } from "./sessions.js"
 import { ensureToolsOnPath } from "./path-setup.js"
 import { closeMcp } from "./mcp.js"
+import { killAllBackgroundShells } from "./tools/background.js"
 
 // Guarantee git + core tools are on PATH before we run any bash command.
 ensureToolsOnPath()
@@ -13,6 +14,7 @@ startServer().catch((err) => {
 
 async function shutdown(): Promise<void> {
 	stopServer()
+	killAllBackgroundShells()
 	await closeMcp()
 	closeDb()
 	process.exit(0)

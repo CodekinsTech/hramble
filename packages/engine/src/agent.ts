@@ -5,6 +5,13 @@ import { nanoid } from "nanoid"
 import { buildSystemPrompt } from "./system-prompt.js"
 import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode } from "./types.js"
 import { runBash, bashToolDefinition, isDangerous } from "./tools/bash.js"
+import {
+	startBackgroundShell,
+	readBackgroundShell,
+	killBackgroundShell,
+	bashOutputToolDefinition,
+	killShellToolDefinition,
+} from "./tools/background.js"
 import { readFile, readToolDefinition } from "./tools/read.js"
 import { writeFile, writeToolDefinition } from "./tools/write.js"
 import { editFile, editToolDefinition } from "./tools/edit.js"
@@ -31,6 +38,8 @@ import type { ContentBlock } from "./types.js"
 
 const TOOLS: Tool[] = [
 	bashToolDefinition,
+	bashOutputToolDefinition,
+	killShellToolDefinition,
 	readToolDefinition,
 	writeToolDefinition,
 	editToolDefinition,
@@ -106,6 +115,31 @@ function awaitWithAbort<T>(p: Promise<T>, signal: AbortSignal, onAbort: T): Prom
 		signal.addEventListener("abort", onAbortEvt, { once: true })
 		p.then(finish, () => finish(onAbort))
 	})
+}
+
+/**
+ * Convert our provider-neutral image blocks ({type:"image", mimeType, data})
+ * into Anthropic's base64 image source shape. Other blocks pass through, so a
+ * text-only transcript is returned unchanged.
+ */
+function toAnthropicMessages(messages: MessageParam[]): MessageParam[] {
+	let touched = false
+	const out = messages.map((m) => {
+		if (!Array.isArray(m.content)) return m
+		let changed = false
+		const content = m.content.map((b) => {
+			if (b && typeof b === "object" && "type" in b && (b as { type: string }).type === "image" && "data" in b) {
+				changed = true
+				const img = b as unknown as { mimeType: string; data: string }
+				return { type: "image", source: { type: "base64", media_type: img.mimeType, data: img.data } }
+			}
+			return b
+		})
+		if (!changed) return m
+		touched = true
+		return { ...m, content: content as MessageParam["content"] }
+	})
+	return touched ? out : messages
 }
 
 /**
@@ -388,7 +422,7 @@ async function runAnthropicTurn(
 			max_tokens: maxTokens,
 			system,
 			tools,
-			messages: withConversationCache(messages),
+			messages: withConversationCache(toAnthropicMessages(messages)),
 		},
 		{ signal },
 	)
@@ -469,6 +503,17 @@ async function runOpenAICompatTurn(
 					content: tr.content,
 				})) as unknown as OpenAI.Chat.Completions.ChatCompletionMessageParam
 			}
+			// User message carrying images (+ text): convert to OpenAI multimodal parts.
+			const parts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+			for (const c of m.content) {
+				if (typeof c !== "object" || c === null || !("type" in c)) continue
+				if (c.type === "text") parts.push({ type: "text", text: (c as { text: string }).text })
+				else if ((c as { type: string }).type === "image" && "data" in c) {
+					const img = c as unknown as { mimeType: string; data: string }
+					parts.push({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.data}` } })
+				}
+			}
+			if (parts.length > 0) return { role: "user", content: parts }
 		}
 		// Handle assistant messages with tool_use content
 		if (m.role === "assistant" && Array.isArray(m.content)) {
@@ -553,6 +598,11 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 	if (isMcpTool(name)) return callMcpTool(directory, name, input)
 	switch (name) {
 		case "bash": {
+			if (input.run_in_background) {
+				const res = startBackgroundShell(String(input.command ?? ""), directory)
+				if ("error" in res) return res.error
+				return `Started background shell "${res.id}". Read its output with bashoutput (bash_id "${res.id}") and stop it with killshell.`
+			}
 			const result = await runBash(
 				{ command: String(input.command ?? ""), timeout: Number(input.timeout) || undefined },
 				directory,
@@ -563,6 +613,10 @@ async function executeTool(name: string, input: Record<string, unknown>, directo
 			if (result.exitCode !== 0) parts.push(`[exit code: ${result.exitCode}]`)
 			return parts.join("\n") || "(no output)"
 		}
+		case "bashoutput":
+			return readBackgroundShell(String(input.bash_id ?? ""))
+		case "killshell":
+			return killBackgroundShell(String(input.shell_id ?? ""))
 		case "read":
 			return readFile({ filePath: String(input.filePath ?? ""), offset: input.offset !== undefined ? Number(input.offset) : undefined, limit: input.limit !== undefined ? Number(input.limit) : undefined }, directory)
 		case "write":

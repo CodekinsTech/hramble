@@ -29,6 +29,7 @@ function flatten(messages: MessageParam[]): string {
 				lines.push(`${role} [calls ${(block as { name: string }).name}]: ${JSON.stringify((block as { input: unknown }).input)}`)
 			else if (block.type === "tool_result")
 				lines.push(`Tool result: ${(block as { content: string }).content}`)
+			else if (block.type === "image") lines.push(`${role}: [attached an image]`)
 		}
 	}
 	return lines.join("\n")

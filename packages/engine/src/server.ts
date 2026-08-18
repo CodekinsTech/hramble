@@ -2,11 +2,11 @@ import path from "node:path"
 import Fastify from "fastify"
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js"
 import { nanoid } from "nanoid"
-import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode } from "./types.js"
+import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode, ContentBlock } from "./types.js"
 import { runAgentLoop } from "./agent.js"
 import { resolveApiKey } from "./auth.js"
 import { getProvider, getModel, getAllProviders } from "./providers.js"
-import { trimHistory } from "./limits.js"
+import { trimHistory, estimateTokens } from "./limits.js"
 import {
 	initDb,
 	createSession,
@@ -23,11 +23,12 @@ import {
 	deleteMessage,
 	forkSession,
 	compactSession,
+	compactSessionPreservingRecent,
 	revertSession,
 	unrevertSession,
 } from "./sessions.js"
 import { summarizeConversation } from "./summarize.js"
-import { buildAttachmentContext, type Attachment } from "./attachments.js"
+import { buildAttachments, type Attachment } from "./attachments.js"
 import { globFiles } from "./tools/glob.js"
 
 const PORT = Number(process.env.ENGINE_PORT) || 4200
@@ -371,23 +372,49 @@ export async function startServer(): Promise<void> {
 
 		const resolvedModel: ModelRef = { ...requested, apiKey }
 
-		// Prepend any attached file context so the model sees it inline.
-		const attachmentContext = buildAttachmentContext(attachments, session.directory)
-		const userContent = attachmentContext ? `${attachmentContext}${text}` : text
+		// Prepend attached text context inline; attach images as real vision blocks
+		// (the one message shape both providers accept for images).
+		const { text: attachmentContext, images } = buildAttachments(attachments, session.directory)
+		const userText = attachmentContext ? `${attachmentContext}${text}` : text
+		const userContent: string | ContentBlock[] =
+			images.length > 0
+				? [...images.map((im) => ({ type: "image" as const, mimeType: im.mimeType, data: im.data })), { type: "text" as const, text: userText }]
+				: userText
 
 		// Save user message
 		addMessage(session.id, "user", userContent)
 		updateSessionStatus(session.id, "running")
 		broadcast({ type: "session.updated", sessionId: session.id, status: "running" })
 
-		// Build message history for the API from the full stored transcript
+		const contextWindow = getModel(requested.provider, requested.model)?.contextWindow ?? 128_000
+
+		// Auto-compaction: when the stored transcript approaches the context window,
+		// summarize the older turns into one message (preserving the current one)
+		// BEFORE running — so a long session keeps its thread instead of silently
+		// dropping the oldest turns. Best-effort: on failure we fall through to the
+		// token-based trim below, which never fails.
+		const preHistory = getMessages(session.id)
+		const preRaw: MessageParam[] = preHistory.map((m) => ({ role: m.role, content: m.content as MessageParam["content"] }))
+		if (preHistory.length > 4 && estimateTokens(preRaw) > contextWindow * 0.8) {
+			try {
+				const prior = preRaw.slice(0, -1) // everything except the just-added user turn
+				const summary = await summarizeConversation(resolvedModel, prior)
+				if (summary.trim()) {
+					compactSessionPreservingRecent(session.id, summary, 1)
+					broadcast({ type: "session.updated", sessionId: session.id, status: "running" })
+				}
+			} catch {
+				// summarizer unavailable — keep going; trimHistory handles the overflow.
+			}
+		}
+
+		// Build message history for the API from the (possibly compacted) transcript
 		// (text + tool_use + tool_result), then trim to fit the context window.
 		const history = getMessages(session.id)
 		const rawMessages: MessageParam[] = history.map((m) => ({
 			role: m.role,
 			content: m.content as MessageParam["content"],
 		}))
-		const contextWindow = getModel(requested.provider, requested.model)?.contextWindow ?? 128_000
 		const apiMessages = trimHistory(rawMessages, contextWindow)
 
 		const abortController = new AbortController()
