@@ -167,7 +167,6 @@ export function useDiscovery() {
 
 				log.info("Discovery complete", {
 					server: activeServer.name,
-					url,
 					projects: projects.length,
 					prefetched: sortedByActivity.length,
 				})
