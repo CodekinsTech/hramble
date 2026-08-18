@@ -14,26 +14,28 @@ const MAX_MESSAGES_PER_SESSION = 200
  * If found, index is the position of the match.
  * If not found, index is where the item should be inserted.
  */
-function binarySearch<T>(
-	arr: T[],
-	target: string,
-	key: (item: T) => string,
-): { found: boolean; index: number } {
-	let lo = 0
-	let hi = arr.length
-	while (lo < hi) {
-		const mid = (lo + hi) >>> 1
-		const cmp = key(arr[mid]).localeCompare(target)
-		if (cmp < 0) lo = mid + 1
-		else if (cmp > 0) hi = mid
-		else return { found: true, index: mid }
-	}
-	return { found: false, index: lo }
-}
 
 // ============================================================
 // Per-session message list (sorted by id)
 // ============================================================
+
+/**
+ * A message's creation time (ms) — the correct sort key across backends. OpenCode
+ * IDs happen to sort chronologically, but the engine uses random nanoids, so
+ * ordering by id put new messages in random positions (e.g. above the last one).
+ */
+function timeOf(m: Message): number {
+	return (m as { time?: { created?: number } }).time?.created ?? 0
+}
+
+/** Index at which to insert `message` so the list stays ordered by time. */
+function insertIndexByTime(arr: Message[], message: Message): number {
+	const t = timeOf(message)
+	for (let i = 0; i < arr.length; i++) {
+		if (timeOf(arr[i]) > t) return i
+	}
+	return arr.length
+}
 
 export const messagesFamily = atomFamily((_sessionId: string) => atom<Message[]>([]))
 
@@ -73,8 +75,7 @@ export const setMessagesAtom = atom(
 		const merged = existing.slice()
 		for (const msg of args.messages) {
 			if (!existingIds.has(msg.id)) {
-				const result = binarySearch(merged, msg.id, (m) => m.id)
-				merged.splice(result.index, 0, msg)
+				merged.splice(insertIndexByTime(merged, msg), 0, msg)
 			}
 		}
 
@@ -112,25 +113,19 @@ export const upsertMessageAtom = atom(null, (get, set, message: Message) => {
 		}
 	}
 
-	const result = binarySearch(existing, message.id, (m) => m.id)
-
-	if (result.found) {
+	// Dedup by id (update in place); order by TIME, not id.
+	const existingIdx = existing.findIndex((m) => m.id === message.id)
+	if (existingIdx !== -1) {
 		// Skip if reference-equal (no change)
-		if (existing[result.index] === message) return
-
+		if (existing[existingIdx] === message) return
 		const updated = existing.slice()
-		updated[result.index] = message
-		// Cap at MAX_MESSAGES_PER_SESSION
-		if (updated.length > MAX_MESSAGES_PER_SESSION) {
-			const removed = updated.shift()!
-			set(partsFamily(removed.id), [])
-		}
+		updated[existingIdx] = message
 		set(messagesFamily(sessionId), updated)
 		return
 	}
 
 	const updated = existing.slice()
-	updated.splice(result.index, 0, message)
+	updated.splice(insertIndexByTime(updated, message), 0, message)
 	// Cap at MAX_MESSAGES_PER_SESSION
 	if (updated.length > MAX_MESSAGES_PER_SESSION) {
 		const removed = updated.shift()!
@@ -154,10 +149,11 @@ export const removeMessageAtom = atom(
 	) => {
 		const existing = get(messagesFamily(args.sessionId))
 		if (!existing) return
-		const result = binarySearch(existing, args.messageId, (m) => m.id)
-		if (!result.found) return
+		// Find by id (the list is time-ordered now, not id-ordered).
+		const idx = existing.findIndex((m) => m.id === args.messageId)
+		if (idx === -1) return
 		const updated = [...existing]
-		updated.splice(result.index, 1)
+		updated.splice(idx, 1)
 		set(partsFamily(args.messageId), [])
 		set(messagesFamily(args.sessionId), updated)
 	},
