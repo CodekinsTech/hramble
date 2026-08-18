@@ -83,11 +83,33 @@ import type { ChatTurn } from "../../hooks/use-session-chat"
 import { createLogger } from "../../lib/logger"
 import { computeTurnWorkTimeSplit, formatWorkDuration } from "../../lib/session-metrics"
 import type { Agent, FileAttachment, FilePart, QuestionAnswer, TextPart } from "../../lib/types"
-import { getProjectClient } from "../../services/connection-manager"
-import { getEngineSession, summarizeEngineSession } from "../../services/engine-client"
+import {
+	createEngineSession,
+	deleteEngineSession,
+	abortEngineSession,
+	getEngineSession,
+	sendEnginePrompt,
+	summarizeEngineSession,
+	waitForEngineSessionIdle,
+} from "../../services/engine-client"
 import { mapEngineMessagesToEntries, type EngineMessage } from "../../services/engine-history"
 
 const log = createLogger("chat-view")
+
+/** Engine model ref from the UI's selected model (empty apiKey → engine uses its env keys). */
+function engineModelOf(m: { providerID: string; modelID: string } | null | undefined) {
+	return m ? { provider: m.providerID, model: m.modelID, apiKey: "" } : undefined
+}
+
+/** The concatenated text of a session's last assistant message (engine transcript). */
+async function lastAssistantText(sessionId: string): Promise<string> {
+	const es = await getEngineSession(sessionId).catch(() => null)
+	const entries = mapEngineMessagesToEntries((es?.messages ?? []) as EngineMessage[])
+	const last = [...entries].reverse().find((m) => m.info?.role === "assistant")
+	return (last?.parts ?? [])
+		.map((p) => (p.type === "text" ? ((p as { text?: string }).text ?? "") : ""))
+		.join("\n")
+}
 
 import {
 	type DiffComment,
@@ -1311,7 +1333,6 @@ function ChatInputSection({
 
 			const spaceIndex = trimmed.indexOf(" ")
 			const cmdName = spaceIndex === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIndex)
-			const cmdArgs = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1).trim()
 
 			// Client-only commands that don't go through the server
 			switch (cmdName.toLowerCase()) {
@@ -1334,25 +1355,11 @@ function ChatInputSection({
 					break
 			}
 
-			if (agent.directory) {
-				const client = getProjectClient(agent.directory)
-				if (client) {
-					try {
-						await client.session.command({
-							sessionID: agent.sessionId,
-							command: cmdName,
-							arguments: cmdArgs,
-						})
-						return true
-					} catch {
-						// Not a recognized server command
-					}
-				}
-			}
-
+			// Custom server-side slash commands aren't supported by the engine; an
+			// unrecognized command falls through to be sent as a normal message.
 			return false
 		},
-		[agent, onUndo, onRedo, effectiveModel],
+		[agent, onUndo, onRedo],
 	)
 
 	/**
@@ -1544,29 +1551,19 @@ function ChatInputSection({
 	// of steps. Runs in a throwaway session so it doesn't clutter the chat.
 	const autoDecompose = useCallback(async () => {
 		const g = goal.trim()
-		if (!g || decomposing) return
-		const client = getProjectClient(agent.directory)
-		if (!client) return
+		if (!g || decomposing || !agent.directory) return
 		setDecomposing(true)
+		let scratchId: string | undefined
 		try {
-			const created = await client.session.create({ title: "Plan steps" })
-			const scratchId = created.data?.id
-			if (!scratchId) return
-			const res = await client.session.prompt({
-				sessionID: scratchId,
-				parts: [
-					{
-						type: "text",
-						text: `Break this goal into up to ${STEP_COUNT} concrete, ordered implementation steps. Reply ONLY as a numbered list (\`1.\`, \`2.\`, …), one step per line — no preamble, no sub-bullets.\n\nGoal: ${g}`,
-					},
-				],
-				model: effectiveModel
-					? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
-					: undefined,
-			})
-			const text = (res.data?.parts ?? [])
-				.map((p) => (p.type === "text" ? p.text : ""))
-				.join("\n")
+			const created = await createEngineSession(agent.directory, "Plan steps")
+			scratchId = created.id
+			await sendEnginePrompt(
+				scratchId,
+				`Break this goal into up to ${STEP_COUNT} concrete, ordered implementation steps. Reply ONLY as a numbered list (\`1.\`, \`2.\`, …), one step per line — no preamble, no sub-bullets.\n\nGoal: ${g}`,
+				engineModelOf(effectiveModel),
+			)
+			await waitForEngineSessionIdle(scratchId)
+			const text = await lastAssistantText(scratchId)
 			const parsed = text
 				.split("\n")
 				.filter((l) => /^\s*\d+[.)]\s+/.test(l))
@@ -1577,8 +1574,8 @@ function ChatInputSection({
 				setSteps(Array.from({ length: STEP_COUNT }, (_, i) => parsed[i] ?? ""))
 				setStepsOpen(true)
 			}
-			await client.session.delete({ sessionID: scratchId, directory: agent.directory }).catch(() => {})
 		} finally {
+			if (scratchId) await deleteEngineSession(scratchId).catch(() => {})
 			setDecomposing(false)
 		}
 	}, [goal, decomposing, agent.directory, effectiveModel])
@@ -1586,47 +1583,20 @@ function ChatInputSection({
 	// Hyperloop: decompose one big goal into 7 parallel steps via AI.
 	const hyperDecompose = useCallback(async () => {
 		const g = hyperGoal.trim()
-		if (!g || hyperDecomposing) return
-		const client = getProjectClient(agent.directory)
-		if (!client) return
+		if (!g || hyperDecomposing || !agent.directory) return
 		setHyperDecomposing(true)
 		setHyperSteps([])
+		let scratchId: string | undefined
 		try {
-			const created = await client.session.create({ title: "Hyperloop plan", directory: agent.directory })
-			const scratchId = created.data?.id
-			if (!scratchId) return
-			await client.session.promptAsync({
-				sessionID: scratchId,
-				directory: agent.directory,
-				parts: [
-					{
-						type: "text",
-						text: `Break this goal into exactly 7 concrete implementation steps that can be worked on in PARALLEL by separate agents (each step touches different files/areas). Make each step a precise, self-contained instruction — include file names and what to do. At the end of each line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nReply ONLY as a numbered list (1., 2., …), one step per line. No preamble, no sub-bullets.\n\nExample line: 1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${g}`,
-					},
-				],
-				model: effectiveModel
-					? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
-					: undefined,
-			})
-			// Poll until the session finishes. A finished session drops out of the status map,
-			// so track seenBusy: once it's been busy and then disappears, it's genuinely done.
-			let seenBusy = false
-			for (let i = 0; i < 120; i++) {
-				await new Promise((r) => setTimeout(r, 1000))
-				const status = await client.session.status({ directory: agent.directory }).catch(() => null)
-				const sessionStatus = (status?.data as Record<string, { type: string }> | null)?.[scratchId]
-				if (sessionStatus?.type === "busy") { seenBusy = true; continue }
-				if (seenBusy) break
-				if (i >= 12) break
-			}
-			// Fetch the last assistant message
-			const msgs = await client.session.messages({ sessionID: scratchId, directory: agent.directory }).catch(() => null)
-			type MsgEntry = { info: { role: string }; parts: Array<{ type: string; text?: string }> }
-			const allMsgs: MsgEntry[] = (msgs?.data as MsgEntry[]) ?? []
-			const lastAssistant = [...allMsgs].reverse().find((m) => m.info?.role === "assistant")
-			const text = (lastAssistant?.parts ?? [])
-				.map((p) => (p.type === "text" ? p.text ?? "" : ""))
-				.join("\n")
+			const created = await createEngineSession(agent.directory, "Hyperloop plan")
+			scratchId = created.id
+			await sendEnginePrompt(
+				scratchId,
+				`Break this goal into exactly 7 concrete implementation steps that can be worked on in PARALLEL by separate agents (each step touches different files/areas). Make each step a precise, self-contained instruction — include file names and what to do. At the end of each line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nReply ONLY as a numbered list (1., 2., …), one step per line. No preamble, no sub-bullets.\n\nExample line: 1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${g}`,
+				engineModelOf(effectiveModel),
+			)
+			await waitForEngineSessionIdle(scratchId)
+			const text = await lastAssistantText(scratchId)
 			const parsed = text
 				.split("\n")
 				.filter((l) => /^\s*\d+[.)]\s+/.test(l))
@@ -1643,24 +1613,22 @@ function ChatInputSection({
 			if (parsed.length > 0) {
 				setHyperSteps(parsed.map((s) => ({ ...s, status: "idle" as const })))
 			}
-			await client.session.delete({ sessionID: scratchId, directory: agent.directory }).catch(() => {})
 		} finally {
+			if (scratchId) await deleteEngineSession(scratchId).catch(() => {})
 			setHyperDecomposing(false)
 		}
 	}, [hyperGoal, hyperDecomposing, agent.directory, effectiveModel])
 
 	// Hyperloop: launch all steps simultaneously — each in its own session.
 	const hyperLaunch = useCallback(async () => {
-		if (hyperRunning || hyperSteps.length === 0) return
-		const client = getProjectClient(agent.directory)
-		if (!client) return
+		if (hyperRunning || hyperSteps.length === 0 || !agent.directory) return
 		setHyperRunning(true)
 		const dir = agent.directory
+		const model = engineModelOf(effectiveModel)
 		const sessionIds = await Promise.all(
 			hyperSteps.map((s, i) =>
-				client.session
-					.create({ title: `Hyperloop ${i + 1}: ${s.text.slice(0, 40)}`, directory: dir })
-					.then((r) => r.data?.id ?? null)
+				createEngineSession(dir, `Hyperloop ${i + 1}: ${s.text.slice(0, 40)}`)
+					.then((r) => r.id)
 					.catch(() => null),
 			),
 		)
@@ -1677,25 +1645,8 @@ function ChatInputSection({
 				return
 			}
 			try {
-				await client.session.promptAsync({
-					sessionID: sid,
-					directory: dir,
-					parts: [{ type: "text", text: step.text }],
-					model: effectiveModel
-						? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
-						: undefined,
-				})
-				// Poll until idle (max 10 min). A finished session drops out of the status map,
-				// so break as soon as it's been busy and then disappears — not on timeout.
-				let seenBusy = false
-				for (let t = 0; t < 600; t++) {
-					await new Promise((r) => setTimeout(r, 1000))
-					const status = await client.session.status({ directory: dir }).catch(() => null)
-					const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
-					if (st?.type === "busy") { seenBusy = true; continue }
-					if (seenBusy) break
-					if (t >= 12) break
-				}
+				await sendEnginePrompt(sid, step.text, model)
+				await waitForEngineSessionIdle(sid)
 				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const } : s)))
 			} catch {
 				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
@@ -1710,21 +1661,13 @@ function ChatInputSection({
 		async (i: number, text: string) => {
 			const step = hyperSteps[i]
 			if (!step?.sessionId || !text.trim()) return
-			const client = getProjectClient(agent.directory)
-			if (!client) return
+			const sid = step.sessionId
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "running" as const } : s)))
 			setHyperReprompts((prev) => prev.map((r, j) => (j === i ? "" : r)))
 			try {
-				const res = await client.session.prompt({
-					sessionID: step.sessionId,
-					parts: [{ type: "text", text }],
-					model: effectiveModel
-						? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
-						: undefined,
-				})
-				const preview = (res.data?.parts ?? [])
-					.map((p) => (p.type === "text" ? p.text : ""))
-					.join("\n")
+				await sendEnginePrompt(sid, text, engineModelOf(effectiveModel))
+				await waitForEngineSessionIdle(sid)
+				const preview = (await lastAssistantText(sid))
 					.trim()
 					.split("\n")
 					.filter((l) => l.trim())
@@ -1738,7 +1681,7 @@ function ChatInputSection({
 				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 			}
 		},
-		[hyperSteps, agent.directory, effectiveModel],
+		[hyperSteps, effectiveModel],
 	)
 
 	const handleSend = useCallback(
@@ -2357,25 +2300,23 @@ function ChatInputSection({
 															<div className="mt-1 flex gap-1.5 pl-6">
 																{step.status === "running" && step.sessionId && (
 																	<button type="button" onClick={async () => {
-																		const c = getProjectClient(agent.directory)
-																		if (c && step.sessionId) {
-																			await c.session.abort({ sessionID: step.sessionId }).catch(() => {})
+																		if (step.sessionId) {
+																			await abortEngineSession(step.sessionId).catch(() => {})
 																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "failed" as const } : s))
 																		}
 																	}} className="rounded px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10">Stop</button>
 																)}
 																{step.status === "failed" && (
 																	<button type="button" onClick={async () => {
-																		const c = getProjectClient(agent.directory)
-																		if (!c) return
+																		if (!agent.directory) return
 																		setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "running" as const } : s))
 																		try {
-																			const r = await c.session.create({ title: `Retry ${i + 1}: ${step.text.slice(0, 40)}` })
-																			const sid = r.data?.id
-																			if (!sid) throw new Error("no id")
+																			const created = await createEngineSession(agent.directory, `Retry ${i + 1}: ${step.text.slice(0, 40)}`)
+																			const sid = created.id
 																			markHyperloopSession(sid)
 																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, sessionId: sid } : s))
-																			await c.session.prompt({ sessionID: sid, parts: [{ type: "text", text: step.text }], model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined })
+																			await sendEnginePrompt(sid, step.text, engineModelOf(effectiveModel))
+																			await waitForEngineSessionIdle(sid)
 																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "done" as const } : s))
 																		} catch {
 																			setHyperSteps((prev) => prev.map((s, j) => j === i ? { ...s, status: "failed" as const } : s))

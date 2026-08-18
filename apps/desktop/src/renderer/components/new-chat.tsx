@@ -79,7 +79,15 @@ import {
 } from "../hooks/use-opencode-data"
 import { useAgentActions } from "../hooks/use-server"
 import type { FileAttachment } from "../lib/types"
-import { getProjectClient } from "../services/connection-manager"
+import {
+	createEngineSession,
+	deleteEngineSession,
+	abortEngineSession,
+	getEngineSession,
+	sendEnginePrompt,
+	waitForEngineSessionIdle,
+} from "../services/engine-client"
+import { mapEngineMessagesToEntries, type EngineMessage } from "../services/engine-history"
 import { pickDirectory } from "../services/backend"
 import { createWorktree, randomWorktreeName } from "../services/worktree-service"
 import { useSetAppBarContent } from "./app-bar-context"
@@ -89,6 +97,33 @@ import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
 import { HrambleLogo } from "./hramble-logo"
 import { GraphView } from "./graph-view"
 import { HyperloopSpinner } from "./hyperloop-spinner"
+
+// ============================================================
+// Engine helpers (Hyperloop runs on the xot engine)
+// ============================================================
+
+/** Engine model ref from the UI's selected model (empty apiKey → engine uses its env keys). */
+function engineModelOf(m: { providerID: string; modelID: string } | null | undefined) {
+	return m ? { provider: m.providerID, model: m.modelID, apiKey: "" } : undefined
+}
+
+/** Engine transcript entries for a session (info + parts), newest last. */
+async function engineEntries(sessionId: string): Promise<Array<{ info: { role: string }; parts: unknown[] }>> {
+	const es = await getEngineSession(sessionId).catch(() => null)
+	return mapEngineMessagesToEntries((es?.messages ?? []) as EngineMessage[]) as unknown as Array<{
+		info: { role: string }
+		parts: unknown[]
+	}>
+}
+
+/** Concatenated text of a session's last assistant message. */
+async function engineLastAssistantText(sessionId: string): Promise<string> {
+	const entries = await engineEntries(sessionId)
+	const last = [...entries].reverse().find((m) => m.info?.role === "assistant")
+	return ((last?.parts ?? []) as Array<{ type: string; text?: string }>)
+		.map((p) => (p.type === "text" ? (p.text ?? "") : ""))
+		.join("\n")
+}
 
 // ============================================================
 // Worktree mode toggle
@@ -759,57 +794,24 @@ export function NewChat() {
 
 	const hyperDecompose = async () => {
 		if (!hyperGoal.trim() || badFolder) return
-		const client = getProjectClient(selectedDirectory)
-		if (!client) return
 		hyperDecomposeAbort.current = false
 		setHyperCollapsed(false)
 		setHyperDecomposing(true)
 		setHyperSteps([])
 		setManualQueueMode(false)
+		let scratchId: string | undefined
 		try {
-			const created = await client.session.create({ title: "Hyperloop plan", directory: selectedDirectory })
-			const scratchId = created.data?.id
-			if (!scratchId) return
+			const created = await createEngineSession(selectedDirectory, "Hyperloop plan")
+			scratchId = created.id
 			hyperScratchId.current = scratchId
-			if (hyperDecomposeAbort.current) {
-				await client.session.delete({ sessionID: scratchId, directory: selectedDirectory }).catch(() => {})
-				return
-			}
-			await client.session.promptAsync({
-				sessionID: scratchId,
-				directory: selectedDirectory,
-				parts: [
-					{
-						type: "text",
-						text: `First, in ONE short sentence, judge whether this goal is a small, medium, or large task and say roughly how many implementation steps it needs — for example "This is a medium task — I'll use 9 steps across 2 loops of 7." A loop holds ${HYPER_LOOP_SIZE} steps; use as many loops as the task genuinely needs, up to ${HYPER_MAX_STEPS} steps total. Do NOT pad or force a specific count — use exactly as many steps as the task needs.\n\nThen on a new line, list the steps as a numbered list (1., 2., …), one step per line. Make each step a precise, self-contained instruction that can be worked on in PARALLEL by separate agents (each step touches different files/areas) — include file names and what to do. At the end of each step line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nNo preamble besides that one sizing sentence, no sub-bullets.\n\nExample:\nThis is a small task — I'll use 4 steps.\n1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${hyperGoal}`,
-					},
-				],
-				model: effectiveModel
-					? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID }
-					: undefined,
-			})
-			// Poll until the session finishes. Wait up to 2 min.
-			// A finished session DROPS OUT of the status map (status is {}), so absence
-			// means either "not started yet" or "already done". Track seenBusy to tell them apart:
-			// once we've seen it busy, the next time it's absent it's genuinely finished.
-			let seenBusy = false
-			for (let i = 0; i < 120; i++) {
-				if (hyperDecomposeAbort.current) break
-				await new Promise((r) => setTimeout(r, 1000))
-				const status = await client.session.status({ directory: selectedDirectory }).catch(() => null)
-				const sessionStatus = (status?.data as Record<string, { type: string }> | null)?.[scratchId]
-				if (sessionStatus?.type === "busy") { seenBusy = true; continue }
-				if (seenBusy) break        // was working, now gone → done
-				if (i >= 12) break         // never went busy after 12s → nothing to wait for
-			}
-			// Fetch the last assistant message
-			const msgs = await client.session.messages({ sessionID: scratchId, directory: selectedDirectory }).catch(() => null)
-			type MsgEntry = { info: { role: string }; parts: Array<{ type: string; text?: string }> }
-			const allMsgs: MsgEntry[] = (msgs?.data as MsgEntry[]) ?? []
-			const lastAssistant = [...allMsgs].reverse().find((m) => m.info?.role === "assistant")
-			const text = (lastAssistant?.parts ?? [])
-				.map((p) => (p.type === "text" ? p.text ?? "" : ""))
-				.join("\n")
+			if (hyperDecomposeAbort.current) return
+			await sendEnginePrompt(
+				scratchId,
+				`First, in ONE short sentence, judge whether this goal is a small, medium, or large task and say roughly how many implementation steps it needs — for example "This is a medium task — I'll use 9 steps across 2 loops of 7." A loop holds ${HYPER_LOOP_SIZE} steps; use as many loops as the task genuinely needs, up to ${HYPER_MAX_STEPS} steps total. Do NOT pad or force a specific count — use exactly as many steps as the task needs.\n\nThen on a new line, list the steps as a numbered list (1., 2., …), one step per line. Make each step a precise, self-contained instruction that can be worked on in PARALLEL by separate agents (each step touches different files/areas) — include file names and what to do. At the end of each step line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nNo preamble besides that one sizing sentence, no sub-bullets.\n\nExample:\nThis is a small task — I'll use 4 steps.\n1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${hyperGoal}`,
+				engineModelOf(effectiveModel),
+			)
+			await waitForEngineSessionIdle(scratchId, { shouldStop: () => hyperDecomposeAbort.current })
+			const text = await engineLastAssistantText(scratchId)
 			const lines = text.split("\n")
 			const firstNumberedIdx = lines.findIndex((l) => /^\s*\d+[.)]\s+/.test(l))
 			// Everything before the first numbered line is the AI's sizing sentence
@@ -841,8 +843,8 @@ export function NewChat() {
 					sizingNote: sizingNote || undefined,
 				})
 			}
-			await client.session.delete({ sessionID: scratchId, directory: selectedDirectory }).catch(() => {})
 		} finally {
+			if (scratchId) await deleteEngineSession(scratchId).catch(() => {})
 			hyperScratchId.current = null
 			setHyperDecomposing(false)
 		}
@@ -850,22 +852,9 @@ export function NewChat() {
 
 	// Fetch a short "what was done" summary (the agent's last assistant message)
 	// for a completed step session. Used to build the collapsed on-page recap.
-	const fetchStepSummary = async (
-		client: NonNullable<ReturnType<typeof getProjectClient>>,
-		sessionID: string,
-		directory: string,
-	): Promise<string> => {
+	const fetchStepSummary = async (sessionID: string): Promise<string> => {
 		try {
-			const msgs = await client.session.messages({ sessionID, directory }).catch(() => null)
-			const arr =
-				(msgs?.data as Array<{ info: { role: string }; parts: Array<{ type: string; text?: string }> }>) ?? []
-			const last = [...arr].reverse().find((m) => m.info?.role === "assistant")
-			return (last?.parts ?? [])
-				.map((p) => (p.type === "text" ? p.text ?? "" : ""))
-				.join(" ")
-				.replace(/\s+/g, " ")
-				.trim()
-				.slice(0, 4000)
+			return (await engineLastAssistantText(sessionID)).replace(/\s+/g, " ").trim().slice(0, 4000)
 		} catch {
 			return ""
 		}
@@ -888,37 +877,24 @@ export function NewChat() {
 	 * result is actually what the user wanted. That's a real, permanent limit of
 	 * automated verification, not a gap in this check.
 	 */
-	const verifyStepMessages = async (
-		client: NonNullable<ReturnType<typeof getProjectClient>>,
-		sessionID: string,
-		directory: string,
-	): Promise<{ ok: boolean; reason?: string }> => {
+	const verifyStepMessages = async (sessionID: string): Promise<{ ok: boolean; reason?: string }> => {
 		try {
-			const msgs = await client.session.messages({ sessionID, directory }).catch(() => null)
+			const entries = await engineEntries(sessionID)
 			type ToolPart = { type: string; tool?: string; state?: { status?: string; output?: string; error?: string } }
-			const arr = (msgs?.data as Array<{ parts: ToolPart[] }>) ?? []
-			const toolParts = arr.flatMap((m) => m.parts ?? []).filter((p) => p.type === "tool")
+			const toolParts = entries.flatMap((m) => (m.parts ?? []) as ToolPart[]).filter((p) => p.type === "tool")
 
 			if (toolParts.length === 0) {
 				return { ok: false, reason: "No tool call was made — the model replied with text instead of doing the work" }
 			}
-			// OpenCode represents "the model called a tool that doesn't exist" as a
-			// synthetic tool part named "invalid" with status "completed" (not
-			// "error") — so status alone won't catch it; check the tool name too.
-			const hallucinated = toolParts.find((p) => p.tool === "invalid")
-			if (hallucinated) {
-				return {
-					ok: false,
-					reason: (hallucinated.state?.output || hallucinated.state?.error || "Tried to call a tool that doesn't exist").slice(0, 300),
-				}
-			}
+			// A tool the engine couldn't run (unknown tool / no result) is recorded as
+			// an errored tool part — that covers hallucinated tool calls too.
 			const errored = toolParts.find((p) => p.state?.status === "error")
 			if (errored) {
 				return { ok: false, reason: `${errored.tool} failed: ${(errored.state?.error || "").slice(0, 250)}` }
 			}
 			return { ok: true }
 		} catch {
-			// Can't verify (server hiccup, etc.) — don't punish the step for our own fetch failure.
+			// Can't verify (engine hiccup, etc.) — don't punish the step for our own fetch failure.
 			return { ok: true }
 		}
 	}
@@ -930,8 +906,6 @@ export function NewChat() {
 	 * back, up to MAX_REPAIR_ATTEMPTS — this is the self-repair loop.
 	 */
 	const runStepUntilVerified = async (
-		client: NonNullable<ReturnType<typeof getProjectClient>>,
-		dir: string,
 		i: number,
 		sid: string,
 		promptText: string,
@@ -945,29 +919,9 @@ export function NewChat() {
 		const gate = isLocalModel ? hyperSequentialGate : hyperConcurrentGate
 		const release = await gate.acquire()
 		try {
-			await client.session.promptAsync({
-				sessionID: sid,
-				directory: dir,
-				parts: [{ type: "text", text: `${promptText}${STEP_SUMMARY_INSTRUCTION}` }],
-				model: effectiveModel ? { providerID: effectiveModel.providerID, modelID: effectiveModel.modelID } : undefined,
-			})
-			// Poll until the session goes idle (max 10 min). A finished session drops out
-			// of the status map, so track seenBusy: break as soon as it's been busy and
-			// then disappears — instead of spinning the full timeout.
-			let seenBusy = false
-			for (let t = 0; t < 600; t++) {
-				if (manuallyStoppedRef.current.has(sid)) break
-				await new Promise((r) => setTimeout(r, 1000))
-				if (manuallyStoppedRef.current.has(sid)) break
-				const status = await client.session.status({ directory: dir }).catch(() => null)
-				const st = (status?.data as Record<string, { type: string }> | null)?.[sid]
-				if (st?.type === "busy") {
-					seenBusy = true
-					continue
-				}
-				if (seenBusy) break
-				if (t >= 12) break
-			}
+			await sendEnginePrompt(sid, `${promptText}${STEP_SUMMARY_INSTRUCTION}`, engineModelOf(effectiveModel))
+			// Wait for the background run to finish; bail early if the user Stops it.
+			await waitForEngineSessionIdle(sid, { shouldStop: () => manuallyStoppedRef.current.has(sid) })
 		} finally {
 			release()
 		}
@@ -981,8 +935,8 @@ export function NewChat() {
 			return
 		}
 
-		const verdict = await verifyStepMessages(client, sid, dir)
-		const summary = await fetchStepSummary(client, sid, dir)
+		const verdict = await verifyStepMessages(sid)
+		const summary = await fetchStepSummary(sid)
 
 		if (verdict.ok) {
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview: summary || s.preview } : s)))
@@ -993,7 +947,7 @@ export function NewChat() {
 				prev.map((s, j) => (j === i ? { ...s, status: "repairing" as const, preview: `Retrying — ${verdict.reason}` } : s)),
 			)
 			const corrective = `Your previous attempt did not succeed: ${verdict.reason}\n\nRetry the task below. Only use tools that actually exist in this environment — if a tool call fails because the tool doesn't exist, don't try it again, use a different real tool (e.g. read, write, edit, patch, bash, grep, glob) instead. Make sure to actually call a tool rather than just describing what you would do.\n\nTask: ${promptText}`
-			return runStepUntilVerified(client, dir, i, sid, corrective, attempt + 1)
+			return runStepUntilVerified(i, sid, corrective, attempt + 1)
 		}
 		setHyperSteps((prev) =>
 			prev.map((s, j) =>
@@ -1041,13 +995,10 @@ export function NewChat() {
 		// each step's plain `text` when there's no `preview` yet, so a failure
 		// here must never be allowed to look like the recap itself failed.
 		try {
-			const dir = hyperRun?.directory || selectedDirectory
-			const client = getProjectClient(dir)
-			if (!client) return
 			if (!hyperSteps.some((s) => s.sessionId && !s.preview)) return
 			const summaries = await Promise.all(
 				hyperSteps.map((s) =>
-					s.preview || !s.sessionId ? Promise.resolve(s.preview ?? "") : fetchStepSummary(client, s.sessionId, dir),
+					s.preview || !s.sessionId ? Promise.resolve(s.preview ?? "") : fetchStepSummary(s.sessionId),
 				),
 			)
 			setHyperSteps((prev) => prev.map((s, j) => ({ ...s, preview: summaries[j] || s.preview })))
@@ -1064,10 +1015,7 @@ export function NewChat() {
 		if (!willExpand) return
 		const step = hyperSteps[i]
 		if (!step?.sessionId || (step.preview?.length ?? 0) >= 400) return
-		const dir = hyperRun?.directory || selectedDirectory
-		const client = getProjectClient(dir)
-		if (!client) return
-		const full = await fetchStepSummary(client, step.sessionId, dir)
+		const full = await fetchStepSummary(step.sessionId)
 		if (full && full.length > (step.preview?.length ?? 0)) {
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, preview: full } : s)))
 		}
@@ -1090,15 +1038,13 @@ export function NewChat() {
 	const runSingleStep = async (i: number) => {
 		const dir = hyperRun?.directory ?? selectedDirectory
 		if (!dir || dir === "/" || dir.length <= 1) return
-		const client = getProjectClient(dir)
 		const step = hyperSteps[i]
-		if (!client || !step || !step.text.trim()) return
+		if (!step || !step.text.trim()) return
 		setEditingStep(null)
 		setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "running" as const } : s)))
 		try {
-			const r = await client.session.create({ title: `Hyperloop ${i + 1}: ${step.text.slice(0, 40)}`, directory: dir })
-			const sid = r.data?.id
-			if (!sid) throw new Error("no id")
+			const created = await createEngineSession(dir, `Hyperloop ${i + 1}: ${step.text.slice(0, 40)}`)
+			const sid = created.id
 			markHyperloopSession(sid)
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, sessionId: sid } : s)))
 			// Running this step alone (a re-run, or a step added after the original
@@ -1112,7 +1058,7 @@ export function NewChat() {
 			const prompt = doneContext
 				? `Other steps already completed in this project:\n${doneContext}\n\nBuild on that existing work — don't recreate it. Your task:\n${step.text}`
 				: step.text
-			await runStepUntilVerified(client, dir, i, sid, prompt, 0)
+			await runStepUntilVerified(i, sid, prompt, 0)
 		} catch {
 			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 		}
@@ -1121,16 +1067,13 @@ export function NewChat() {
 	const hyperLaunchAll = async () => {
 		if (!hyperSteps.length || badFolder || hyperNeedsRunModeChoice) return
 		setHyperCollapsed(false)
-		const client = getProjectClient(selectedDirectory)
-		if (!client) return
 		setHyperRunning(true)
 
 		// Create all 7 sessions with correct directory
 		const sessionIds = await Promise.all(
 			hyperSteps.map((s, i) =>
-				client.session
-					.create({ title: `Hyperloop ${i + 1}: ${s.text.slice(0, 40)}`, directory: selectedDirectory })
-					.then((r) => r.data?.id ?? null)
+				createEngineSession(selectedDirectory, `Hyperloop ${i + 1}: ${s.text.slice(0, 40)}`)
+					.then((r) => r.id)
 					.catch(() => null),
 			),
 		)
@@ -1141,9 +1084,8 @@ export function NewChat() {
 			prev.map((s, i) => ({ ...s, status: "running" as const, sessionId: sessionIds[i] ?? undefined })),
 		)
 
-		// Fire all prompts with promptAsync (non-blocking fire-and-forget)
-		// then poll each session status until idle
-		const dir = selectedDirectory
+		// Each step runs in its own session: prompt (fire-and-forget) then await idle,
+		// with the mechanical verify + self-repair loop inside runStepUntilVerified.
 		const runOne = async (i: number) => {
 			const sid = sessionIds[i]
 			const step = hyperSteps[i]
@@ -1152,7 +1094,7 @@ export function NewChat() {
 				return
 			}
 			try {
-				await runStepUntilVerified(client, dir, i, sid, step.text, 0)
+				await runStepUntilVerified(i, sid, step.text, 0)
 			} catch {
 				setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 			}
@@ -1610,9 +1552,8 @@ export function NewChat() {
 												onClick={() => {
 													if (hyperDecomposing) {
 														hyperDecomposeAbort.current = true
-														const client = getProjectClient(selectedDirectory)
-														if (client && hyperScratchId.current) {
-															client.session.abort({ sessionID: hyperScratchId.current }).catch(() => {})
+														if (hyperScratchId.current) {
+															abortEngineSession(hyperScratchId.current).catch(() => {})
 														}
 														setHyperDecomposing(false)
 													} else {
@@ -1752,10 +1693,9 @@ export function NewChat() {
 															)}
 															{isBusy && step.sessionId && (
 																<button type="button" onClick={async () => {
-																	const c2 = getProjectClient(hyperRun?.directory ?? selectedDirectory)
-																	if (c2 && step.sessionId) {
+																																		if (step.sessionId) {
 																		manuallyStoppedRef.current.add(step.sessionId)
-																		await c2.session.abort({ sessionID: step.sessionId }).catch(() => {})
+																		await abortEngineSession(step.sessionId).catch(() => {})
 																		setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "failed" as const } : s)))
 																	}
 																}} className="rounded px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-500/10">Stop</button>
