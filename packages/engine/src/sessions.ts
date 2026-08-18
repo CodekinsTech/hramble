@@ -1,9 +1,33 @@
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
-import { DatabaseSync } from "node:sqlite"
 import { nanoid } from "nanoid"
 import type { Session, Message, ContentBlock, Todo, Usage } from "./types.js"
+
+// SQLite driver, resolved for the runtime: node:sqlite under Node, bun:sqlite
+// under Bun (the desktop app spawns the engine with Bun, which lacks
+// node:sqlite). Both expose the same surface we use: exec(), prepare() →
+// run/get/all(...params), close().
+interface SqlStatement {
+	run(...params: unknown[]): { changes: number | bigint }
+	get(...params: unknown[]): unknown
+	all(...params: unknown[]): unknown[]
+}
+interface SqlDatabase {
+	exec(sql: string): void
+	prepare(sql: string): SqlStatement
+	close(): void
+}
+type DbCtor = new (path: string) => SqlDatabase
+
+let DatabaseCtor: DbCtor
+try {
+	DatabaseCtor = (await import("node:sqlite")).DatabaseSync as unknown as DbCtor
+} catch {
+	// Non-literal specifier so tsc doesn't try to resolve the Bun-only module.
+	const bunSqlite = "bun:sqlite"
+	DatabaseCtor = (await import(bunSqlite)).Database as unknown as DbCtor
+}
 
 const DATA_DIR = process.env.ENGINE_DATA_DIR || path.join(os.homedir(), ".local", "share", "hramble", "engine")
 const DB_FILE = path.join(DATA_DIR, "engine.db")
@@ -26,7 +50,7 @@ interface RevertBatch {
 	snapshots: FileSnapshot[]
 }
 
-let db: DatabaseSync
+let db: SqlDatabase
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -101,9 +125,9 @@ export function initDb(): void {
 }
 
 /** Open the DB; if the file is corrupt, back it up and start fresh (don't crash). */
-function openOrRecover(): DatabaseSync {
+function openOrRecover(): SqlDatabase {
 	try {
-		const d = new DatabaseSync(DB_FILE)
+		const d = new DatabaseCtor(DB_FILE)
 		d.exec("SELECT 1") // force it to actually touch the file
 		return d
 	} catch (err) {
@@ -113,7 +137,7 @@ function openOrRecover(): DatabaseSync {
 			// ignore
 		}
 		console.error(`[xot-engine] engine.db was unreadable; backed it up and started fresh: ${err instanceof Error ? err.message : err}`)
-		return new DatabaseSync(DB_FILE)
+		return new DatabaseCtor(DB_FILE)
 	}
 }
 
