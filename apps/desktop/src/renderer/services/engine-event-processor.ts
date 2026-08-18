@@ -71,7 +71,11 @@ function makeAssistantMessage(messageId: string, sessionId: string): AssistantMe
 		sessionID: sessionId,
 		role: "assistant",
 		time: { created: Date.now() },
-		parentID: sessionId,
+		// No parentID: turn-grouping attaches an assistant message to the preceding
+		// user turn only when parentID is empty or equals the user message id.
+		// Stamping sessionId here excluded the whole streaming response from the turn,
+		// so nothing rendered live until history reloaded.
+		parentID: undefined,
 		modelID: "",
 		providerID: "",
 		mode: "auto",

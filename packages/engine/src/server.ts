@@ -172,7 +172,10 @@ export async function startServer(): Promise<void> {
 		reply.raw.setHeader("Cache-Control", "no-cache")
 		reply.raw.setHeader("Connection", "keep-alive")
 		reply.raw.setHeader("Access-Control-Allow-Origin", "*")
+		// Defeat any proxy/stream buffering so each event flushes immediately.
+		reply.raw.setHeader("X-Accel-Buffering", "no")
 		reply.raw.flushHeaders()
+		reply.raw.socket?.setNoDelay(true)
 
 		const write = (event: EngineEvent) => {
 			reply.raw.write(`data: ${JSON.stringify(event)}\n\n`)
