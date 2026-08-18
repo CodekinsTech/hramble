@@ -524,6 +524,14 @@ export async function startServer(): Promise<void> {
 		return { ok: true, sessionId: session.id }
 	})
 
+	// ── Run status ────────────────────────────────────────────────────────
+	// Definitive "is the agent still running for this session" — backed by the
+	// activeAgents map, so callers (7-steps / Hyperloop / proforge) can await a
+	// run's completion instead of racing the SSE stream.
+	app.get<{ Params: { id: string } }>("/sessions/:id/status", async (req) => {
+		return { active: activeAgents.has(req.params.id) }
+	})
+
 	// ── Abort ────────────────────────────────────────────────────────────
 	app.post<{ Params: { id: string } }>("/sessions/:id/abort", async (req, reply) => {
 		const controller = activeAgents.get(req.params.id)

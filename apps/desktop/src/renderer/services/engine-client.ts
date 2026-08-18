@@ -238,6 +238,48 @@ export async function abortEngineSession(sessionId: string): Promise<{ ok: boole
 	return request(`/sessions/${sessionId}/abort`, { method: "POST" })
 }
 
+/** Whether the engine still has an agent running for this session. */
+export async function isEngineSessionActive(sessionId: string): Promise<boolean> {
+	const res = await request<{ active: boolean }>(`/sessions/${sessionId}/status`)
+	return res.active
+}
+
+/**
+ * Resolve once the engine's agent run for a session has finished (or a timeout /
+ * abort predicate fires). The engine's /prompt returns immediately and runs in
+ * the background, so callers that need the result (7-steps verify, Hyperloop,
+ * proforge diff harvest) await this. Polls the definitive activeAgents-backed
+ * status endpoint rather than racing the SSE stream.
+ *
+ * Waits for the run to actually START (become active) before treating "not
+ * active" as done, so a poll landing in the gap between prompt POST and agent
+ * spin-up doesn't return prematurely. If it never becomes active within
+ * `startGraceMs`, assumes it finished too fast to observe and returns.
+ */
+export async function waitForEngineSessionIdle(
+	sessionId: string,
+	opts?: { timeoutMs?: number; pollMs?: number; startGraceMs?: number; shouldStop?: () => boolean },
+): Promise<void> {
+	const timeoutMs = opts?.timeoutMs ?? 600_000
+	const pollMs = opts?.pollMs ?? 600
+	const startGraceMs = opts?.startGraceMs ?? 8_000
+	const start = performance.now()
+	let seenActive = false
+	while (performance.now() - start < timeoutMs) {
+		if (opts?.shouldStop?.()) return
+		await new Promise((r) => setTimeout(r, pollMs))
+		if (opts?.shouldStop?.()) return
+		const active = await isEngineSessionActive(sessionId).catch(() => false)
+		if (active) {
+			seenActive = true
+			continue
+		}
+		if (seenActive) return
+		// Never observed a busy window — assume the run finished before our first poll.
+		if (performance.now() - start > startGraceMs) return
+	}
+}
+
 export async function allowEnginePermission(
 	permissionId: string,
 	always = false,

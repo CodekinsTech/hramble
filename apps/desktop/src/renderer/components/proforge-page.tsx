@@ -43,8 +43,13 @@ import {
 	masterSessionRoomToken,
 	publishMasterSessionCanvasUrl,
 } from "../lib/master-session-relay"
-import { getProjectClient, loadProjectSessions } from "../services/connection-manager"
-import { getSessionDiff } from "../services/opencode"
+import { loadProjectSessions } from "../services/connection-manager"
+import {
+	getEngineSession,
+	getEngineSessionDiff,
+	waitForEngineSessionIdle,
+} from "../services/engine-client"
+import { engineDiffsToFileDiffs, mapEngineMessagesToEntries, type EngineMessage } from "../services/engine-history"
 import { createWorktree, randomWorktreeName } from "../services/worktree-service"
 import { useSetSidebarSlot } from "./sidebar-slot-context"
 import { CreateOrJoinTeam, GateScreen, TeamWorkspace, useTeamSpaces } from "./team-page"
@@ -449,8 +454,10 @@ export function ProForgeDesignDeck() {
 			if (!session) throw new Error("Couldn't start a session")
 			setVariants((prev) => prev.map((v) => (v.index === index ? { ...v, sessionId: session.id } : v)))
 			await sendPrompt(directory, session.id, buildVariantPrompt(userBrief, style.brief), { agent: "build" })
-			const client = getProjectClient(directory)
-			const diffs = client ? await getSessionDiff(client, session.id) : []
+			// The engine runs the prompt in the background — wait for it to finish
+			// before harvesting the diff, or we'd read an empty result.
+			await waitForEngineSessionIdle(session.id)
+			const diffs = engineDiffsToFileDiffs(await getEngineSessionDiff(session.id))
 			const htmlFile = diffs.find((d) => d.status !== "deleted" && /\.(html?|svg)$/i.test(d.file))
 			if (!htmlFile?.after) throw new Error("No HTML file found in the result")
 			setVariants((prev) => prev.map((v) => (v.index === index ? { ...v, status: "done", html: htmlFile.after } : v)))
@@ -584,15 +591,13 @@ function buildSwarmDecomposePrompt(goal: string): string {
 	return `First, in ONE short sentence, judge whether this goal is a small, medium, or large task and say roughly how many steps it needs. Use as many steps as the task genuinely needs, up to ${SWARM_MAX_STEPS} steps total — do NOT pad or force a specific count.\n\nThen on a new line, list the steps as a numbered list (1., 2., …), one step per line. Each step runs in its OWN isolated git worktree/branch by a separate agent, so make each step a precise, self-contained instruction (each step should touch different files/areas where possible) — include file names and what to do. At the end of each step line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the project folder. Never use absolute paths.\n\nNo preamble besides that one sizing sentence, no sub-bullets.\n\nGoal: ${goal}`
 }
 
-async function fetchLastAssistantText(directory: string, sessionId: string): Promise<string> {
-	const client = getProjectClient(directory)
-	if (!client) return ""
-	const msgs = await client.session.messages({ sessionID: sessionId }).catch(() => null)
-	type MsgEntry = { info: { role: string }; parts: Array<{ type: string; text?: string }> }
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const allMsgs: MsgEntry[] = ((msgs as any)?.data as MsgEntry[]) ?? []
-	const lastAssistant = [...allMsgs].reverse().find((m) => m.info?.role === "assistant")
-	return (lastAssistant?.parts ?? []).map((p) => (p.type === "text" ? (p.text ?? "") : "")).join("\n")
+async function fetchLastAssistantText(_directory: string, sessionId: string): Promise<string> {
+	const es = await getEngineSession(sessionId).catch(() => null)
+	const entries = mapEngineMessagesToEntries((es?.messages ?? []) as EngineMessage[])
+	const lastAssistant = [...entries].reverse().find((m) => m.info?.role === "assistant")
+	return (lastAssistant?.parts ?? [])
+		.map((p) => (p.type === "text" ? ((p as { text?: string }).text ?? "") : ""))
+		.join("\n")
 }
 
 function parseSwarmSteps(text: string): { text: string; timeEstimate?: string }[] {
@@ -688,6 +693,7 @@ export function ProForgeSwarm() {
 			const session = await createSession(directory, "Swarm plan", CHAT_MODES.auto.permission ?? undefined)
 			if (!session) return
 			await sendPrompt(directory, session.id, buildSwarmDecomposePrompt(trimmedGoal), { agent: "build" })
+			await waitForEngineSessionIdle(session.id)
 			const text = await fetchLastAssistantText(directory, session.id)
 			const lines = text.split("\n")
 			const firstNumberedIdx = lines.findIndex((l) => /^\s*\d+[.)]\s+/.test(l))
@@ -1008,8 +1014,8 @@ export function ProForgeFanOut() {
 			if (!session) throw new Error("Couldn't start a session")
 			setTargets((prev) => prev.map((t) => (t.index === index ? { ...t, sessionId: session.id } : t)))
 			await sendPrompt(wt.worktreeWorkspace, session.id, buildFanOutPrompt(format), { agent: "build" })
-			const client = getProjectClient(wt.worktreeWorkspace)
-			const diffs = client ? await getSessionDiff(client, session.id) : []
+			await waitForEngineSessionIdle(session.id)
+			const diffs = engineDiffsToFileDiffs(await getEngineSessionDiff(session.id))
 			const htmlFile = diffs.find((d) => d.status !== "deleted" && /\.(html?|svg)$/i.test(d.file))
 			if (!htmlFile?.after) throw new Error("No HTML file found in the result")
 			setTargets((prev) => prev.map((t) => (t.index === index ? { ...t, status: "done", html: htmlFile.after } : t)))
