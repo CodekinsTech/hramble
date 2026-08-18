@@ -39,16 +39,29 @@ async function nodeGrepFallback(input: GrepInput, workingDir: string): Promise<s
 	})
 
 	const { readFile } = await import("node:fs/promises")
-	const regex = new RegExp(input.pattern, input.caseSensitive ? "g" : "gi")
+	// A user-supplied pattern can be an invalid or catastrophically-backtracking
+	// (ReDoS) regex. Validate it, cap the text each match runs against, and stop
+	// the whole scan at a hard deadline so a pathological pattern can't wedge the turn.
+	let regex: RegExp
+	try {
+		regex = new RegExp(input.pattern, input.caseSensitive ? "g" : "gi")
+	} catch {
+		return `Invalid regular expression: ${input.pattern}`
+	}
+	const MAX_PROBE_CHARS = 2000 // don't run the regex over pathologically long lines
+	const deadline = Date.now() + 8000
 	const results: string[] = []
 
 	for (const file of files) {
 		if (results.length >= 50) break
+		if (Date.now() > deadline) break
 		try {
 			const content = await readFile(`${workingDir}/${file}`, "utf-8")
 			const lines = content.split("\n")
 			for (let i = 0; i < lines.length; i++) {
-				if (regex.test(lines[i])) {
+				if (Date.now() > deadline) break
+				const probe = lines[i].length > MAX_PROBE_CHARS ? lines[i].slice(0, MAX_PROBE_CHARS) : lines[i]
+				if (regex.test(probe)) {
 					results.push(`${file}:${i + 1}:${lines[i]}`)
 					regex.lastIndex = 0
 				}

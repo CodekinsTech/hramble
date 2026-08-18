@@ -108,6 +108,26 @@ function awaitWithAbort<T>(p: Promise<T>, signal: AbortSignal, onAbort: T): Prom
 	})
 }
 
+/**
+ * Return a shallow copy of the messages with a cache breakpoint on the last
+ * block of the final message — caches the whole conversation prefix. Never
+ * mutates the caller's array (stale breakpoints would blow the 4-breakpoint
+ * limit and cache the wrong prefix on later turns).
+ */
+function withConversationCache(messages: MessageParam[]): MessageParam[] {
+	if (messages.length === 0) return messages
+	const out = messages.slice()
+	const lastIdx = out.length - 1
+	const last = out[lastIdx]
+	if (Array.isArray(last.content) && last.content.length > 0) {
+		const content = last.content.slice()
+		const bi = content.length - 1
+		content[bi] = { ...(content[bi] as object), cache_control: { type: "ephemeral" } } as (typeof content)[number]
+		out[lastIdx] = { ...last, content: content as MessageParam["content"] }
+	}
+	return out
+}
+
 export async function runAgentLoop(options: RunOptions): Promise<void> {
 	const { sessionId, directory, model, emit, signal, onPermissionRequest } = options
 	const mode: AgentMode = options.mode ?? "build"
@@ -124,6 +144,7 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 
 	const MAX_ITERATIONS = 50
 	let iterations = 0
+	let lastToolCallCount = 0
 
 	while (iterations < MAX_ITERATIONS) {
 		if (signal.aborted) break
@@ -198,6 +219,7 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 			messages.push({ role: "assistant", content: assistantBlocks as MessageParam["content"] })
 		}
 
+		lastToolCallCount = toolCalls.length
 		if (toolCalls.length === 0) break
 
 		// Execute tools. Every tool_use MUST get a matching tool_result or the next
@@ -318,6 +340,16 @@ export async function runAgentLoop(options: RunOptions): Promise<void> {
 		if (interrupted || signal.aborted) break
 	}
 
+	// If we ran out of iterations while the model still wanted to call tools, say
+	// so instead of stopping silently — the user's task may be unfinished.
+	if (!signal.aborted && iterations >= MAX_ITERATIONS && lastToolCallCount > 0) {
+		const notice = `Reached the ${MAX_ITERATIONS}-step limit for a single turn and stopped. The task may be unfinished — send "continue" to keep going.`
+		const noticeMsg = addMessage(sessionId, "assistant", [{ type: "text", text: notice }])
+		emit({ type: "message.start", messageId: noticeMsg.id, sessionId, role: "assistant" })
+		emit({ type: "message.delta", messageId: noticeMsg.id, sessionId, text: notice })
+		emit({ type: "message.complete", messageId: noticeMsg.id, sessionId })
+	}
+
 	emit({ type: "session.idle", sessionId })
 }
 
@@ -338,13 +370,25 @@ async function runAnthropicTurn(
 	const client = new Anthropic({ apiKey: model.apiKey })
 	const maxTokens = resolveMaxOutputTokens(getModel(model.provider, model.model)?.contextWindow ?? 128_000)
 
+	// Prompt caching: mark the static prefix (system prompt + tool schemas) and the
+	// conversation prefix as cacheable so each turn only pays to process the newly
+	// appended tokens — a large cost/latency win on multi-step loops. Anthropic
+	// allows up to 4 breakpoints; we use 3 (system, last tool, last message).
+	const system: Anthropic.TextBlockParam[] = [
+		{ type: "text", text: buildSystemPrompt(directory, mode), cache_control: { type: "ephemeral" } },
+	]
+	const tools =
+		turnTools.length > 0
+			? turnTools.map((t, i) => (i === turnTools.length - 1 ? { ...t, cache_control: { type: "ephemeral" as const } } : t))
+			: turnTools
+
 	const stream = client.messages.stream(
 		{
 			model: model.model,
 			max_tokens: maxTokens,
-			system: buildSystemPrompt(directory, mode),
-			tools: turnTools,
-			messages,
+			system,
+			tools,
+			messages: withConversationCache(messages),
 		},
 		{ signal },
 	)
