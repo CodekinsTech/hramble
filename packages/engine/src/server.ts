@@ -35,6 +35,7 @@ import { maybeImportOpenCode } from "./opencode-import.js"
 import { buildAttachments, type Attachment } from "./attachments.js"
 import { searchFiles } from "./tools/glob.js"
 import { listDirectory } from "./fsutil.js"
+import { discoverSkills } from "./skills.js"
 
 const PORT = Number(process.env.ENGINE_PORT) || 4200
 
@@ -179,6 +180,16 @@ export async function startServer(): Promise<void> {
 		} catch {
 			return { entries: [] }
 		}
+	})
+
+	// ── List a project's skills (skill picker) ────────────────────────────
+	app.get("/skills", async (req, reply) => {
+		const { directory } = req.query as { directory?: string }
+		if (!directory) return reply.code(400).send({ error: "directory is required" })
+		if (!isKnownProjectDir(directory)) {
+			return reply.code(403).send({ error: "directory is not an open project" })
+		}
+		return { skills: discoverSkills(directory) }
 	})
 
 	// ── SSE event stream ─────────────────────────────────────────────────

@@ -20,7 +20,7 @@ import { useQuery } from "@tanstack/react-query"
 import fuzzysort from "fuzzysort"
 import { BookOpenIcon, SearchIcon } from "lucide-react"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { getProjectClient } from "../../services/connection-manager"
+import { listEngineSkills } from "../../services/engine-client"
 
 // ============================================================
 // Types
@@ -48,11 +48,13 @@ interface SkillPickerDialogProps {
 function useSkills(directory: string | null, enabled: boolean) {
 	const { data, isLoading } = useQuery({
 		queryKey: ["skills", directory],
-		queryFn: async () => {
-			const client = getProjectClient(directory!)
-			if (!client) return []
-			const result = await client.app.skills()
-			return (result.data ?? []) as Skill[]
+		queryFn: async (): Promise<Skill[]> => {
+			const skills = await listEngineSkills(directory!)
+			return skills.map((s) => ({
+				name: s.name,
+				description: s.description,
+				location: `.hramble/skills/${s.slug}`,
+			}))
 		},
 		enabled: !!directory && enabled,
 		staleTime: 30_000,

@@ -104,6 +104,19 @@ export async function listEngineDir(directory: string, path = ""): Promise<Engin
 	return res.entries
 }
 
+export interface EngineSkill {
+	name: string
+	description: string
+	slug: string
+}
+
+/** List a project's skills (.hramble/skills) for the skill picker. */
+export async function listEngineSkills(directory: string): Promise<EngineSkill[]> {
+	const params = new URLSearchParams({ directory })
+	const res = await request<{ skills: EngineSkill[] }>(`/skills?${params.toString()}`)
+	return res.skills
+}
+
 export async function listEngineSessions(
 	opts: { directory?: string; search?: string; limit?: number } = {},
 ): Promise<EngineSession[]> {
