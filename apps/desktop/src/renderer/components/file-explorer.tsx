@@ -1,7 +1,7 @@
 /**
  * File explorer — a lazy-loading project file tree for the session view.
  *
- * Uses OpenCode's file API (client.file.list) to browse the project, and opens a
+ * Uses the xot engine's /files endpoint to browse the project, and opens a
  * clicked file in the existing diff/review panel (viewFileInDiffPanelAtom). This
  * is the "feels like a real coding tool" piece — you can see and open the code,
  * not just chat about it.
@@ -10,29 +10,21 @@ import { ChevronRightIcon, FileIcon, FolderIcon, Loader2Icon, RefreshCwIcon } fr
 import { useSetAtom } from "jotai"
 import { useCallback, useEffect, useState } from "react"
 import { viewFileInDiffPanelAtom } from "../atoms/ui"
-import { getProjectClient } from "../services/connection-manager"
+import { listEngineDir } from "../services/engine-client"
 
 type FileNode = {
 	name: string
 	path: string
-	absolute: string
 	type: "file" | "directory"
 	ignored: boolean
 }
 
 async function listDir(directory: string, path: string): Promise<FileNode[]> {
-	const client = getProjectClient(directory)
-	if (!client) return []
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const res: any = await client.file.list({ directory, path })
-		const nodes: FileNode[] = res?.data ?? res ?? []
-		// Directories first, then files; hide dotfiles/ignored to keep it clean.
-		return nodes
-			.filter((n) => !n.ignored && !n.name.startsWith("."))
-			.sort((a, b) =>
-				a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1,
-			)
+		// The engine returns entries directory-first; hide dotfiles and noise dirs
+		// (node_modules, .git, …, flagged `ignored`) to keep the tree clean.
+		const entries = await listEngineDir(directory, path)
+		return entries.filter((n) => !n.ignored && !n.name.startsWith("."))
 	} catch {
 		return []
 	}

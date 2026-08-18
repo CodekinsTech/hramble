@@ -25,6 +25,57 @@ export async function atomicWrite(filePath: string, content: string): Promise<vo
 	}
 }
 
+/** Directories never worth showing in a file tree — noise that floods the view. */
+const ALWAYS_IGNORE = new Set([
+	"node_modules",
+	".git",
+	"dist",
+	"build",
+	".next",
+	"out",
+	"target",
+	".venv",
+	"__pycache__",
+	".turbo",
+	".cache",
+])
+
+export interface DirEntry {
+	name: string
+	type: "directory" | "file"
+	/** Path relative to the project root, forward-slashed. */
+	path: string
+	ignored: boolean
+}
+
+/**
+ * List one level of a directory, relative to a project root. `relPath` is a
+ * project-relative sub-path ("" for the root). Refuses to escape `root` (path
+ * traversal), so a crafted `..` sub-path can't read outside the open project.
+ * Directories are returned before files, each alphabetically.
+ */
+export async function listDirectory(root: string, relPath = ""): Promise<DirEntry[]> {
+	const abs = path.resolve(root, relPath)
+	const rel = path.relative(root, abs)
+	if (rel.startsWith("..") || path.isAbsolute(rel)) {
+		throw new Error("path escapes project root")
+	}
+	const dirents = await fsp.readdir(abs, { withFileTypes: true })
+	const entries: DirEntry[] = dirents.map((d) => {
+		const isDir = d.isDirectory()
+		return {
+			name: d.name,
+			type: isDir ? ("directory" as const) : ("file" as const),
+			path: path.join(rel, d.name).replace(/\\/g, "/"),
+			ignored: ALWAYS_IGNORE.has(d.name),
+		}
+	})
+	entries.sort((a, b) =>
+		a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1,
+	)
+	return entries
+}
+
 /** Synchronous atomic write (for the hot persistence path). */
 export function atomicWriteSync(filePath: string, content: string): void {
 	const dir = path.dirname(filePath)

@@ -89,6 +89,21 @@ export async function listEngineProjects(): Promise<EngineProject[]> {
 	return res.projects
 }
 
+export interface EngineDirEntry {
+	name: string
+	type: "directory" | "file"
+	path: string
+	ignored: boolean
+}
+
+/** List one level of a project directory (file-explorer tree). `path` is "" for the root. */
+export async function listEngineDir(directory: string, path = ""): Promise<EngineDirEntry[]> {
+	const params = new URLSearchParams({ directory })
+	if (path) params.set("path", path)
+	const res = await request<{ entries: EngineDirEntry[] }>(`/files?${params.toString()}`)
+	return res.entries
+}
+
 export async function listEngineSessions(
 	opts: { directory?: string; search?: string; limit?: number } = {},
 ): Promise<EngineSession[]> {

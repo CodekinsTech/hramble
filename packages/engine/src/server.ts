@@ -34,6 +34,7 @@ import { summarizeConversation } from "./summarize.js"
 import { maybeImportOpenCode } from "./opencode-import.js"
 import { buildAttachments, type Attachment } from "./attachments.js"
 import { searchFiles } from "./tools/glob.js"
+import { listDirectory } from "./fsutil.js"
 
 const PORT = Number(process.env.ENGINE_PORT) || 4200
 
@@ -163,6 +164,22 @@ export async function startServer(): Promise<void> {
 			// Full-tree search, capping only the RESULT count (not the pre-filter list).
 			return { files: await searchFiles(query ?? "", directory) }
 		})
+
+	// ── List one directory level (file-explorer tree) ─────────────────────
+	app.get("/files", async (req, reply) => {
+		const { directory, path: relPath } = req.query as { directory?: string; path?: string }
+		if (!directory) return reply.code(400).send({ error: "directory is required" })
+		// Only list inside directories the engine knows as projects — the root is
+		// validated here and listDirectory refuses any `..` escape below it.
+		if (!isKnownProjectDir(directory)) {
+			return reply.code(403).send({ error: "directory is not an open project" })
+		}
+		try {
+			return { entries: await listDirectory(directory, relPath ?? "") }
+		} catch {
+			return { entries: [] }
+		}
+	})
 
 	// ── SSE event stream ─────────────────────────────────────────────────
 	app.get("/events", (req, reply) => {
