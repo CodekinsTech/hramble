@@ -99,6 +99,15 @@ function projectNameFromDir(directory: string): string {
 	return directory.split("/").pop() || "/"
 }
 
+/**
+ * Brain sessions run in the app's internal `<userData>/brain-chat` directory and
+ * belong to the Brain page's own history — not the Code sidebar. Exclude them
+ * from the Code project + agent lists.
+ */
+export function isBrainDir(directory: string): boolean {
+	return /(^|\/)brain-chat(\/|$)/.test(directory.replace(/\\/g, "/"))
+}
+
 // ============================================================
 // Project slug system
 // ============================================================
@@ -386,7 +395,7 @@ export const agentsAtom = (() => {
 
 		for (const id of sessionIds) {
 			const agent = get(agentFamily(id))
-			if (agent) agents.push(agent)
+			if (agent && !isBrainDir(agent.directory)) agents.push(agent)
 		}
 
 		// Return the previous array if every element is referentially identical.
@@ -491,6 +500,7 @@ export const projectListAtom = (() => {
 			if (!entry) continue
 			if (entry.session.parentID) continue
 			if (!entry.directory) continue
+			if (isBrainDir(entry.directory)) continue
 
 			// Remap sandbox directories to their parent project
 			const parentDir = sandboxToParent.get(entry.directory)
@@ -538,6 +548,7 @@ export const projectListAtom = (() => {
 				if (!project.worktree) continue
 				if (projects.has(project.worktree)) continue
 				if (sandboxDirs.has(project.worktree)) continue
+				if (isBrainDir(project.worktree)) continue
 
 				const projectInfo = slugMap.get(project.worktree)
 				const name = project.name ?? projectNameFromDir(project.worktree)
