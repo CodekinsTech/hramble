@@ -59,6 +59,14 @@ export interface EngineProject {
 	sessionCount: number
 }
 
+/** Fuzzy file search within an open project directory. */
+export async function findEngineFiles(directory: string, query: string): Promise<string[]> {
+	const params = new URLSearchParams({ directory })
+	if (query) params.set("query", query)
+	const res = await request<{ files: string[] }>(`/find?${params.toString()}`)
+	return res.files
+}
+
 export async function listEngineProjects(): Promise<EngineProject[]> {
 	const res = await request<{ projects: EngineProject[] }>("/projects")
 	return res.projects
