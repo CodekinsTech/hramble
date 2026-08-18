@@ -12,13 +12,16 @@ import { enginePermissionsAtom, type EnginePermissionRequest } from "../atoms/en
 import { upsertMessageAtom } from "../atoms/messages"
 import { applyPartDeltaAtom, partsFamily, upsertPartAtom } from "../atoms/parts"
 import {
+	addPermissionAtom,
 	lastToolEventAtom,
+	removePermissionAtom,
 	removeSessionAtom,
 	sessionFamily,
 	setSessionErrorAtom,
 	setSessionStatusAtom,
 	upsertSessionAtom,
 } from "../atoms/sessions"
+import type { PermissionRequest } from "../lib/types"
 import { appStore } from "../atoms/store"
 import { streamingVersionFamily } from "../atoms/streaming"
 import { todosFamily } from "../atoms/todos"
@@ -322,11 +325,26 @@ export function processEngineEvent(event: EngineEvent): void {
 			}
 			const current = appStore.get(enginePermissionsAtom)
 			set(enginePermissionsAtom, { ...current, [req.id]: req })
+			// Surface it on the session so the existing permission card actually
+			// renders it — otherwise the prompt is invisible and times out after 5m.
+			set(addPermissionAtom, {
+				sessionId: event.sessionId,
+				permission: {
+					id: event.permissionId,
+					sessionID: event.sessionId,
+					permission: event.description,
+					patterns: [],
+					metadata: { tool: event.tool, input: event.input },
+					always: [],
+				} as unknown as PermissionRequest,
+			})
 			break
 		}
 
 		case "permission.resolved": {
 			const current = appStore.get(enginePermissionsAtom)
+			const req = current[event.permissionId]
+			if (req) set(removePermissionAtom, { sessionId: req.sessionId, permissionId: event.permissionId })
 			const { [event.permissionId]: _removed, ...rest } = current
 			set(enginePermissionsAtom, rest)
 			break
