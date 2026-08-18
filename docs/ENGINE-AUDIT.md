@@ -18,6 +18,20 @@ projects · M6 webfetch download cap · M7 bash maxBuffer/timeout labels · M8 s
 head+tail + retry · M9 read size guard + binary detection · L1 nbformat cell id · L2 glob
 exclude merges defaults.
 
+## ✅ Post-audit capability additions (toward Claude parity)
+- **Prompt caching** (Anthropic): system prompt + tool schemas + conversation prefix
+  are cache-marked (3 breakpoints) so multi-step loops only pay for new tokens.
+- **Background shells**: `bash` run_in_background + `bashoutput` + `killshell`
+  (Claude-style) for dev servers/watchers; Windows tree-kill; drained on shutdown.
+- **Auto-compaction**: near ~80% of the context window, older turns are summarized
+  into one message (current turn preserved) instead of silently trimmed.
+- **Image vision**: image attachments (png/jpeg/gif/webp, ≤5MB) now flow as real
+  vision blocks in the user message, serialized to Anthropic + OpenAI shapes.
+- **M10** grep ReDoS: fallback validates the regex, caps per-line probe length,
+  and stops at an 8s deadline. ✅
+- **M13** iteration limit: emits a notice when a turn hits MAX_ITERATIONS with tool
+  calls still pending, instead of stopping silently. ✅
+
 ## 📝 Noted / deferred (design decisions, not blocking)
 - **S7** malicious-repo prompt injection via CLAUDE.md/AGENTS.md/skills — trusted by
   design (Claude Code trusts project files too); consider opt-in loading for untrusted repos.
