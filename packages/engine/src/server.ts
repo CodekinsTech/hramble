@@ -33,7 +33,7 @@ import {
 import { summarizeConversation } from "./summarize.js"
 import { maybeImportOpenCode } from "./opencode-import.js"
 import { buildAttachments, type Attachment } from "./attachments.js"
-import { globFiles } from "./tools/glob.js"
+import { searchFiles } from "./tools/glob.js"
 
 const PORT = Number(process.env.ENGINE_PORT) || 4200
 
@@ -160,12 +160,8 @@ export async function startServer(): Promise<void> {
 			if (!isKnownProjectDir(directory)) {
 				return reply.code(403).send({ error: "directory is not an open project" })
 			}
-			const q = (query ?? "").trim().toLowerCase()
-			const result = await globFiles({ pattern: "**/*" }, directory)
-			if (result.startsWith("No files")) return { files: [] }
-			let files = result.split("\n").filter((l) => l && !l.startsWith("["))
-			if (q) files = files.filter((f) => f.toLowerCase().includes(q))
-			return { files: files.slice(0, 200) }
+			// Full-tree search, capping only the RESULT count (not the pre-filter list).
+			return { files: await searchFiles(query ?? "", directory) }
 		})
 
 	// ── SSE event stream ─────────────────────────────────────────────────

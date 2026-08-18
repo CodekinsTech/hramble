@@ -28,6 +28,25 @@ export async function globFiles(input: GlobInput, workingDir: string): Promise<s
 	return shown
 }
 
+/**
+ * File search for the UI's @-mention / file picker: walk the whole project tree
+ * (minus heavy dirs), filter by a substring query, and cap only the RESULT count.
+ * Unlike globFiles (which caps the file list at 1000 before anything sees it),
+ * this never silently drops matches in a large repo.
+ */
+export async function searchFiles(query: string, workingDir: string, limit = 200): Promise<string[]> {
+	const files = await globFn("**/*", {
+		cwd: workingDir,
+		ignore: ["**/node_modules/**", "**/.git/**", "**/dist/**"],
+		dot: false,
+		nodir: true,
+	})
+	const q = query.trim().toLowerCase()
+	const matched = q ? files.filter((f) => f.toLowerCase().includes(q)) : files
+	matched.sort()
+	return matched.slice(0, limit).map((f) => path.join(workingDir, f))
+}
+
 export const globToolDefinition = {
 	name: "glob",
 	description: "Find files matching a glob pattern in the project directory.",
