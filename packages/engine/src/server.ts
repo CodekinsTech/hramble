@@ -29,6 +29,7 @@ import {
 	unrevertSession,
 } from "./sessions.js"
 import { summarizeConversation } from "./summarize.js"
+import { maybeImportOpenCode } from "./opencode-import.js"
 import { buildAttachments, type Attachment } from "./attachments.js"
 import { globFiles } from "./tools/glob.js"
 
@@ -101,6 +102,9 @@ function broadcast(event: EngineEvent): void {
 
 export async function startServer(): Promise<void> {
 	initDb()
+	// One-time: bring the user's existing OpenCode sessions into the engine store
+	// so history carries over on the cutover (idempotent — skips if already done).
+	maybeImportOpenCode()
 
 	const app = Fastify({ logger: false })
 

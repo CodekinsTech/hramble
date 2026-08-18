@@ -290,6 +290,41 @@ export interface ProjectDir {
 	sessionCount: number
 }
 
+// Shapes for one-time OpenCode → engine import (see opencode-import.ts).
+export type ImportBlock =
+	| { type: "text"; text: string }
+	| { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+	| { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
+	| { type: "image"; mimeType: string; data: string }
+export interface ImportSession {
+	id: string
+	title: string
+	directory: string
+	createdAt: number
+	updatedAt: number
+	messages: Array<{ id: string; role: "user" | "assistant"; content: ImportBlock[]; createdAt: number }>
+}
+
+/** True once any OpenCode-sourced session (id "ses_…") has been imported. */
+export function hasOpenCodeImport(): boolean {
+	return Boolean(db.prepare("SELECT 1 FROM sessions WHERE id LIKE 'ses\\_%' ESCAPE '\\' LIMIT 1").get())
+}
+
+/** Bulk-insert imported OpenCode sessions (idempotent via INSERT OR IGNORE). */
+export function importOpenCodeSessions(sessions: ImportSession[]): number {
+	return tx(() => {
+		let imported = 0
+		const insS = db.prepare("INSERT OR IGNORE INTO sessions(id,title,directory,createdAt,updatedAt,status) VALUES(?,?,?,?,?,?)")
+		const insM = db.prepare("INSERT OR IGNORE INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)")
+		for (const s of sessions) {
+			const info = insS.run(s.id, s.title, s.directory, s.createdAt, s.updatedAt, "idle")
+			for (const m of s.messages) insM.run(m.id, s.id, m.role, JSON.stringify(m.content), m.createdAt)
+			if (Number(info.changes) > 0) imported++
+		}
+		return imported
+	})
+}
+
 /** Distinct project directories that have sessions, most-recently-active first. */
 export function listProjectDirs(): ProjectDir[] {
 	return db
