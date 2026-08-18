@@ -44,7 +44,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { agentFamily } from "../atoms/derived/agents"
-import { brainSessionAtom, brainSessionIdsAtom } from "../atoms/brain"
+import { brainSessionAtom, brainSessionIdsAtom, brainSessionListAtom } from "../atoms/brain"
 import {
 	communityBackendEnabledAtom,
 	type CommunityPost,
@@ -105,7 +105,7 @@ function BrainHistoryItem({
 /** Brain's own sidebar — a plain session history, no Code/Hyperloop concepts. */
 function BrainSidebarContent() {
 	const [brainSession, setBrainSession] = useAtom(brainSessionAtom)
-	const brainSessionIds = useAtomValue(brainSessionIdsAtom)
+	const brainSessionIds = useAtomValue(brainSessionListAtom)
 	const setWorkspaceMode = useSetAtom(workspaceModeAtom)
 	const navigate = useNavigate()
 	return (
