@@ -28,9 +28,14 @@ async function request<T>(
 	path: string,
 	opts?: RequestInit,
 ): Promise<T> {
+	// Only send a JSON content-type when there's actually a body. Sending it on a
+	// bodyless request (DELETE, or POST abort/unrevert/deny) makes Fastify reject
+	// with 400 FST_ERR_CTP_EMPTY_JSON_BODY ("Body cannot be empty…").
+	const headers: Record<string, string> = { ...(opts?.headers as Record<string, string>) }
+	if (opts?.body != null) headers["Content-Type"] = "application/json"
 	const res = await fetch(`${ENGINE_URL}${path}`, {
-		headers: { "Content-Type": "application/json", ...opts?.headers },
 		...opts,
+		headers,
 	})
 	if (!res.ok) {
 		const text = await res.text().catch(() => "")
