@@ -1,16 +1,13 @@
 import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
+import { DatabaseSync } from "node:sqlite"
 import { nanoid } from "nanoid"
 import type { Session, Message, ContentBlock, Todo, Usage } from "./types.js"
-import { atomicWriteSync } from "./fsutil.js"
 
 const DATA_DIR = process.env.ENGINE_DATA_DIR || path.join(os.homedir(), ".local", "share", "hramble", "engine")
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json")
-
-function emptyStore(): Store {
-	return { sessions: {}, messages: {}, checkpoints: {}, redo: {}, permissionRules: {}, todos: {}, usage: {} }
-}
+const DB_FILE = path.join(DATA_DIR, "engine.db")
+const LEGACY_JSON = path.join(DATA_DIR, "sessions.json")
 
 /**
  * A file's content captured around an engine edit, so a revert can restore it.
@@ -29,86 +26,209 @@ interface RevertBatch {
 	snapshots: FileSnapshot[]
 }
 
-interface Store {
-	sessions: Record<string, Session>
-	messages: Record<string, Message[]>
-	// File snapshots per session (undo history) and a redo stack for unrevert.
-	checkpoints: Record<string, FileSnapshot[]>
-	redo: Record<string, RevertBatch[]>
-	// "Always allow" rules, keyed by project directory -> permission keys.
-	permissionRules: Record<string, string[]>
-	// Current todo list per session.
-	todos: Record<string, Todo[]>
-	// Cumulative token usage per session.
-	usage: Record<string, Usage>
-}
+let db: DatabaseSync
 
-let store: Store = emptyStore()
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS sessions (
+	id TEXT PRIMARY KEY,
+	title TEXT NOT NULL,
+	directory TEXT NOT NULL,
+	createdAt INTEGER NOT NULL,
+	updatedAt INTEGER NOT NULL,
+	status TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS messages (
+	id TEXT PRIMARY KEY,
+	sessionId TEXT NOT NULL,
+	role TEXT NOT NULL,
+	content TEXT NOT NULL,
+	createdAt INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(sessionId, createdAt);
+CREATE TABLE IF NOT EXISTS checkpoints (
+	seq INTEGER PRIMARY KEY AUTOINCREMENT,
+	sessionId TEXT NOT NULL,
+	messageId TEXT NOT NULL,
+	path TEXT NOT NULL,
+	before TEXT,
+	after TEXT,
+	ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(sessionId);
+CREATE TABLE IF NOT EXISTS redo (
+	seq INTEGER PRIMARY KEY AUTOINCREMENT,
+	sessionId TEXT NOT NULL,
+	batch TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_redo_session ON redo(sessionId);
+CREATE TABLE IF NOT EXISTS permission_rules (
+	directory TEXT NOT NULL,
+	key TEXT NOT NULL,
+	PRIMARY KEY(directory, key)
+);
+CREATE TABLE IF NOT EXISTS todos (
+	sessionId TEXT PRIMARY KEY,
+	todos TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS usage (
+	sessionId TEXT PRIMARY KEY,
+	inputTokens INTEGER NOT NULL,
+	outputTokens INTEGER NOT NULL
+);
+`
 
 export function initDb(): void {
 	fs.mkdirSync(DATA_DIR, { recursive: true })
-	if (fs.existsSync(SESSIONS_FILE)) {
+	db = openOrRecover()
+	db.exec("PRAGMA journal_mode = WAL")
+	db.exec("PRAGMA foreign_keys = OFF")
+	db.exec(SCHEMA)
+
+	// One-time migration from the old flat-JSON store, if present and not yet done.
+	if (fs.existsSync(LEGACY_JSON) && isEmpty()) {
 		try {
-			const parsed = JSON.parse(fs.readFileSync(SESSIONS_FILE, "utf-8")) as Partial<Store>
-			// Backfill EVERY map (incl. sessions) so a valid-but-partial file can't
-			// throw downstream (Object.values(undefined)) and crash the engine.
-			store = {
-				sessions: parsed.sessions ?? {},
-				messages: parsed.messages ?? {},
-				checkpoints: parsed.checkpoints ?? {},
-				redo: parsed.redo ?? {},
-				permissionRules: parsed.permissionRules ?? {},
-				todos: parsed.todos ?? {},
-				usage: parsed.usage ?? {},
-			}
+			migrateFromJson(LEGACY_JSON)
+			fs.renameSync(LEGACY_JSON, `${LEGACY_JSON}.migrated-${nanoid(6)}`)
+			console.log("[xot-engine] migrated sessions.json → engine.db")
 		} catch (err) {
-			// Corrupt store — DON'T silently wipe. Preserve the bad file for recovery
-			// and start fresh, surfacing the loss loudly in the logs.
-			try {
-				fs.renameSync(SESSIONS_FILE, `${SESSIONS_FILE}.corrupt-${nanoid(6)}`)
-			} catch {
-				// ignore
-			}
-			console.error(`[xot-engine] sessions store was corrupt; backed it up and started fresh: ${err instanceof Error ? err.message : err}`)
-			store = emptyStore()
+			console.error(`[xot-engine] sessions.json migration failed (left in place): ${err instanceof Error ? err.message : err}`)
 		}
 	}
-	// Boot reconciliation: a restart orphans any session left "running" (its
-	// agent loop and abort controller are gone). Reset them so the UI isn't
-	// stuck showing a spinner for a run that will never finish.
-	let changed = false
-	for (const session of Object.values(store.sessions)) {
-		if (session.status === "running") {
-			session.status = "idle"
-			changed = true
-		}
-	}
-	if (changed) persist()
+
+	// Boot reconciliation: a restart orphans any session left "running" (its agent
+	// loop and abort controller are gone). Reset them so the UI isn't stuck.
+	db.exec("UPDATE sessions SET status = 'idle' WHERE status = 'running'")
 }
 
-function persist(): void {
-	// Atomic (temp + rename) so a crash mid-write can't truncate/brick the store.
-	atomicWriteSync(SESSIONS_FILE, JSON.stringify(store))
+/** Open the DB; if the file is corrupt, back it up and start fresh (don't crash). */
+function openOrRecover(): DatabaseSync {
+	try {
+		const d = new DatabaseSync(DB_FILE)
+		d.exec("SELECT 1") // force it to actually touch the file
+		return d
+	} catch (err) {
+		try {
+			if (fs.existsSync(DB_FILE)) fs.renameSync(DB_FILE, `${DB_FILE}.corrupt-${nanoid(6)}`)
+		} catch {
+			// ignore
+		}
+		console.error(`[xot-engine] engine.db was unreadable; backed it up and started fresh: ${err instanceof Error ? err.message : err}`)
+		return new DatabaseSync(DB_FILE)
+	}
 }
+
+function isEmpty(): boolean {
+	const row = db.prepare("SELECT COUNT(*) AS n FROM sessions").get() as { n: number }
+	return row.n === 0
+}
+
+/** Run a set of writes atomically. */
+function tx<T>(fn: () => T): T {
+	db.exec("BEGIN")
+	try {
+		const result = fn()
+		db.exec("COMMIT")
+		return result
+	} catch (err) {
+		db.exec("ROLLBACK")
+		throw err
+	}
+}
+
+// ── Row mappers ───────────────────────────────────────────────────────────
+
+interface SessionRow {
+	id: string
+	title: string
+	directory: string
+	createdAt: number
+	updatedAt: number
+	status: string
+}
+interface MessageRow {
+	id: string
+	sessionId: string
+	role: string
+	content: string
+	createdAt: number
+}
+
+function toSession(r: SessionRow): Session {
+	return { id: r.id, title: r.title, directory: r.directory, createdAt: r.createdAt, updatedAt: r.updatedAt, status: r.status as Session["status"] }
+}
+function toMessage(r: MessageRow): Message {
+	return { id: r.id, sessionId: r.sessionId, role: r.role as Message["role"], content: JSON.parse(r.content) as Message["content"], createdAt: r.createdAt }
+}
+
+function touch(id: string, ts = Date.now()): void {
+	db.prepare("UPDATE sessions SET updatedAt = ? WHERE id = ?").run(ts, id)
+}
+
+// ── Migration ─────────────────────────────────────────────────────────────
+
+interface LegacyStore {
+	sessions?: Record<string, Session>
+	messages?: Record<string, Message[]>
+	checkpoints?: Record<string, FileSnapshot[]>
+	redo?: Record<string, RevertBatch[]>
+	permissionRules?: Record<string, string[]>
+	todos?: Record<string, Todo[]>
+	usage?: Record<string, Usage>
+}
+
+function migrateFromJson(file: string): void {
+	const data = JSON.parse(fs.readFileSync(file, "utf-8")) as LegacyStore
+	tx(() => {
+		const insS = db.prepare("INSERT OR REPLACE INTO sessions(id,title,directory,createdAt,updatedAt,status) VALUES(?,?,?,?,?,?)")
+		for (const s of Object.values(data.sessions ?? {})) insS.run(s.id, s.title, s.directory, s.createdAt, s.updatedAt, s.status)
+
+		const insM = db.prepare("INSERT OR REPLACE INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)")
+		for (const [sid, list] of Object.entries(data.messages ?? {})) {
+			for (const m of list) insM.run(m.id, sid, m.role, JSON.stringify(m.content), m.createdAt)
+		}
+
+		const insC = db.prepare("INSERT INTO checkpoints(sessionId,messageId,path,before,after,ts) VALUES(?,?,?,?,?,?)")
+		for (const [sid, snaps] of Object.entries(data.checkpoints ?? {})) {
+			for (const s of snaps) insC.run(sid, s.messageId, s.path, s.before, s.after, s.ts)
+		}
+
+		const insR = db.prepare("INSERT INTO redo(sessionId,batch) VALUES(?,?)")
+		for (const [sid, batches] of Object.entries(data.redo ?? {})) {
+			for (const b of batches) insR.run(sid, JSON.stringify(b))
+		}
+
+		const insP = db.prepare("INSERT OR IGNORE INTO permission_rules(directory,key) VALUES(?,?)")
+		for (const [dir, keys] of Object.entries(data.permissionRules ?? {})) {
+			for (const k of keys) insP.run(dir, k)
+		}
+
+		const insT = db.prepare("INSERT OR REPLACE INTO todos(sessionId,todos) VALUES(?,?)")
+		for (const [sid, todos] of Object.entries(data.todos ?? {})) insT.run(sid, JSON.stringify(todos))
+
+		const insU = db.prepare("INSERT OR REPLACE INTO usage(sessionId,inputTokens,outputTokens) VALUES(?,?,?)")
+		for (const [sid, u] of Object.entries(data.usage ?? {})) insU.run(sid, u.inputTokens, u.outputTokens)
+	})
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────
 
 export function createSession(title: string, directory: string): Session {
 	const now = Date.now()
-	const session: Session = {
-		id: nanoid(),
-		title,
-		directory,
-		createdAt: now,
-		updatedAt: now,
-		status: "idle",
-	}
-	store.sessions[session.id] = session
-	store.messages[session.id] = []
-	persist()
+	const session: Session = { id: nanoid(), title, directory, createdAt: now, updatedAt: now, status: "idle" }
+	db.prepare("INSERT INTO sessions(id,title,directory,createdAt,updatedAt,status) VALUES(?,?,?,?,?,?)").run(
+		session.id,
+		session.title,
+		session.directory,
+		session.createdAt,
+		session.updatedAt,
+		session.status,
+	)
 	return session
 }
 
 export function getSession(id: string): Session | null {
-	return store.sessions[id] ?? null
+	const row = db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as SessionRow | undefined
+	return row ? toSession(row) : null
 }
 
 export interface ListOptions {
@@ -118,64 +238,68 @@ export interface ListOptions {
 }
 
 export function listSessions(opts: ListOptions = {}): Session[] {
-	let list = Object.values(store.sessions)
-	if (opts.directory) list = list.filter((s) => s.directory === opts.directory)
-	if (opts.search?.trim()) {
-		const q = opts.search.trim().toLowerCase()
-		list = list.filter((s) => s.title.toLowerCase().includes(q))
+	let sql = "SELECT * FROM sessions"
+	const where: string[] = []
+	const params: (string | number)[] = []
+	if (opts.directory) {
+		where.push("directory = ?")
+		params.push(opts.directory)
 	}
-	list.sort((a, b) => b.updatedAt - a.updatedAt)
-	if (opts.limit && opts.limit > 0) list = list.slice(0, opts.limit)
-	return list
+	if (opts.search?.trim()) {
+		// Escape LIKE wildcards so a literal search can't act as a pattern.
+		const q = opts.search.trim().toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)
+		where.push("lower(title) LIKE ? ESCAPE '\\'")
+		params.push(`%${q}%`)
+	}
+	if (where.length) sql += ` WHERE ${where.join(" AND ")}`
+	sql += " ORDER BY updatedAt DESC"
+	if (opts.limit && opts.limit > 0) {
+		sql += " LIMIT ?"
+		params.push(opts.limit)
+	}
+	return (db.prepare(sql).all(...params) as unknown as SessionRow[]).map(toSession)
 }
 
 export function renameSession(id: string, title: string): Session | null {
-	const session = store.sessions[id]
+	const session = getSession(id)
 	if (!session) return null
-	session.title = title
-	session.updatedAt = Date.now()
-	persist()
-	return session
+	db.prepare("UPDATE sessions SET title = ?, updatedAt = ? WHERE id = ?").run(title, Date.now(), id)
+	return getSession(id)
 }
 
 export function deleteSession(id: string): boolean {
-	if (!store.sessions[id]) return false
-	delete store.sessions[id]
-	delete store.messages[id]
-	delete store.checkpoints[id]
-	delete store.redo[id]
-	delete store.todos[id]
-	delete store.usage[id]
-	persist()
-	return true
+	return tx(() => {
+		const info = db.prepare("DELETE FROM sessions WHERE id = ?").run(id)
+		if (info.changes === 0) return false
+		db.prepare("DELETE FROM messages WHERE sessionId = ?").run(id)
+		db.prepare("DELETE FROM checkpoints WHERE sessionId = ?").run(id)
+		db.prepare("DELETE FROM redo WHERE sessionId = ?").run(id)
+		db.prepare("DELETE FROM todos WHERE sessionId = ?").run(id)
+		db.prepare("DELETE FROM usage WHERE sessionId = ?").run(id)
+		return true
+	})
 }
 
 /** Delete a single message ("part") from a session's transcript. */
 export function deleteMessage(sessionId: string, messageId: string): boolean {
-	const list = store.messages[sessionId]
-	if (!list) return false
-	const next = list.filter((m) => m.id !== messageId)
-	if (next.length === list.length) return false
-	store.messages[sessionId] = next
-	// Drop the deleted message's file snapshots so they don't linger in the diff
-	// forever, and invalidate redo (its batch may reference the removed message).
-	if (store.checkpoints[sessionId]) {
-		store.checkpoints[sessionId] = store.checkpoints[sessionId].filter((s) => s.messageId !== messageId)
-	}
-	store.redo[sessionId] = []
-	const session = store.sessions[sessionId]
-	if (session) session.updatedAt = Date.now()
-	persist()
-	return true
+	return tx(() => {
+		const info = db.prepare("DELETE FROM messages WHERE id = ? AND sessionId = ?").run(messageId, sessionId)
+		if (info.changes === 0) return false
+		// Drop the message's file snapshots and invalidate redo (its batch may
+		// reference the removed message).
+		db.prepare("DELETE FROM checkpoints WHERE sessionId = ? AND messageId = ?").run(sessionId, messageId)
+		db.prepare("DELETE FROM redo WHERE sessionId = ?").run(sessionId)
+		touch(sessionId)
+		return true
+	})
 }
 
 /**
  * Fork a session into a new one, copying its transcript up to and including
- * `throughMessageId` (or the whole transcript when omitted). Lets the user
- * branch a conversation without mutating the original.
+ * `throughMessageId` (or the whole transcript when omitted).
  */
 export function forkSession(id: string, throughMessageId?: string): Session | null {
-	const source = store.sessions[id]
+	const source = getSession(id)
 	if (!source) return null
 	const srcMessages = getMessages(id)
 	let slice = srcMessages
@@ -184,50 +308,44 @@ export function forkSession(id: string, throughMessageId?: string): Session | nu
 		if (idx === -1) return null
 		slice = srcMessages.slice(0, idx + 1)
 	}
-	const fork = createSession(`${source.title} (fork)`, source.directory)
-	store.messages[fork.id] = slice.map((m) => ({ ...m, id: nanoid(), sessionId: fork.id }))
-	persist()
-	return fork
+	return tx(() => {
+		const fork = createSession(`${source.title} (fork)`, source.directory)
+		const ins = db.prepare("INSERT INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)")
+		for (const m of slice) ins.run(nanoid(), fork.id, m.role, JSON.stringify(m.content), m.createdAt)
+		return fork
+	})
 }
 
 export function updateSessionStatus(id: string, status: Session["status"]): void {
-	const session = store.sessions[id]
-	if (!session) return
-	session.status = status
-	session.updatedAt = Date.now()
-	persist()
+	db.prepare("UPDATE sessions SET status = ?, updatedAt = ? WHERE id = ?").run(status, Date.now(), id)
 }
 
-export function addMessage(
-	sessionId: string,
-	role: "user" | "assistant",
-	content: string | ContentBlock[],
-): Message {
-	const message: Message = {
-		id: nanoid(),
-		sessionId,
-		role,
-		content,
-		createdAt: Date.now(),
-	}
-	if (!store.messages[sessionId]) store.messages[sessionId] = []
-	store.messages[sessionId].push(message)
-	// Continuing the conversation invalidates any reverted branch (redo).
-	if (store.redo[sessionId]?.length) store.redo[sessionId] = []
-	persist()
+export function addMessage(sessionId: string, role: "user" | "assistant", content: string | ContentBlock[]): Message {
+	const message: Message = { id: nanoid(), sessionId, role, content, createdAt: Date.now() }
+	tx(() => {
+		db.prepare("INSERT INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)").run(
+			message.id,
+			sessionId,
+			role,
+			JSON.stringify(content),
+			message.createdAt,
+		)
+		// Continuing the conversation invalidates any reverted branch (redo).
+		db.prepare("DELETE FROM redo WHERE sessionId = ?").run(sessionId)
+	})
 	return message
 }
 
 export function getMessages(sessionId: string): Message[] {
-	return (store.messages[sessionId] ?? []).sort((a, b) => a.createdAt - b.createdAt)
+	const rows = db.prepare("SELECT * FROM messages WHERE sessionId = ? ORDER BY createdAt ASC").all(sessionId) as unknown as MessageRow[]
+	return rows.map(toMessage)
 }
 
 /**
  * Replace a session's transcript with a single summary message (compaction).
- * The next turn continues with the summary as its only prior context.
  */
 export function compactSession(sessionId: string, summary: string): Message | null {
-	if (!store.sessions[sessionId]) return null
+	if (!getSession(sessionId)) return null
 	const message: Message = {
 		id: nanoid(),
 		sessionId,
@@ -235,27 +353,33 @@ export function compactSession(sessionId: string, summary: string): Message | nu
 		content: `Summary of the conversation so far:\n\n${summary}`,
 		createdAt: Date.now(),
 	}
-	store.messages[sessionId] = [message]
-	// The pre-compaction messages are gone, so their snapshots/redo are dead —
-	// clear them to avoid a leak and a stale diff/unrevert referencing vanished state.
-	store.checkpoints[sessionId] = []
-	store.redo[sessionId] = []
-	store.sessions[sessionId].updatedAt = Date.now()
-	persist()
+	tx(() => {
+		db.prepare("DELETE FROM messages WHERE sessionId = ?").run(sessionId)
+		db.prepare("INSERT INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)").run(
+			message.id,
+			sessionId,
+			message.role,
+			JSON.stringify(message.content),
+			message.createdAt,
+		)
+		// Pre-compaction snapshots/redo are dead — clear them.
+		db.prepare("DELETE FROM checkpoints WHERE sessionId = ?").run(sessionId)
+		db.prepare("DELETE FROM redo WHERE sessionId = ?").run(sessionId)
+		touch(sessionId)
+	})
 	return message
 }
 
 /**
  * Compact a session in place while preserving the most recent `keep` messages
  * (the current turn). Everything older is replaced by a single summary message
- * ordered just before the kept tail. Used by auto-compaction so a long session
- * keeps its thread instead of silently losing the oldest turns to trimming.
+ * ordered just before the kept tail. Used by auto-compaction.
  */
 export function compactSessionPreservingRecent(sessionId: string, summary: string, keep = 1): boolean {
-	const list = store.messages[sessionId]
-	if (!list) return false
-	const ordered = [...list].sort((a, b) => a.createdAt - b.createdAt)
+	if (!getSession(sessionId)) return false
+	const ordered = getMessages(sessionId)
 	const tail = keep > 0 ? ordered.slice(-keep) : []
+	const tailIds = new Set(tail.map((m) => m.id))
 	const anchor = tail.length > 0 ? tail[0].createdAt - 1 : Date.now()
 	const summaryMsg: Message = {
 		id: nanoid(),
@@ -264,28 +388,44 @@ export function compactSessionPreservingRecent(sessionId: string, summary: strin
 		content: `Summary of the conversation so far:\n\n${summary}`,
 		createdAt: anchor,
 	}
-	store.messages[sessionId] = [summaryMsg, ...tail]
-	// The pre-compaction messages are gone — their snapshots/redo are dead.
-	store.checkpoints[sessionId] = []
-	store.redo[sessionId] = []
-	if (store.sessions[sessionId]) store.sessions[sessionId].updatedAt = Date.now()
-	persist()
+	tx(() => {
+		// Delete everything except the preserved tail, then insert the summary.
+		if (tailIds.size > 0) {
+			const placeholders = [...tailIds].map(() => "?").join(",")
+			db.prepare(`DELETE FROM messages WHERE sessionId = ? AND id NOT IN (${placeholders})`).run(sessionId, ...tailIds)
+		} else {
+			db.prepare("DELETE FROM messages WHERE sessionId = ?").run(sessionId)
+		}
+		db.prepare("INSERT INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)").run(
+			summaryMsg.id,
+			sessionId,
+			summaryMsg.role,
+			JSON.stringify(summaryMsg.content),
+			summaryMsg.createdAt,
+		)
+		db.prepare("DELETE FROM checkpoints WHERE sessionId = ?").run(sessionId)
+		db.prepare("DELETE FROM redo WHERE sessionId = ?").run(sessionId)
+		touch(sessionId)
+	})
 	return true
 }
 
+// ── Checkpoints / revert ──────────────────────────────────────────────────
+
 /** Record a file's before/after content around an engine edit for undo. */
-export function recordSnapshot(
-	sessionId: string,
-	messageId: string,
-	filePath: string,
-	before: string | null,
-	after: string | null,
-): void {
-	if (!store.checkpoints[sessionId]) store.checkpoints[sessionId] = []
-	store.checkpoints[sessionId].push({ messageId, path: filePath, before, after, ts: Date.now() })
-	// A fresh edit invalidates the redo stack.
-	store.redo[sessionId] = []
-	persist()
+export function recordSnapshot(sessionId: string, messageId: string, filePath: string, before: string | null, after: string | null): void {
+	tx(() => {
+		db.prepare("INSERT INTO checkpoints(sessionId,messageId,path,before,after,ts) VALUES(?,?,?,?,?,?)").run(
+			sessionId,
+			messageId,
+			filePath,
+			before,
+			after,
+			Date.now(),
+		)
+		// A fresh edit invalidates the redo stack.
+		db.prepare("DELETE FROM redo WHERE sessionId = ?").run(sessionId)
+	})
 }
 
 function applyFileState(filePath: string, content: string | null): void {
@@ -301,59 +441,64 @@ function applyFileState(filePath: string, content: string | null): void {
 	fs.writeFileSync(filePath, content, "utf-8")
 }
 
+function getCheckpoints(sessionId: string): FileSnapshot[] {
+	const rows = db.prepare("SELECT messageId, path, before, after, ts FROM checkpoints WHERE sessionId = ? ORDER BY ts ASC").all(sessionId) as {
+		messageId: string
+		path: string
+		before: string | null
+		after: string | null
+		ts: number
+	}[]
+	return rows.map((r) => ({ messageId: r.messageId, path: r.path, before: r.before, after: r.after, ts: r.ts }))
+}
+
 /**
  * Revert a session back to (and including) `messageId`: undo every file change
  * made by that turn and later (restoring `before`), drop those messages, and
  * push them onto the redo stack so unrevert can replay them.
  */
 export function revertSession(sessionId: string, messageId: string): { reverted: number } | null {
-	const list = store.messages[sessionId]
-	if (!list) return null
-	const ordered = [...list].sort((a, b) => a.createdAt - b.createdAt)
+	const ordered = getMessages(sessionId)
 	const idx = ordered.findIndex((m) => m.id === messageId)
 	if (idx === -1) return null
 
 	const removed = ordered.slice(idx)
 	const removedIds = new Set(removed.map((m) => m.id))
-	const snaps = store.checkpoints[sessionId] ?? []
-	const affected = snaps.filter((s) => removedIds.has(s.messageId))
+	const affected = getCheckpoints(sessionId).filter((s) => removedIds.has(s.messageId))
 
 	// Restore files newest-first so a file edited repeatedly ends at its earliest `before`.
-	for (const snap of [...affected].sort((a, b) => b.ts - a.ts)) {
-		applyFileState(snap.path, snap.before)
-	}
+	for (const snap of [...affected].sort((a, b) => b.ts - a.ts)) applyFileState(snap.path, snap.before)
 
-	store.messages[sessionId] = ordered.slice(0, idx)
-	store.checkpoints[sessionId] = snaps.filter((s) => !removedIds.has(s.messageId))
-	if (!store.redo[sessionId]) store.redo[sessionId] = []
-	store.redo[sessionId].push({ messages: removed, snapshots: affected })
-
-	const session = store.sessions[sessionId]
-	if (session) session.updatedAt = Date.now()
-	persist()
+	tx(() => {
+		const placeholders = [...removedIds].map(() => "?").join(",")
+		db.prepare(`DELETE FROM messages WHERE sessionId = ? AND id IN (${placeholders})`).run(sessionId, ...removedIds)
+		db.prepare(`DELETE FROM checkpoints WHERE sessionId = ? AND messageId IN (${placeholders})`).run(sessionId, ...removedIds)
+		const batch: RevertBatch = { messages: removed, snapshots: affected }
+		db.prepare("INSERT INTO redo(sessionId,batch) VALUES(?,?)").run(sessionId, JSON.stringify(batch))
+		touch(sessionId)
+	})
 	return { reverted: removed.length }
 }
 
 /** Replay the most recently reverted batch: re-apply files (`after`) and messages. */
 export function unrevertSession(sessionId: string): { restored: number } | null {
-	const stack = store.redo[sessionId]
-	if (!stack || stack.length === 0) return null
-	const batch = stack.pop()
-	if (!batch) return null
+	const row = db.prepare("SELECT seq, batch FROM redo WHERE sessionId = ? ORDER BY seq DESC LIMIT 1").get(sessionId) as
+		| { seq: number; batch: string }
+		| undefined
+	if (!row) return null
+	const batch = JSON.parse(row.batch) as RevertBatch
 
 	// Re-apply oldest-first so a file's final state matches its latest `after`.
-	for (const snap of [...batch.snapshots].sort((a, b) => a.ts - b.ts)) {
-		applyFileState(snap.path, snap.after)
-	}
+	for (const snap of [...batch.snapshots].sort((a, b) => a.ts - b.ts)) applyFileState(snap.path, snap.after)
 
-	if (!store.messages[sessionId]) store.messages[sessionId] = []
-	store.messages[sessionId].push(...batch.messages)
-	if (!store.checkpoints[sessionId]) store.checkpoints[sessionId] = []
-	store.checkpoints[sessionId].push(...batch.snapshots)
-
-	const session = store.sessions[sessionId]
-	if (session) session.updatedAt = Date.now()
-	persist()
+	tx(() => {
+		const insM = db.prepare("INSERT OR REPLACE INTO messages(id,sessionId,role,content,createdAt) VALUES(?,?,?,?,?)")
+		for (const m of batch.messages) insM.run(m.id, sessionId, m.role, JSON.stringify(m.content), m.createdAt)
+		const insC = db.prepare("INSERT INTO checkpoints(sessionId,messageId,path,before,after,ts) VALUES(?,?,?,?,?,?)")
+		for (const s of batch.snapshots) insC.run(sessionId, s.messageId, s.path, s.before, s.after, s.ts)
+		db.prepare("DELETE FROM redo WHERE seq = ?").run(row.seq)
+		touch(sessionId)
+	})
 	return { restored: batch.messages.length }
 }
 
@@ -369,7 +514,7 @@ export interface FileDiff {
  * earliest `before` vs latest `after` per file.
  */
 export function getSessionDiff(sessionId: string): FileDiff[] {
-	const snaps = (store.checkpoints[sessionId] ?? []).slice().sort((a, b) => a.ts - b.ts)
+	const snaps = getCheckpoints(sessionId) // already ts-ascending
 	const byPath = new Map<string, { before: string | null; after: string | null }>()
 	for (const s of snaps) {
 		const existing = byPath.get(s.path)
@@ -377,51 +522,53 @@ export function getSessionDiff(sessionId: string): FileDiff[] {
 		else byPath.set(s.path, { before: s.before, after: s.after })
 	}
 	const diffs: FileDiff[] = []
-	for (const [path, { before, after }] of byPath) {
+	for (const [p, { before, after }] of byPath) {
 		if (before === after) continue
 		const status = before === null ? "created" : after === null ? "deleted" : "modified"
-		diffs.push({ path, before, after, status })
+		diffs.push({ path: p, before, after, status })
 	}
 	return diffs
 }
 
+// ── Todos / usage / permissions ───────────────────────────────────────────
+
 export function setTodos(sessionId: string, todos: Todo[]): void {
-	store.todos[sessionId] = todos
-	persist()
+	db.prepare("INSERT OR REPLACE INTO todos(sessionId,todos) VALUES(?,?)").run(sessionId, JSON.stringify(todos))
 }
 
 export function getTodos(sessionId: string): Todo[] {
-	return store.todos[sessionId] ?? []
+	const row = db.prepare("SELECT todos FROM todos WHERE sessionId = ?").get(sessionId) as { todos: string } | undefined
+	return row ? (JSON.parse(row.todos) as Todo[]) : []
 }
 
 /** Add a turn's token usage to the session total and return the new total. */
 export function addUsage(sessionId: string, inputTokens: number, outputTokens: number): Usage {
-	const current = store.usage[sessionId] ?? { inputTokens: 0, outputTokens: 0 }
-	current.inputTokens += inputTokens
-	current.outputTokens += outputTokens
-	store.usage[sessionId] = current
-	persist()
-	return current
+	const current = getUsage(sessionId)
+	const next: Usage = { inputTokens: current.inputTokens + inputTokens, outputTokens: current.outputTokens + outputTokens }
+	db.prepare("INSERT OR REPLACE INTO usage(sessionId,inputTokens,outputTokens) VALUES(?,?,?)").run(sessionId, next.inputTokens, next.outputTokens)
+	return next
 }
 
 export function getUsage(sessionId: string): Usage {
-	return store.usage[sessionId] ?? { inputTokens: 0, outputTokens: 0 }
+	const row = db.prepare("SELECT inputTokens, outputTokens FROM usage WHERE sessionId = ?").get(sessionId) as Usage | undefined
+	return row ?? { inputTokens: 0, outputTokens: 0 }
 }
 
 /** True if the user previously chose "always allow" for this action in this project. */
 export function matchesPermissionRule(directory: string, key: string): boolean {
-	return store.permissionRules[directory]?.includes(key) ?? false
+	const row = db.prepare("SELECT 1 AS ok FROM permission_rules WHERE directory = ? AND key = ?").get(directory, key)
+	return Boolean(row)
 }
 
 /** Remember an "always allow" decision for this project + action. */
 export function addPermissionRule(directory: string, key: string): void {
-	if (!store.permissionRules[directory]) store.permissionRules[directory] = []
-	if (!store.permissionRules[directory].includes(key)) {
-		store.permissionRules[directory].push(key)
-		persist()
-	}
+	db.prepare("INSERT OR IGNORE INTO permission_rules(directory,key) VALUES(?,?)").run(directory, key)
 }
 
 export function closeDb(): void {
-	persist()
+	try {
+		db?.close()
+	} catch {
+		// already closed
+	}
 }

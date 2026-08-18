@@ -44,7 +44,10 @@ exclude merges defaults.
   baseURL / non-bearer auth) — remove from the catalog or gate as "needs config" (product decision).
 - **M12** SSE broadcasts all sessions to every client — irrelevant for single-user local +
   now behind the Origin guard; add per-session filtering if multi-user.
-- **Storage** move flat-JSON store → SQLite (atomic writes shipped now; SQLite is the scale fix — see Compozy note).
+- **Storage** ✅ moved flat-JSON store → SQLite (`node:sqlite`, WAL, indexed, transactional;
+  auto-migrates any existing sessions.json). Incremental row writes replace whole-file
+  rewrites. Note: node:sqlite is experimental in Node 24 (benign boot warning); chosen over
+  better-sqlite3 to avoid native-module packaging in Electron.
 - Low: L3 PATH prepend order, L4 tiny-window last-2 rule, L5 token-estimate overhead, L6 data:-URL
   attachment cap, L7 unknown-tool default-allow, L8 explicit request-size/rate limits.
 
