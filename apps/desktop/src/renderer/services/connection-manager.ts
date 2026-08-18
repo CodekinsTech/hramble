@@ -32,7 +32,9 @@ import {
 } from "./opencode"
 import { engineConnectedAtom } from "../atoms/engine"
 import { processEngineEvent } from "./engine-event-processor"
-import { openEngineEventStream } from "./engine-client"
+import { openEngineEventStream, listEngineSessions } from "./engine-client"
+import { engineSessionToSession, engineSessionStatus } from "./engine-history"
+import type { SessionStatus } from "../lib/types"
 
 const log = createLogger("connection-manager")
 
@@ -197,13 +199,33 @@ export async function loadProjectSessions(
 	sandboxDirs?: Set<string>,
 	options?: { limit?: number; roots?: boolean; search?: string },
 ): Promise<void> {
-	const client = getProjectClient(directory)
-	if (!client) return
-
 	// Set loading state so the sidebar shows a spinner
 	if (options?.limit) {
 		appStore.set(setProjectPaginationLoadingAtom, directory)
 	}
+
+	// Engine path: list sessions for this directory from the engine store.
+	if (appStore.get(engineConnectedAtom)) {
+		try {
+			const es = await listEngineSessions({ directory, search: options?.search, limit: options?.limit })
+			const sessions = es.map(engineSessionToSession)
+			const statuses: Record<string, SessionStatus> = {}
+			for (const s of es) statuses[s.id] = engineSessionStatus(s)
+			appStore.set(setSessionsAtom, { sessions, statuses, directory, sandboxDirs })
+			if (options?.limit) {
+				appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: es.length, limit: options.limit })
+			}
+		} catch (err) {
+			log.error("Failed to load engine sessions", { directory }, err)
+			if (options?.limit) {
+				appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: 0, limit: options.limit })
+			}
+		}
+		return
+	}
+
+	const client = getProjectClient(directory)
+	if (!client) return
 
 	try {
 		const [sessions, statuses] = await Promise.all([
@@ -253,6 +275,22 @@ export async function loadMoreProjectSessions(
 	const nextLimit = currentLimit + SESSIONS_PAGE_SIZE
 	log.info("Loading more sessions", { directory, currentLimit, nextLimit })
 	appStore.set(setProjectPaginationLoadingAtom, directory)
+
+	// Engine path: re-list with the larger limit.
+	if (appStore.get(engineConnectedAtom)) {
+		try {
+			const es = await listEngineSessions({ directory, limit: nextLimit })
+			const sessions = es.map(engineSessionToSession)
+			const statuses: Record<string, SessionStatus> = {}
+			for (const s of es) statuses[s.id] = engineSessionStatus(s)
+			appStore.set(setSessionsAtom, { sessions, statuses, directory })
+			appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: es.length, limit: nextLimit })
+		} catch (err) {
+			log.error("Failed to load more engine sessions", { directory }, err)
+			appStore.set(updateProjectPaginationAtom, { directory, fetchedCount: currentLimit, limit: currentLimit })
+		}
+		return
+	}
 
 	const client = getProjectClient(directory)
 	if (!client) {

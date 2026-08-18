@@ -13,6 +13,9 @@ import { appStore } from "../atoms/store"
 import { streamingVersionFamily } from "../atoms/streaming"
 import type { Message, Part } from "../lib/types"
 import { getBaseClient, getProjectClient } from "../services/connection-manager"
+import { engineConnectedAtom } from "../atoms/engine"
+import { getEngineSession } from "../services/engine-client"
+import { mapEngineMessagesToEntries, type EngineMessage } from "../services/engine-history"
 
 // Re-export types for consumers
 export type { ChatMessageEntry, ChatTurn }
@@ -81,6 +84,20 @@ export function useSessionChat(
 			}
 			setError(null)
 			try {
+				// Engine path: hydrate from the engine's stored transcript instead of
+				// the OpenCode SDK. The engine keeps the whole history, so there is no
+				// separate "load earlier".
+				if (appStore.get(engineConnectedAtom)) {
+					const es = await getEngineSession(sid)
+					const raw = mapEngineMessagesToEntries((es.messages ?? []) as EngineMessage[])
+					hasEarlierRef.current = false
+					const messages = raw.map((m) => m.info)
+					const parts: Record<string, Part[]> = {}
+					for (const m of raw) parts[m.info.id] = m.parts
+					appStore.set(setMessagesAtom, { sessionId: sid, messages, parts })
+					return
+				}
+
 				// Use a directory-scoped client when available, otherwise fall back to the base client
 				const client = (directory ? getProjectClient(directory) : null) ?? getBaseClient()
 				if (!client) {
