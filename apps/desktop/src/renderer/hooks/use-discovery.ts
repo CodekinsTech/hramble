@@ -15,6 +15,14 @@ import {
 
 const log = createLogger("discovery")
 
+/** Reject after `ms` so a hung backend probe can't block discovery forever. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+	return Promise.race([
+		p,
+		new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+	])
+}
+
 // Module-level guard to prevent concurrent discovery runs.
 // The Jotai atom guard (loaded/loading) depends on a React re-render
 // to propagate, which can race with React Strict Mode double-effects
@@ -67,28 +75,22 @@ export function useDiscovery() {
 
 		;(async () => {
 			try {
-				// --- Step 1: Resolve the server URL ---
-				log.info("Resolving server URL...", {
-					server: activeServer.name,
-					type: activeServer.type,
-				})
-				const url = await resolveServerUrl(activeServer)
-
-				// --- Step 2: Resolve auth if needed ---
-				const authHeader = await resolveAuthHeader(activeServer)
-
-				// --- Step 3: Connect to the server (starts SSE event loop) ---
+				// --- Steps 1-3: Connect OpenCode (best-effort). The engine can back the
+				// app on its own, so an unavailable/slow OpenCode must not block discovery
+				// — resolve + connect under a timeout, and continue on any failure.
 				setPhase("connecting")
-				log.info("Connecting to OpenCode server", {
-					url,
-					server: activeServer.name,
-					authenticated: !!authHeader,
-				})
-				await connectToOpenCode(url, authHeader)
+				try {
+					const url = await withTimeout(resolveServerUrl(activeServer), 5000)
+					const authHeader = await resolveAuthHeader(activeServer).catch(() => null)
+					log.info("Connecting to OpenCode server", { url, server: activeServer.name, authenticated: !!authHeader })
+					await connectToOpenCode(url, authHeader)
+				} catch (err) {
+					log.warn("OpenCode unavailable — continuing on the engine", err)
+				}
 				// Connect to the xot engine and WAIT for it before loading projects/
 				// sessions — otherwise the loads race ahead while the engine is still
 				// connecting and fall back to OpenCode, hiding engine-only sessions.
-				await connectToEngine()
+				const engineReady = await connectToEngine()
 
 				// --- Step 3b: Bail if server is unreachable ---
 				// connectToOpenCode runs a health check and sets serverConnectedAtom.
@@ -96,8 +98,11 @@ export function useDiscovery() {
 				// stays in a non-loaded state, allowing the sidebar to show "Server offline".
 				// Keep discoveryInFlight = true to prevent an infinite retry loop;
 				// resetDiscoveryGuard() (called on server switch) clears it.
-				if (!appStore.get(serverConnectedAtom)) {
-					log.warn("Server is unreachable, skipping project discovery", {
+				// Proceed if EITHER backend is reachable. The engine alone is enough to
+				// drive the app (projects/sessions come from it); only bail when both
+				// OpenCode and the engine are down.
+				if (!appStore.get(serverConnectedAtom) && !engineReady) {
+					log.warn("Neither OpenCode nor the engine is reachable, skipping discovery", {
 						server: activeServer.name,
 					})
 					appStore.set(discoveryAtom, (prev) => ({
