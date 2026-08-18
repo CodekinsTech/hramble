@@ -5,8 +5,20 @@
  * like an OpenCode one. Live streaming is handled separately by
  * engine-event-processor; this is the one-time hydration on session open.
  */
-import type { Message, Part, Session, SessionStatus, TextPart, ToolPart, FilePart, UserMessage, AssistantMessage } from "../lib/types"
-import type { EngineSession } from "./engine-client"
+import type { Message, Part, Session, SessionStatus, TextPart, ToolPart, FilePart, UserMessage, AssistantMessage, OpenCodeProject } from "../lib/types"
+import type { EngineSession, EngineProject } from "./engine-client"
+
+/** Map an engine project directory to the app's Project (sidebar) shape. */
+export function engineProjectToProject(p: EngineProject): OpenCodeProject {
+	const name = p.directory.split(/[\\/]/).filter(Boolean).pop() ?? p.directory
+	return {
+		id: p.directory,
+		worktree: p.directory,
+		name,
+		time: { created: p.updatedAt, updated: p.updatedAt },
+		sandboxes: [],
+	} as unknown as OpenCodeProject
+}
 
 // Engine content-block shapes (mirror packages/engine/src/types.ts ContentBlock).
 interface EngineBlock {

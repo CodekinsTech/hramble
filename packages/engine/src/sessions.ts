@@ -284,6 +284,19 @@ export function listSessions(opts: ListOptions = {}): Session[] {
 	return (db.prepare(sql).all(...params) as unknown as SessionRow[]).map(toSession)
 }
 
+export interface ProjectDir {
+	directory: string
+	updatedAt: number
+	sessionCount: number
+}
+
+/** Distinct project directories that have sessions, most-recently-active first. */
+export function listProjectDirs(): ProjectDir[] {
+	return db
+		.prepare("SELECT directory, MAX(updatedAt) AS updatedAt, COUNT(*) AS sessionCount FROM sessions GROUP BY directory ORDER BY updatedAt DESC")
+		.all() as unknown as ProjectDir[]
+}
+
 export function renameSession(id: string, title: string): Session | null {
 	const session = getSession(id)
 	if (!session) return null

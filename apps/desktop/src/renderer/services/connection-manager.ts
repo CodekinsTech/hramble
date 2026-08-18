@@ -32,8 +32,8 @@ import {
 } from "./opencode"
 import { engineConnectedAtom } from "../atoms/engine"
 import { processEngineEvent } from "./engine-event-processor"
-import { openEngineEventStream, listEngineSessions } from "./engine-client"
-import { engineSessionToSession, engineSessionStatus } from "./engine-history"
+import { openEngineEventStream, listEngineSessions, listEngineProjects } from "./engine-client"
+import { engineSessionToSession, engineSessionStatus, engineProjectToProject } from "./engine-history"
 import type { SessionStatus } from "../lib/types"
 
 const log = createLogger("connection-manager")
@@ -170,6 +170,18 @@ export async function connectToOpenCode(url: string, authHeader?: string | null)
  * Uses the base client (no directory scope) since project.list() is global.
  */
 export async function loadAllProjects() {
+	// Engine path: projects are the distinct directories that have engine sessions.
+	if (appStore.get(engineConnectedAtom)) {
+		try {
+			const eps = await listEngineProjects()
+			log.info("Loaded projects from engine", { count: eps.length })
+			return eps.map(engineProjectToProject)
+		} catch (err) {
+			log.error("Failed to load engine projects", err)
+			return []
+		}
+	}
+
 	const client = getBaseClient()
 	if (!client) {
 		log.warn("Cannot load projects: not connected to server")

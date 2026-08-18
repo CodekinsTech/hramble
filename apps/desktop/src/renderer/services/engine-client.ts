@@ -53,6 +53,17 @@ export async function createEngineSession(
 	})
 }
 
+export interface EngineProject {
+	directory: string
+	updatedAt: number
+	sessionCount: number
+}
+
+export async function listEngineProjects(): Promise<EngineProject[]> {
+	const res = await request<{ projects: EngineProject[] }>("/projects")
+	return res.projects
+}
+
 export async function listEngineSessions(
 	opts: { directory?: string; search?: string; limit?: number } = {},
 ): Promise<EngineSession[]> {

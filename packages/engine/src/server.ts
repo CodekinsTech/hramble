@@ -12,6 +12,7 @@ import {
 	createSession,
 	getSession,
 	listSessions,
+	listProjectDirs,
 	updateSessionStatus,
 	addMessage,
 	getMessages,
@@ -193,6 +194,12 @@ export async function startServer(): Promise<void> {
 
 		// Don't let Fastify end the response
 		return reply
+	})
+
+	// ── Projects ─────────────────────────────────────────────────────────
+	// Distinct project directories that have engine sessions (sidebar source).
+	app.get("/projects", async () => {
+		return { projects: listProjectDirs() }
 	})
 
 	// ── Sessions ─────────────────────────────────────────────────────────
