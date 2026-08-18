@@ -7,6 +7,13 @@ import { appStore } from "../atoms/store"
 import type { Session, TextPart } from "../lib/types"
 import { getProjectClient } from "../services/connection-manager"
 import { useServerCommands } from "./use-opencode-data"
+import { engineConnectedAtom } from "../atoms/engine"
+import {
+	abortEngineSession,
+	revertEngineSession,
+	unrevertEngineSession,
+	summarizeEngineSession,
+} from "../services/engine-client"
 
 // ============================================================
 // Types
@@ -98,28 +105,36 @@ export function useSessionRevert(
 
 	const undo = useCallback(async (): Promise<string | undefined> => {
 		if (!directory || !sessionId) return undefined
-		const client = getProjectClient(directory)
-		if (!client) return undefined
-
-		const sessionEntry = appStore.get(sessionFamily(sessionId))
-		if (sessionEntry?.status?.type === "busy") {
-			await client.session.abort({ sessionID: sessionId })
-		}
-
 		const targetId = findUndoTarget(sessionId, revertInfo?.messageID)
 		if (!targetId) return undefined
-
 		const userText = getUserMessageText(targetId)
+		const busy = appStore.get(sessionFamily(sessionId))?.status?.type === "busy"
+
+		if (appStore.get(engineConnectedAtom)) {
+			if (busy) await abortEngineSession(sessionId)
+			await revertEngineSession(sessionId, targetId)
+			return userText
+		}
+
+		const client = getProjectClient(directory)
+		if (!client) return undefined
+		if (busy) await client.session.abort({ sessionID: sessionId })
 		await client.session.revert({ sessionID: sessionId, messageID: targetId })
 		return userText
 	}, [directory, sessionId, revertInfo])
 
 	const redo = useCallback(async () => {
 		if (!directory || !sessionId || !revertInfo) return
+		const nextTarget = findRedoTarget(sessionId, revertInfo.messageID)
+
+		if (appStore.get(engineConnectedAtom)) {
+			if (nextTarget) await revertEngineSession(sessionId, nextTarget)
+			else await unrevertEngineSession(sessionId)
+			return
+		}
+
 		const client = getProjectClient(directory)
 		if (!client) return
-
-		const nextTarget = findRedoTarget(sessionId, revertInfo.messageID)
 		if (nextTarget) {
 			await client.session.revert({ sessionID: sessionId, messageID: nextTarget })
 		} else {
@@ -130,14 +145,17 @@ export function useSessionRevert(
 	const revertToMessage = useCallback(
 		async (messageId: string) => {
 			if (!directory || !sessionId) return
-			const client = getProjectClient(directory)
-			if (!client) return
+			const busy = appStore.get(sessionFamily(sessionId))?.status?.type === "busy"
 
-			const sessionEntry = appStore.get(sessionFamily(sessionId))
-			if (sessionEntry?.status?.type === "busy") {
-				await client.session.abort({ sessionID: sessionId })
+			if (appStore.get(engineConnectedAtom)) {
+				if (busy) await abortEngineSession(sessionId)
+				await revertEngineSession(sessionId, messageId)
+				return
 			}
 
+			const client = getProjectClient(directory)
+			if (!client) return
+			if (busy) await client.session.abort({ sessionID: sessionId })
 			await client.session.revert({ sessionID: sessionId, messageID: messageId })
 		},
 		[directory, sessionId],
@@ -201,6 +219,10 @@ export function useCommands(
 			source: "client",
 			execute: async () => {
 				if (!directory || !sessionId) return
+				if (appStore.get(engineConnectedAtom)) {
+					await summarizeEngineSession(sessionId)
+					return
+				}
 				const client = getProjectClient(directory)
 				if (!client) return
 				await client.session.summarize({ sessionID: sessionId })
