@@ -49,6 +49,7 @@ import {
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import { CHAT_MODES, chatModeAtom } from "../atoms/chat-mode"
+import { engineConnectedAtom } from "../atoms/engine"
 import { pendingSessionStepsAtom } from "../atoms/chat"
 import { mergeSessionPermission, permissionRulesAtom } from "../atoms/permission-rules"
 import { interruptedWorkAtom, resolveInterruptedItemAtom } from "../atoms/sleep-recovery"
@@ -255,6 +256,9 @@ export function NewChat() {
 	const [launching, setLaunching] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [worktreeMode, setWorktreeMode] = useState<"local" | "worktree">("local")
+	// The engine doesn't support git worktrees yet, so hide the toggle on the
+	// engine path — sessions run in the project directory (local mode).
+	const engineConnected = useAtomValue(engineConnectedAtom)
 
 	// Hyperloop state — persisted in atom so navigating away (View) and back restores the run
 	const [hyperRun, setHyperRun] = useAtom(hyperloopRunAtom)
@@ -2003,7 +2007,7 @@ export function NewChat() {
 							) : undefined
 						}
 						extraSlot={
-							vcs ? (
+							vcs && !engineConnected ? (
 								<WorktreeToggle mode={worktreeMode} onModeChange={setWorktreeMode} />
 							) : undefined
 						}
