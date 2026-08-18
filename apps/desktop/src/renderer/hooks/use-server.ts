@@ -3,7 +3,7 @@ import { useCallback } from "react"
 import { connectionAtom } from "../atoms/connection"
 import { messagesFamily, upsertMessageAtom } from "../atoms/messages"
 import { upsertPartAtom } from "../atoms/parts"
-import { sessionFamily, upsertSessionAtom } from "../atoms/sessions"
+import { removeSessionAtom, sessionFamily, upsertSessionAtom } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import { createLogger } from "../lib/logger"
 import type {
@@ -555,7 +555,17 @@ export function useAgentActions() {
 		log.debug("deleteSession", { sessionId })
 
 		if (appStore.get(engineConnectedAtom)) {
+			// Remove from the UI immediately (don't wait on the SSE round-trip), then
+			// delete from the engine. Also best-effort delete from OpenCode's parallel
+			// store — imported sessions still exist there and would otherwise reappear
+			// on the next OpenCode-backed reload.
+			appStore.set(removeSessionAtom, sessionId)
 			await deleteEngineSession(sessionId)
+			try {
+				await getProjectClient(directory)?.session.delete({ sessionID: sessionId })
+			} catch {
+				// Not in OpenCode (engine-only session) — fine.
+			}
 			return
 		}
 
