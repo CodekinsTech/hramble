@@ -97,6 +97,7 @@ import { PromptAttachmentPreview } from "./chat/prompt-attachments"
 import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
 import { HrambleLogo } from "./hramble-logo"
 import { BrainSessionSummary } from "./brain-session-summary"
+import { FloatingPanel } from "./floating-panel"
 import { GraphView } from "./graph-view"
 import { HyperloopSpinner } from "./hyperloop-spinner"
 
@@ -1880,18 +1881,10 @@ export function NewChat() {
 							/>
 
 							{stepsOpen && (
-								<div className="mb-2 rounded-xl border border-border bg-muted/30 p-3">
-									<div className="mb-2 flex items-center justify-between">
-										<span className="font-medium text-muted-foreground text-xs">Steps — run in order after session starts</span>
-										<button
-											type="button"
-											onClick={() => setStepsOpen(false)}
-											className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-											title="Hide steps"
-										>
-											<XIcon className="size-3.5" />
-										</button>
-									</div>
+								<FloatingPanel
+									title="Steps — run in order after session starts"
+									onClose={() => setStepsOpen(false)}
+								>
 									<div className="space-y-1.5">
 										{steps.map((s, i) => (
 											<div key={i} className="flex items-start gap-2">
@@ -1925,7 +1918,7 @@ export function NewChat() {
 											Clear
 										</button>
 									</div>
-								</div>
+								</FloatingPanel>
 							)}
 
 							{/* Toolbar inside the card — agent + model + variant selectors */}
