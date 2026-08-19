@@ -275,14 +275,21 @@ export const PROVIDERS: ProviderDef[] = [
 		],
 	},
 
-	// ── Ollama (local) ────────────────────────────────────────────────────
+	// ── Ollama (local / LAN) ──────────────────────────────────────────────
+	// keyless: local Ollama needs no Authorization header. baseURL is
+	// env-overridable (OLLAMA_BASE_URL) and can also be overridden per-request
+	// via ModelRef.baseURL — e.g. a Mac on the LAN serving models over the network
+	// (Settings → General → Ollama server URL).
 	{
 		id: "ollama",
 		name: "Ollama",
 		type: "openai-compat",
-		baseURL: "http://localhost:11434/v1",
+		baseURL: process.env.OLLAMA_BASE_URL?.trim() || "http://localhost:11434/v1",
 		envKey: "OLLAMA_API_KEY",
+		keyless: true,
 		models: [
+			{ id: "qwen3-coder:30b", name: "Qwen3 Coder 30B", contextWindow: 262144, supportsTools: true },
+			{ id: "qwen3.8:27b", name: "Qwen3.8 27B (vision)", contextWindow: 262144, supportsVision: true },
 			{ id: "llama3.3", name: "Llama 3.3", contextWindow: 131072, supportsTools: true },
 			{ id: "llama3.2", name: "Llama 3.2", contextWindow: 131072, supportsTools: true },
 			{ id: "llama3.1", name: "Llama 3.1", contextWindow: 131072, supportsTools: true },

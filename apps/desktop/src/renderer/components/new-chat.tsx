@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { CodebaseGraph } from "./codebase-graph"
+import { readOllamaBaseURL } from "../lib/ollama"
 import { Semaphore } from "../lib/semaphore"
 import { projectModelsAtom, setProjectModelAtom } from "../atoms/preferences"
 import {
@@ -107,7 +108,13 @@ import { HyperloopSpinner } from "./hyperloop-spinner"
 
 /** Engine model ref from the UI's selected model (empty apiKey → engine uses its env keys). */
 function engineModelOf(m: { providerID: string; modelID: string } | null | undefined) {
-	return m ? { provider: m.providerID, model: m.modelID, apiKey: "" } : undefined
+	if (!m) return undefined
+	// Local/LAN Ollama: point the engine at the user's server (Settings → General).
+	if (m.providerID === "ollama") {
+		const baseURL = readOllamaBaseURL()
+		return { provider: m.providerID, model: m.modelID, apiKey: "", ...(baseURL ? { baseURL } : {}) }
+	}
+	return { provider: m.providerID, model: m.modelID, apiKey: "" }
 }
 
 /** Engine transcript entries for a session (info + parts), newest last. */

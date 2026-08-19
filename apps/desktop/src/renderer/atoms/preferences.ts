@@ -125,6 +125,14 @@ export const isTransparentAtom = atom((get) => {
 
 export const draftsAtom = atomWithStorage<Record<string, string>>("hramble:drafts", {})
 
+/**
+ * Base URL of a local/LAN Ollama server (e.g. a Mac serving models over the
+ * network). Empty = use the engine's localhost default. Sent to the engine as
+ * ModelRef.baseURL for the "ollama" provider. Key must match OLLAMA_BASE_URL_KEY
+ * in lib/ollama.ts (engineModelOf reads it straight from localStorage).
+ */
+export const ollamaBaseUrlAtom = atomWithStorage<string>("hramble:ollamaBaseURL", "")
+
 export const projectModelsAtom = atomWithStorage<Record<string, PersistedModelRef>>(
 	"hramble:projectModels",
 	{},

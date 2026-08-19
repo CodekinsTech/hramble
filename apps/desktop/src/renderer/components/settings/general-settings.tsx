@@ -15,7 +15,8 @@ import { useCallback, useEffect, useState } from "react"
 import { browserAutoOpenAtom } from "../../atoms/browser"
 import { communityAccessTokenAtom } from "../../atoms/community"
 import { dispatchPairTokenAtom, dispatchSessionRefAtom } from "../../atoms/dispatch"
-import { type DisplayMode, displayModeAtom, opaqueWindowsAtom } from "../../atoms/preferences"
+import { type DisplayMode, displayModeAtom, ollamaBaseUrlAtom, opaqueWindowsAtom } from "../../atoms/preferences"
+import { normalizeOllamaBaseURL } from "../../lib/ollama"
 import { useSettings } from "../../hooks/use-settings"
 import { useColorScheme, useSetColorScheme } from "../../hooks/use-theme"
 import { shareUrlForRoom } from "../../lib/share-client"
@@ -54,10 +55,75 @@ export function GeneralSettings() {
 				<ChromeConsoleAccessRow />
 			</SettingsSection>
 
+			<SettingsSection title="Local models">
+				<OllamaServerRow />
+			</SettingsSection>
+
 			<SettingsSection title="Dispatch">
 				<DispatchPairingRow />
 			</SettingsSection>
 		</div>
+	)
+}
+
+function OllamaServerRow() {
+	const saved = useAtomValue(ollamaBaseUrlAtom)
+	const setSaved = useSetAtom(ollamaBaseUrlAtom)
+	const [value, setValue] = useState(saved)
+	const [status, setStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle")
+	const [count, setCount] = useState<number | null>(null)
+
+	useEffect(() => setValue(saved), [saved])
+
+	const test = useCallback(async () => {
+		const base = normalizeOllamaBaseURL(value)
+		setSaved(normalizeOllamaBaseURL(value) ? value.trim() : "")
+		if (!base) {
+			setStatus("idle")
+			setCount(null)
+			return
+		}
+		setStatus("testing")
+		try {
+			const res = await fetch(`${base}/models`)
+			if (!res.ok) throw new Error(String(res.status))
+			const data = (await res.json()) as { data?: unknown[] }
+			setCount(Array.isArray(data.data) ? data.data.length : 0)
+			setStatus("ok")
+		} catch {
+			setStatus("fail")
+			setCount(null)
+		}
+	}, [value, setSaved])
+
+	return (
+		<SettingsRow
+			label="Ollama server URL"
+			description="Run models on another machine (e.g. a Mac on your network) and point Hramble at it. Leave blank to use a local Ollama. Then pick an Ollama model (Qwen3, etc.) in the model picker."
+		>
+			<div className="flex flex-col items-end gap-1.5">
+				<div className="flex items-center gap-2">
+					<Input
+						value={value}
+						onChange={(e) => setValue(e.target.value)}
+						placeholder="http://hostname.local:11434"
+						className="w-56 text-xs"
+						onBlur={test}
+					/>
+					<Button size="sm" variant="outline" onClick={test} disabled={status === "testing"}>
+						{status === "testing" ? "Testing…" : "Test"}
+					</Button>
+				</div>
+				{status === "ok" && (
+					<span className="text-[11px] text-green-600 dark:text-green-400">
+						Connected — {count} model{count === 1 ? "" : "s"} available
+					</span>
+				)}
+				{status === "fail" && (
+					<span className="text-[11px] text-destructive">Couldn't reach that server</span>
+				)}
+			</div>
+		</SettingsRow>
 	)
 }
 

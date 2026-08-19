@@ -81,6 +81,7 @@ import {
 } from "../../hooks/use-opencode-data"
 import type { ChatTurn } from "../../hooks/use-session-chat"
 import { createLogger } from "../../lib/logger"
+import { readOllamaBaseURL } from "../../lib/ollama"
 import { computeTurnWorkTimeSplit, formatWorkDuration } from "../../lib/session-metrics"
 import type { Agent, FileAttachment, FilePart, QuestionAnswer, TextPart } from "../../lib/types"
 import {
@@ -99,7 +100,13 @@ const log = createLogger("chat-view")
 
 /** Engine model ref from the UI's selected model (empty apiKey → engine uses its env keys). */
 function engineModelOf(m: { providerID: string; modelID: string } | null | undefined) {
-	return m ? { provider: m.providerID, model: m.modelID, apiKey: "" } : undefined
+	if (!m) return undefined
+	// Local/LAN Ollama: point the engine at the user's server (Settings → General).
+	if (m.providerID === "ollama") {
+		const baseURL = readOllamaBaseURL()
+		return { provider: m.providerID, model: m.modelID, apiKey: "", ...(baseURL ? { baseURL } : {}) }
+	}
+	return { provider: m.providerID, model: m.modelID, apiKey: "" }
 }
 
 /** The concatenated text of a session's last assistant message (engine transcript). */
