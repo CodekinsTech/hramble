@@ -93,6 +93,7 @@ import {
 	waitForEngineSessionIdle,
 } from "../../services/engine-client"
 import { mapEngineMessagesToEntries, type EngineMessage } from "../../services/engine-history"
+import { FloatingPanel } from "../floating-panel"
 
 const log = createLogger("chat-view")
 
@@ -2400,21 +2401,15 @@ function ChatInputSection({
 								)}
 
 								{stepsOpen && (
-									<div className="mb-2 rounded-xl border border-border bg-muted/30 p-3">
-										<div className="mb-2 flex items-center justify-between">
-											<span className="font-medium text-muted-foreground text-xs">
+									<FloatingPanel
+										title={
+											<>
 												Steps — run in order
 												{workspaceMode === "hyperloop" ? " · Hyperloop each step" : ""}
-											</span>
-											<button
-												type="button"
-												onClick={() => setStepsOpen(false)}
-												className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-												title="Hide steps"
-											>
-												<XIcon className="size-3.5" />
-											</button>
-										</div>
+											</>
+										}
+										onClose={() => setStepsOpen(false)}
+									>
 										{/* Auto-plan: turn one goal into steps */}
 										<div className="mb-2 flex items-center gap-2">
 											<input
@@ -2560,7 +2555,7 @@ function ChatInputSection({
 												Clear
 											</button>
 										</div>
-									</div>
+									</FloatingPanel>
 								)}
 								<PromptInput
 									className="rounded-xl"
