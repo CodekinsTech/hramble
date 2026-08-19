@@ -51,6 +51,7 @@ import {
 	servePreviewFile,
 } from "../services/backend"
 import { useSetAppBarContent } from "./app-bar-context"
+import { BrainSessionSummary } from "./brain-session-summary"
 import { ChatView } from "./chat"
 import { ReviewPanel } from "./review/review-panel"
 import { fileExplorerOpenAtom } from "../atoms/file-explorer"
@@ -322,6 +323,10 @@ export function AgentDetail({
 					</span>
 				</button>
 			)}
+
+			{/* Docked Brain — shrunk to a puzzle badge with a summary of what the
+			   Brain contributed to this session. Header strip, not a takeover. */}
+			{agent.sessionId && <BrainSessionSummary sessionId={agent.sessionId} />}
 
 			{/* Chat -- full height */}
 			<div className="min-h-0 flex-1">
