@@ -53,6 +53,9 @@ export const PROVIDER_KEY_URLS: Record<string, { label: string; url: string }> =
 	cohere: { label: "Get API key", url: "https://dashboard.cohere.com/api-keys" },
 	fireworks: { label: "Get API key", url: "https://fireworks.ai/account/api-keys" },
 	perplexity: { label: "Get API key", url: "https://www.perplexity.ai/settings/api" },
+	vercel: { label: "Get API key", url: "https://vercel.com/dashboard/ai-gateway" },
+	github: { label: "Create token", url: "https://github.com/settings/tokens" },
+	deepinfra: { label: "Get API key", url: "https://deepinfra.com/dash/api_keys" },
 }
 
 // ============================================================

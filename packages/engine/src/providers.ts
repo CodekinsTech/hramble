@@ -259,6 +259,57 @@ export const PROVIDERS: ProviderDef[] = [
 		],
 	},
 
+	// ── Vercel AI Gateway ─────────────────────────────────────────────────
+	{
+		id: "vercel",
+		name: "Vercel AI Gateway",
+		type: "openai-compat",
+		baseURL: "https://ai-gateway.vercel.sh/v1",
+		envKey: "AI_GATEWAY_API_KEY",
+		models: [
+			{ id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet 4.5", contextWindow: 200000, supportsVision: true, supportsTools: true },
+			{ id: "openai/gpt-4o", name: "GPT-4o", contextWindow: 128000, supportsVision: true, supportsTools: true },
+			{ id: "openai/gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128000, supportsVision: true, supportsTools: true },
+			{ id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", contextWindow: 1000000, supportsVision: true, supportsTools: true },
+			{ id: "xai/grok-3", name: "Grok 3", contextWindow: 131072, supportsTools: true },
+			{ id: "meta/llama-3.3-70b", name: "Llama 3.3 70B", contextWindow: 131072, supportsTools: true },
+		],
+	},
+
+	// ── GitHub Models ─────────────────────────────────────────────────────
+	{
+		id: "github",
+		name: "GitHub Models",
+		type: "openai-compat",
+		baseURL: "https://models.github.ai/inference",
+		envKey: "GITHUB_TOKEN",
+		models: [
+			{ id: "openai/gpt-4o", name: "GPT-4o", contextWindow: 128000, supportsVision: true, supportsTools: true },
+			{ id: "openai/gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128000, supportsVision: true, supportsTools: true },
+			{ id: "openai/o3-mini", name: "o3 Mini", contextWindow: 200000, supportsTools: true },
+			{ id: "meta/Llama-3.3-70B-Instruct", name: "Llama 3.3 70B", contextWindow: 131072, supportsTools: true },
+			{ id: "mistral-ai/Mistral-Large-2411", name: "Mistral Large", contextWindow: 128000, supportsTools: true },
+			{ id: "deepseek/DeepSeek-V3-0324", name: "DeepSeek V3", contextWindow: 65536, supportsTools: true },
+		],
+	},
+
+	// ── DeepInfra ─────────────────────────────────────────────────────────
+	{
+		id: "deepinfra",
+		name: "DeepInfra",
+		type: "openai-compat",
+		baseURL: "https://api.deepinfra.com/v1/openai",
+		envKey: "DEEPINFRA_API_KEY",
+		models: [
+			{ id: "meta-llama/Llama-3.3-70B-Instruct", name: "Llama 3.3 70B", contextWindow: 131072, supportsTools: true },
+			{ id: "Qwen/Qwen2.5-72B-Instruct", name: "Qwen 2.5 72B", contextWindow: 32768, supportsTools: true },
+			{ id: "Qwen/Qwen2.5-Coder-32B-Instruct", name: "Qwen 2.5 Coder 32B", contextWindow: 32768, supportsTools: true },
+			{ id: "deepseek-ai/DeepSeek-V3", name: "DeepSeek V3", contextWindow: 65536, supportsTools: true },
+			{ id: "deepseek-ai/DeepSeek-R1", name: "DeepSeek R1", contextWindow: 65536 },
+			{ id: "mistralai/Mistral-Small-24B-Instruct-2501", name: "Mistral Small 24B", contextWindow: 32768, supportsTools: true },
+		],
+	},
+
 	// ── Azure OpenAI ──────────────────────────────────────────────────────
 	{
 		id: "azure",
