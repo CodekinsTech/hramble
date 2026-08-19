@@ -490,17 +490,26 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		const isVisible = (n: RepoGraphNode) => !hiddenClusters.has(n.cluster)
 		const searching = !!matchingIds
 
-		// 1) Reference edges as chords bowing through the centre. Faint, tinted
-		//    toward the source cluster so it stays readable behind the dots.
-		ctx.lineWidth = layoutMode === "ring" ? 0.8 : 0.6
-		const edgeAlpha = layoutMode === "ring" ? 0.14 : 0.06
-		for (const e of scene.refEdges) {
-			if (!isVisible(e.a.node) || !isVisible(e.b.node)) continue
-			ctx.strokeStyle = withAlpha(colorFor(e.a.node.cluster), edgeAlpha)
-			ctx.beginPath()
-			ctx.moveTo(e.a.x, e.a.y)
-			ctx.quadraticCurveTo(scene.cx, scene.cy, e.b.x, e.b.y)
-			ctx.stroke()
+		// 1) Reference edges as chords bowing through the centre. With hundreds of
+		//    files, drawing every edge washes the centre into an unreadable hairball,
+		//    so only draw the edges that touch the focused node (hover/select) or a
+		//    search match. Idle = a clean ring of dots, no chords.
+		const focusId = hovered ?? selected?.id ?? null
+		if (focusId || searching) {
+			ctx.lineWidth = 1
+			for (const e of scene.refEdges) {
+				if (!isVisible(e.a.node) || !isVisible(e.b.node)) continue
+				const touchesFocus =
+					e.a.node.id === focusId ||
+					e.b.node.id === focusId ||
+					(searching && (matchingIds?.has(e.a.node.id) || matchingIds?.has(e.b.node.id)))
+				if (!touchesFocus) continue
+				ctx.strokeStyle = withAlpha(colorFor(e.a.node.cluster), 0.4)
+				ctx.beginPath()
+				ctx.moveTo(e.a.x, e.a.y)
+				ctx.quadraticCurveTo(scene.cx, scene.cy, e.b.x, e.b.y)
+				ctx.stroke()
+			}
 		}
 
 		// 2) Tree branch links (parent → child). Dim + neutral.
@@ -544,8 +553,15 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			ctx.globalAlpha = 1
 		}
 
-		// 5) Node labels — restrained: only selection / search-match / hover /
-		//    high-connectivity get a label.
+		// 5) Node labels — restrained: selection / search-match / hover, plus only
+		//    the top few hubs by connectivity. Labelling every well-connected node
+		//    stacks hundreds of overlapping names, so cap it to the biggest hubs.
+		const HUB_LABEL_COUNT = 14
+		const refDesc = scene.points
+			.filter((p) => isVisible(p.node))
+			.map((p) => p.node.refCount)
+			.sort((a, b) => b - a)
+		const hubCutoff = refDesc.length > HUB_LABEL_COUNT ? refDesc[HUB_LABEL_COUNT] : -1
 		ctx.font = "9px 'Inter Variable', Inter, sans-serif"
 		ctx.textAlign = "center"
 		ctx.textBaseline = "bottom"
@@ -555,7 +571,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			const isSelected = selected?.id === p.node.id
 			const isMatch = matchingIds?.has(p.node.id) ?? false
 			const isHover = hovered === p.node.id
-			if (!(isSelected || isMatch || isHover || p.node.refCount >= 4)) continue
+			if (!(isSelected || isMatch || isHover || p.node.refCount > hubCutoff)) continue
 			ctx.globalAlpha = searching && !isMatch && !isSelected ? 0.35 : 1
 			ctx.fillText(p.node.name, p.x, p.y - p.r - 3)
 			ctx.globalAlpha = 1
