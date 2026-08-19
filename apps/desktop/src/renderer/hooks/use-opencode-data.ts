@@ -5,7 +5,7 @@ import type {
 	Model as SdkModel,
 	Provider as SdkProvider,
 	ProviderAuthMethod as SdkProviderAuthMethod,
-} from "@opencode-ai/sdk/v2/client"
+} from "../lib/opencode-types"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useAtomValue } from "jotai"
 import { useCallback } from "react"
@@ -14,7 +14,6 @@ import { engineConnectedAtom } from "../atoms/engine"
 import { isMockModeAtom } from "../atoms/mock-mode"
 import { MOCK_AGENTS, MOCK_CONFIG, MOCK_PROVIDERS } from "../lib/mock-data"
 import { fetchModelState, updateModelRecent } from "../services/backend"
-import { getBaseClient, getProjectClient } from "../services/connection-manager"
 import {
 	listEngineProviders,
 	getEngineConfig,
@@ -58,7 +57,7 @@ function adaptEngineProviders(res: EngineProvidersResponse): ProvidersData {
 }
 
 // ============================================================
-// Re-exports — use SDK types directly
+// Re-exports — SDK-shaped types (vendored copy, no @opencode-ai/sdk dependency)
 // ============================================================
 
 export type { SdkAgent, SdkCommand, SdkConfig, SdkModel, SdkProvider, SdkProviderAuthMethod }
@@ -203,7 +202,7 @@ export const queryKeys = {
 }
 
 // ============================================================
-// Hooks (TanStack Query)
+// Hooks (TanStack Query) — all backed by the xot engine
 // ============================================================
 
 export function useProviders(directory: string | null): {
@@ -218,23 +217,8 @@ export function useProviders(directory: string | null): {
 	const queryClient = useQueryClient()
 
 	const { data, isLoading, error } = useQuery({
-		queryKey: [...queryKeys.providers(directory ?? ""), engineConnected ? "engine" : "opencode"],
-		queryFn: async (): Promise<ProvidersData> => {
-			if (engineConnected) {
-				return adaptEngineProviders(await listEngineProviders())
-			}
-			const client = getProjectClient(directory!)
-			if (!client) throw new Error("No client for directory")
-			const result = await client.config.providers()
-			const raw = result.data as {
-				providers: SdkProvider[]
-				default: Record<string, string>
-			}
-			return {
-				providers: raw.providers ?? [],
-				defaults: raw.default ?? {},
-			}
-		},
+		queryKey: queryKeys.providers(directory ?? ""),
+		queryFn: async (): Promise<ProvidersData> => adaptEngineProviders(await listEngineProviders()),
 		enabled: !!directory && (connected || engineConnected) && !isMockMode,
 	})
 
@@ -274,24 +258,10 @@ export function useConfig(directory: string | null): {
 	const queryClient = useQueryClient()
 
 	const { data, isLoading, error } = useQuery({
-		queryKey: [...queryKeys.config(directory ?? ""), engineConnected ? "engine" : "opencode"],
+		queryKey: queryKeys.config(directory ?? ""),
 		queryFn: async (): Promise<ConfigData> => {
-			if (engineConnected) {
-				const cfg = await getEngineConfig()
-				return { model: `${cfg.default.provider}/${cfg.default.model}`, defaultAgent: "build" }
-			}
-			const client = getProjectClient(directory!)
-			if (!client) throw new Error("No client for directory")
-			const result = await client.config.get()
-			const raw = result.data as SdkConfig
-			return {
-				model: raw.model,
-				smallModel: raw.small_model,
-				defaultAgent: raw.default_agent,
-				compaction: raw.compaction
-					? { auto: raw.compaction.auto, reserved: raw.compaction.reserved }
-					: undefined,
-			}
+			const cfg = await getEngineConfig()
+			return { model: `${cfg.default.provider}/${cfg.default.model}`, defaultAgent: "build" }
 		},
 		enabled: !!directory && (connected || engineConnected) && !isMockMode,
 	})
@@ -327,21 +297,17 @@ export function useVcs(directory: string | null): {
 	reload: () => void
 } {
 	const connected = useAtomValue(serverConnectedAtom)
+	const engineConnected = useAtomValue(engineConnectedAtom)
 	const isMockMode = useAtomValue(isMockModeAtom)
 	const queryClient = useQueryClient()
 
 	const { data, isLoading, error } = useQuery({
 		queryKey: queryKeys.vcs(directory ?? ""),
-		queryFn: async (): Promise<VcsData> => {
-			const client = getProjectClient(directory!)
-			if (!client) throw new Error("No client for directory")
-			const result = await client.vcs.get()
-			const raw = result.data as { branch: string }
-			return { branch: raw.branch ?? "" }
-		},
-		enabled: !!directory && connected && !isMockMode,
+		// The engine has no VCS endpoint yet — branch info is unavailable, same as
+		// the previous engine-mode behavior (the OpenCode client returned null here).
+		queryFn: async (): Promise<VcsData> => ({ branch: "" }),
+		enabled: !!directory && (connected || engineConnected) && !isMockMode,
 		staleTime: 30_000,
-		refetchInterval: 60_000,
 	})
 
 	const reload = useCallback(() => {
@@ -364,21 +330,8 @@ export function useOpenCodeAgents(directory: string | null): {
 	error: string | null
 	reload: () => void
 } {
-	const connected = useAtomValue(serverConnectedAtom)
 	const isMockMode = useAtomValue(isMockModeAtom)
 	const queryClient = useQueryClient()
-
-	const { data, isLoading, error } = useQuery({
-		queryKey: queryKeys.agents(directory ?? ""),
-		queryFn: async (): Promise<SdkAgent[]> => {
-			const client = getProjectClient(directory!)
-			if (!client) throw new Error("No client for directory")
-			const result = await client.app.agents()
-			const raw = (result.data ?? []) as SdkAgent[]
-			return raw.filter((a) => (a.mode === "primary" || a.mode === "all") && !a.hidden)
-		},
-		enabled: !!directory && connected && !isMockMode,
-	})
 
 	const reload = useCallback(() => {
 		if (directory) {
@@ -396,12 +349,9 @@ export function useOpenCodeAgents(directory: string | null): {
 		}
 	}
 
-	return {
-		agents: data ?? [],
-		loading: isLoading,
-		error: error ? (error instanceof Error ? error.message : "Failed to load agents") : null,
-		reload,
-	}
+	// The engine selects its agent (build/plan) via the prompt's `agent` param;
+	// there is no agent-catalog endpoint, so the picker uses its "build" default.
+	return { agents: [], loading: false, error: null, reload }
 }
 
 export function useModelState(): {
@@ -411,6 +361,7 @@ export function useModelState(): {
 	addRecent: (model: ModelRef) => void
 } {
 	const connected = useAtomValue(serverConnectedAtom)
+	const engineConnected = useAtomValue(engineConnectedAtom)
 	const isMockMode = useAtomValue(isMockModeAtom)
 	const queryClient = useQueryClient()
 
@@ -420,7 +371,7 @@ export function useModelState(): {
 			const result = await fetchModelState()
 			return result.recent ?? []
 		},
-		enabled: connected && !isMockMode,
+		enabled: (connected || engineConnected) && !isMockMode,
 		staleTime: 60_000,
 	})
 
@@ -467,22 +418,9 @@ export function useModelState(): {
 	}
 }
 
-export function useServerCommands(directory: string | null): SdkCommand[] {
-	const connected = useAtomValue(serverConnectedAtom)
-	const isMockMode = useAtomValue(isMockModeAtom)
-
-	const { data } = useQuery({
-		queryKey: queryKeys.commands(directory ?? ""),
-		queryFn: async () => {
-			const client = getProjectClient(directory!)
-			if (!client) throw new Error("No client for directory")
-			const result = await client.command.list()
-			return (result.data ?? []) as SdkCommand[]
-		},
-		enabled: !!directory && connected && !isMockMode,
-	})
-
-	return data ?? []
+export function useServerCommands(_directory: string | null): SdkCommand[] {
+	// The engine has no custom slash-command catalog.
+	return []
 }
 
 // ============================================================
@@ -518,10 +456,7 @@ export interface ConnectedProviderInfo {
 // Provider management hooks
 // ============================================================
 
-/**
- * Fetches the full provider catalog (connected and unconnected).
- * Uses GET /provider/ instead of GET /config/providers.
- */
+/** Fetches the full provider catalog (connected and unconnected) from the engine. */
 export function useAllProviders(): {
 	data: AllProvidersData | null
 	loading: boolean
@@ -534,33 +469,18 @@ export function useAllProviders(): {
 	const queryClient = useQueryClient()
 
 	const { data, isLoading, error } = useQuery({
-		queryKey: [...queryKeys.allProviders, engineConnected ? "engine" : "opencode"],
+		queryKey: queryKeys.allProviders,
 		queryFn: async (): Promise<AllProvidersData> => {
-			if (engineConnected) {
-				const res = await listEngineProviders()
-				const all: CatalogProvider[] = res.providers.map((p) => ({
-					id: p.id,
-					name: p.name,
-					env: [],
-					models: Object.fromEntries(p.models.map((m) => [m.id, { id: m.id, name: m.name }])),
-				}))
-				const defaults: Record<string, string> = {}
-				for (const p of res.providers) if (p.models[0]) defaults[p.id] = p.models[0].id
-				return { all, defaults, connected: res.providers.filter((p) => p.connected).map((p) => p.id) }
-			}
-			const client = getBaseClient()
-			if (!client) throw new Error("Not connected to server")
-			const result = await client.provider.list()
-			const raw = result.data as {
-				all: CatalogProvider[]
-				default: Record<string, string>
-				connected: string[]
-			}
-			return {
-				all: raw.all ?? [],
-				defaults: raw.default ?? {},
-				connected: raw.connected ?? [],
-			}
+			const res = await listEngineProviders()
+			const all: CatalogProvider[] = res.providers.map((p) => ({
+				id: p.id,
+				name: p.name,
+				env: [],
+				models: Object.fromEntries(p.models.map((m) => [m.id, { id: m.id, name: m.name }])),
+			}))
+			const defaults: Record<string, string> = {}
+			for (const p of res.providers) if (p.models[0]) defaults[p.id] = p.models[0].id
+			return { all, defaults, connected: res.providers.filter((p) => p.connected).map((p) => p.id) }
 		},
 		enabled: (connected || engineConnected) && !isMockMode,
 	})
@@ -577,12 +497,7 @@ export function useAllProviders(): {
 	}
 }
 
-/**
- * Fetches connected providers with their `source` field.
- * Uses GET /config/providers via the base client (no directory scope).
- * This gives us source info ("env" | "config" | "custom" | "api") that
- * the catalog endpoint (GET /provider/) does not provide.
- */
+/** Fetches connected providers with their `source` field from the engine. */
 export function useConnectedProviders(): {
 	data: Map<string, ConnectedProviderInfo> | null
 	loading: boolean
@@ -595,31 +510,14 @@ export function useConnectedProviders(): {
 	const queryClient = useQueryClient()
 
 	const { data, isLoading, error } = useQuery({
-		queryKey: [...queryKeys.connectedProviders, engineConnected ? "engine" : "opencode"],
+		queryKey: queryKeys.connectedProviders,
 		queryFn: async (): Promise<Map<string, ConnectedProviderInfo>> => {
 			const map = new Map<string, ConnectedProviderInfo>()
-			if (engineConnected) {
-				const res = await listEngineProviders()
-				for (const p of res.providers) {
-					if (p.connected) {
-						map.set(p.id, { id: p.id, name: p.name, source: p.keyless ? "config" : "api", env: [] })
-					}
+			const res = await listEngineProviders()
+			for (const p of res.providers) {
+				if (p.connected) {
+					map.set(p.id, { id: p.id, name: p.name, source: p.keyless ? "config" : "api", env: [] })
 				}
-				return map
-			}
-			const client = getBaseClient()
-			if (!client) throw new Error("Not connected to server")
-			const result = await client.config.providers()
-			const raw = result.data as {
-				providers: Array<{
-					id: string
-					name: string
-					source: "env" | "config" | "custom" | "api"
-					env: string[]
-				}>
-			}
-			for (const p of raw.providers ?? []) {
-				map.set(p.id, { id: p.id, name: p.name, source: p.source, env: p.env })
 			}
 			return map
 		},
@@ -639,31 +537,13 @@ export function useConnectedProviders(): {
 }
 
 /**
- * Fetches auth methods available for each provider.
- * Uses GET /provider/auth.
+ * Auth methods per provider. The engine connects providers by API key (see the
+ * provider settings), with no OpenCode-style auth-method catalog — returns empty.
  */
 export function useProviderAuthMethods(): {
 	data: Record<string, SdkProviderAuthMethod[]> | null
 	loading: boolean
 	error: string | null
 } {
-	const connected = useAtomValue(serverConnectedAtom)
-	const isMockMode = useAtomValue(isMockModeAtom)
-
-	const { data, isLoading, error } = useQuery({
-		queryKey: queryKeys.providerAuthMethods,
-		queryFn: async (): Promise<Record<string, SdkProviderAuthMethod[]>> => {
-			const client = getBaseClient()
-			if (!client) throw new Error("Not connected to server")
-			const result = await client.provider.auth()
-			return (result.data ?? {}) as Record<string, SdkProviderAuthMethod[]>
-		},
-		enabled: connected && !isMockMode,
-	})
-
-	return {
-		data: data ?? null,
-		loading: isLoading,
-		error: error ? (error instanceof Error ? error.message : "Failed to load auth methods") : null,
-	}
+	return { data: {}, loading: false, error: null }
 }
