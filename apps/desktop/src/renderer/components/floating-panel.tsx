@@ -38,8 +38,13 @@ export function FloatingPanel({
 
 	const onPointerMove = useCallback((e: ReactPointerEvent) => {
 		if (!drag.current) return
-		const x = Math.min(Math.max(8, e.clientX - drag.current.dx), window.innerWidth - 48)
-		const y = Math.min(Math.max(8, e.clientY - drag.current.dy), window.innerHeight - 48)
+		// Clamp so the WHOLE panel stays inside the window — it can never be dragged
+		// off-screen or lost (the header is always reachable to drag it back).
+		const panel = e.currentTarget.parentElement as HTMLElement | null
+		const w = panel?.offsetWidth ?? 400
+		const h = panel?.offsetHeight ?? 200
+		const x = Math.min(Math.max(0, e.clientX - drag.current.dx), Math.max(0, window.innerWidth - w))
+		const y = Math.min(Math.max(0, e.clientY - drag.current.dy), Math.max(0, window.innerHeight - h))
 		setPos({ x, y })
 	}, [])
 
