@@ -255,6 +255,24 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		return () => ro.disconnect()
 	}, [])
 
+	// TEMP debug readout — live container/canvas/window sizes to diagnose clipping.
+	const [dbg, setDbg] = useState("")
+	useEffect(() => {
+		const tick = () => {
+			const el = containerRef.current
+			if (!el) return
+			const er = el.getBoundingClientRect()
+			const c = el.querySelector("canvas")
+			const cr = c ? c.getBoundingClientRect() : null
+			setDbg(
+				`cont ${Math.round(er.width)}x${Math.round(er.height)} top${Math.round(er.top)} bot${Math.round(er.bottom)} | win ${window.innerWidth}x${window.innerHeight} | canvas ${cr ? `${Math.round(cr.width)}x${Math.round(cr.height)} bot${Math.round(cr.bottom)}` : "-"}`,
+			)
+		}
+		tick()
+		const id = setInterval(tick, 400)
+		return () => clearInterval(id)
+	}, [])
+
 	const clusters = useMemo(() => {
 		if (!data) return []
 		const counts = new Map<string, number>()
@@ -1208,6 +1226,9 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			</div>
 			<div className="flex flex-1 overflow-hidden">
 				<div ref={containerRef} className="relative flex flex-1 flex-col overflow-hidden">
+					<div className="pointer-events-none absolute top-1 left-1 z-[100] rounded bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-white">
+						{dbg}
+					</div>
 					{!data ? (
 						<div className="flex h-full items-center justify-center text-muted-foreground text-sm">Scanning…</div>
 					) : (
