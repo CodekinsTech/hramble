@@ -19,6 +19,8 @@ import {
 	sessionFamily,
 	setSessionErrorAtom,
 	setSessionStatusAtom,
+	TOOL_EVENT_LOG_CAP,
+	toolEventLogAtom,
 	upsertSessionAtom,
 } from "../atoms/sessions"
 import type { PermissionRequest } from "../lib/types"
@@ -284,13 +286,27 @@ export function processEngineEvent(event: EngineEvent): void {
 			// no live activity on the engine path.
 			const filePath = (event.input.filePath ?? event.input.path) as string | undefined
 			const command = event.input.command as string | undefined
+			const resolvedPath = typeof filePath === "string" ? filePath : undefined
+			const seq = ++toolEventSeq
 			set(lastToolEventAtom, {
 				id: event.toolCallId,
 				tool: event.tool,
-				filePath: typeof filePath === "string" ? filePath : undefined,
+				filePath: resolvedPath,
 				command: typeof command === "string" ? command : undefined,
-				seq: ++toolEventSeq,
+				seq,
 			})
+			// Replay trace: record file touches (events with a path) so the codebase
+			// graph can play them back. Skip pathless tools (bash, etc.) and cap the
+			// log to the most recent entries so it never grows unbounded.
+			if (resolvedPath) {
+				const prev = appStore.get(toolEventLogAtom)
+				const entry = { tool: event.tool, filePath: resolvedPath, ts: performance.now(), seq }
+				const next =
+					prev.length >= TOOL_EVENT_LOG_CAP
+						? [...prev.slice(prev.length - TOOL_EVENT_LOG_CAP + 1), entry]
+						: [...prev, entry]
+				set(toolEventLogAtom, next)
+			}
 			break
 		}
 

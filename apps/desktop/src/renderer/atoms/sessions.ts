@@ -453,3 +453,33 @@ export type ToolEvent = {
 }
 
 export const lastToolEventAtom = atom<ToolEvent | null>(null)
+
+/**
+ * A single file-touch in the agent's recent session, recorded for the codebase
+ * graph's Replay mode. Only tool events that carry a `filePath` are logged —
+ * file touches are what Replay animates across the graph.
+ *
+ * `ts` uses `performance.now()` (renderer monotonic clock) and `seq` mirrors the
+ * ToolEvent counter, so the log is orderable even when two touches land in the
+ * same millisecond.
+ */
+export type ToolEventLogEntry = {
+	/** Tool name, e.g. "edit" / "write" / "read". */
+	tool: string
+	/** Target file path (always present — entries without one are never logged). */
+	filePath?: string
+	/** performance.now() timestamp when the touch was recorded. */
+	ts: number
+	/** Monotonic sequence — mirrors ToolEvent.seq for stable ordering. */
+	seq: number
+}
+
+/** Most-recent file touches to replay are capped so the log never grows unbounded. */
+export const TOOL_EVENT_LOG_CAP = 400
+
+/**
+ * Ordered log of the agent's recent file touches (oldest → newest, capped to the
+ * most recent {@link TOOL_EVENT_LOG_CAP}). The codebase graph's Replay mode reads
+ * this to light up files in the order the agent touched them.
+ */
+export const toolEventLogAtom = atom<ToolEventLogEntry[]>([])
