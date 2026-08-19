@@ -84,6 +84,7 @@ import {
 	deleteEngineSession,
 	abortEngineSession,
 	getEngineSession,
+	getEngineSessionDiff,
 	sendEnginePrompt,
 	waitForEngineSessionIdle,
 } from "../services/engine-client"
@@ -402,6 +403,15 @@ export function NewChat() {
 			status: run.running ? "working" : "done",
 		})
 		run.steps.forEach((s, i) => {
+			const files = s.files ?? []
+			// File-overlap edges: reference every EARLIER step that touched a file this
+			// step also touched (one edge per pair). Turns the flat step column into a
+			// real relationship graph — steps sharing files are likely coupled/conflicting.
+			const refs: string[] = []
+			for (let j = 0; j < i; j++) {
+				const other = run.steps[j].files ?? []
+				if (other.length && files.some((f) => other.includes(f))) refs.push(`s${j}`)
+			}
 			void recordGraph(dir, runId, {
 				id: `s${i}`,
 				parent: "cmd",
@@ -409,6 +419,8 @@ export function NewChat() {
 				title: s.text.slice(0, 60),
 				status: map[s.status],
 				summary: s.preview,
+				files: files.length ? files : undefined,
+				refs: refs.length ? refs : undefined,
 			})
 		})
 		// Keep the run in the Hyperloop history (one entry per run) so the sidebar
@@ -942,7 +954,10 @@ export function NewChat() {
 		const summary = await fetchStepSummary(sid)
 
 		if (verdict.ok) {
-			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview: summary || s.preview } : s)))
+			// Record the files this step changed so the work graph can show a real
+			// file count and draw file-overlap edges between steps.
+			const files = (await getEngineSessionDiff(sid).catch(() => [])).map((d) => d.path)
+			setHyperSteps((prev) => prev.map((s, j) => (j === i ? { ...s, status: "done" as const, preview: summary || s.preview, files } : s)))
 			return
 		}
 		if (attempt < MAX_REPAIR_ATTEMPTS) {

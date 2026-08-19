@@ -48,6 +48,9 @@ export interface HyperStep {
 	sessionId?: string
 	timeEstimate?: string
 	preview?: string
+	/** Project-relative files this step changed (from its diff) — feeds the work
+	 *  graph: the per-node file count and the file-overlap edges between steps. */
+	files?: string[]
 }
 
 /**

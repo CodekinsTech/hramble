@@ -136,9 +136,30 @@ export function GraphView({
 	}
 
 	return (
-		<div className={`relative h-full w-full overflow-auto ${className ?? ""}`}>
-			<div className="relative" style={{ width, height, minWidth: "100%", minHeight: "100%" }}>
-				<svg className="pointer-events-none absolute inset-0 overflow-visible" width={width} height={height}>
+		<div className={`flex h-full w-full flex-col ${className ?? ""}`}>
+			<div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-border/40 border-b px-3 py-1.5 text-[10px] text-muted-foreground">
+				{(
+					[
+						["working", "bg-primary"],
+						["done", "bg-green-500"],
+						["failed", "bg-red-500"],
+						["repair", "bg-amber-500"],
+						["queued", "bg-border"],
+					] as const
+				).map(([label, dot]) => (
+					<span key={label} className="flex items-center gap-1">
+						<span className={`size-2 rounded-[2px] ${dot}`} />
+						{label}
+					</span>
+				))}
+				<span className="ml-auto flex items-center gap-1 opacity-70">
+					<span className="h-px w-3 border-primary/40 border-t border-dashed" />
+					shared files
+				</span>
+			</div>
+			<div className="relative min-h-0 flex-1 overflow-auto">
+				<div className="relative" style={{ width, height, minWidth: "100%", minHeight: "100%" }}>
+					<svg className="pointer-events-none absolute inset-0 overflow-visible" width={width} height={height}>
 					{nodes.flatMap((n) => {
 						const to = pos.get(n.id)
 						if (!to) return []
@@ -192,6 +213,7 @@ export function GraphView({
 					)
 				})}
 			</div>
+		</div>
 		</div>
 	)
 }
