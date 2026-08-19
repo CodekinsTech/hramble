@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "apps/desktop"],
       "port": 5173
+    },
+    {
+      "name": "Web Renderer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:web", "--prefix", "apps/desktop", "--", "--port", "1421", "--strictPort", "false"],
+      "port": 1421
     }
   ]
 }
