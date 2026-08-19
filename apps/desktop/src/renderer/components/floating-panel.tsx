@@ -1,6 +1,7 @@
 import { GripVerticalIcon, XIcon } from "lucide-react"
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react"
 import { useCallback, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 
 /**
  * A floating, draggable panel.
@@ -50,7 +51,9 @@ export function FloatingPanel({
 	// Default: lower-right, sitting above the chat bar and clear of the summary.
 	const style: CSSProperties = pos ? { left: pos.x, top: pos.y, width } : { right: 24, bottom: 92, width }
 
-	return (
+	// Portal to <body> so `position: fixed` is relative to the viewport — an
+	// ancestor with a CSS transform/filter would otherwise trap it inside the frame.
+	return createPortal(
 		<div
 			className="fixed z-[70] flex max-h-[72vh] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
 			style={style}
@@ -77,6 +80,7 @@ export function FloatingPanel({
 				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
-		</div>
+		</div>,
+		document.body,
 	)
 }
