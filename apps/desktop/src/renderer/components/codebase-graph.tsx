@@ -15,8 +15,10 @@
  * simpler standalone reimplementation of the agent's repo_map plugin logic
  * (different runtime, no shared import possible — see repo-graph.ts for why).
  */
-import { SearchIcon, XIcon } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useAtomValue } from "jotai"
+import { PauseIcon, PlayIcon, SearchIcon, XIcon } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { toolEventLogAtom } from "../atoms/sessions"
 
 interface RepoGraphNode {
 	id: string
@@ -86,6 +88,49 @@ function colorFor(cluster: string): string {
 
 const HEIGHT = 520
 
+// ── Replay mode ──────────────────────────────────────────────────────────────
+// Replay plays the agent's recent session back over whichever layout (ring or
+// tree) is active: the graph dims, then each touched file lights up in order
+// with a glow and an ember trail bowed from the previous touch to the current.
+// This is the ONLY mode that uses glow — static Ring/Tree stay muted.
+
+/** Milliseconds each fixation (one file touch) holds the spotlight. */
+const REPLAY_STEP_MS = 700
+/** Ember trail colour drawn between consecutive touches. */
+const EMBER_COLOR = "#ff9e5e"
+
+/** Colour a touch by its tool: edits warm, reads cool, everything else green. */
+function toolGlowColor(tool: string): string {
+	const t = tool.toLowerCase()
+	if (t === "edit" || t === "write" || t === "patch" || t === "multiedit" || t === "apply_patch") return "#f0ad5a"
+	if (t === "read") return "#a5c8f1"
+	return "#8fb45f"
+}
+
+/** One playback step: a file the agent touched, plus the symbol-nodes it maps to. */
+interface Fixation {
+	seq: number
+	tool: string
+	/** Ids of every symbol-node living in the touched file. */
+	nodeIds: string[]
+	/** Basename of the touched file, shown as the step caption. */
+	repFile: string
+}
+
+/** Point along a quadratic bézier at parameter t ∈ [0,1]. */
+function quadPoint(
+	p0: { x: number; y: number },
+	c: { x: number; y: number },
+	p1: { x: number; y: number },
+	t: number,
+): { x: number; y: number } {
+	const mt = 1 - t
+	return {
+		x: mt * mt * p0.x + 2 * mt * t * c.x + t * t * p1.x,
+		y: mt * mt * p0.y + 2 * mt * t * c.y + t * t * p1.y,
+	}
+}
+
 // Dot radius scales gently with how often a symbol is referenced.
 function dotRadius(refCount: number): number {
 	return Math.max(2.5, Math.min(3 + refCount * 0.8, 9))
@@ -123,6 +168,13 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 	const [query, setQuery] = useState("")
 	const [hiddenClusters, setHiddenClusters] = useState<Set<string>>(new Set())
 	const [layoutMode, setLayoutMode] = useState<LayoutMode>("ring")
+
+	// Replay mode — animates the session's file touches over the active layout.
+	const toolLog = useAtomValue(toolEventLogAtom)
+	const [replayActive, setReplayActive] = useState(false)
+	const [replayPlaying, setReplayPlaying] = useState(false)
+	const [replayMs, setReplayMs] = useState(0)
+	const replayMsRef = useRef(0)
 
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -182,6 +234,223 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		return buildTree(data, cx, cy, R, byId)
 	}, [data, width, layoutMode])
 
+	// Build the replay trace: turn the session's logged file touches into an
+	// ordered list of fixations, each mapped to the symbol-nodes in that file.
+	// Matching is layout-independent (depends only on data + log), so it survives
+	// switching between Ring and Tree. A logged absolute path like
+	// `/abs/proj/src/auth/login.ts` matches a node whose `file` is a path suffix
+	// of it (`src/auth/login.ts`); failing that, it falls back to basename.
+	const fixations = useMemo<Fixation[]>(() => {
+		if (!data || toolLog.length === 0) return []
+		const norm = (s: string) => s.replace(/\\/g, "/")
+		// Unique node-file → ids, plus a basename → ids fallback index.
+		const byFile = new Map<string, string[]>()
+		for (const n of data.nodes) {
+			const nf = norm(n.file)
+			const arr = byFile.get(nf)
+			if (arr) arr.push(n.id)
+			else byFile.set(nf, [n.id])
+		}
+		const byBase = new Map<string, string[]>()
+		for (const [nf, ids] of byFile) {
+			const base = nf.split("/").pop() || nf
+			const arr = byBase.get(base)
+			if (arr) arr.push(...ids)
+			else byBase.set(base, [...ids])
+		}
+
+		const matchNodes = (loggedPath: string): { ids: string[]; repFile: string } => {
+			const nl = norm(loggedPath)
+			// Prefer the longest node-file that is a path-suffix of (or contains) the
+			// logged path — the most specific match wins.
+			let bestFile = ""
+			let bestLen = -1
+			for (const [nf] of byFile) {
+				const suffix = nl === nf || nl.endsWith(`/${nf}`) || nf.endsWith(`/${nl}`)
+				if (suffix && nf.length > bestLen) {
+					bestLen = nf.length
+					bestFile = nf
+				}
+			}
+			if (bestFile) return { ids: byFile.get(bestFile) ?? [], repFile: baseName(bestFile) }
+			// Fallback: basename match.
+			const base = nl.split("/").pop() || nl
+			const ids = byBase.get(base)
+			if (ids && ids.length) return { ids, repFile: base }
+			return { ids: [], repFile: base }
+		}
+
+		const out: Fixation[] = []
+		let prevRep: string | null = null
+		for (const entry of toolLog) {
+			if (!entry.filePath) continue
+			const { ids, repFile } = matchNodes(entry.filePath)
+			if (ids.length === 0) continue // logged file matched no node — skip
+			// Collapse consecutive touches of the same file so the ember trail always
+			// moves and each step is a distinct hop.
+			if (repFile === prevRep) continue
+			out.push({ seq: entry.seq, tool: entry.tool, nodeIds: ids, repFile })
+			prevRep = repFile
+		}
+		return out
+	}, [data, toolLog])
+
+	const canReplay = replayActive && fixations.length > 0
+
+	// Centroid of a fixation's nodes in the current layout (positions come from
+	// `scene`, so this tracks whichever layout is active).
+	const fixationPoint = useCallback(
+		(f: Fixation): { x: number; y: number } | null => {
+			if (!scene) return null
+			let sx = 0
+			let sy = 0
+			let count = 0
+			for (const id of f.nodeIds) {
+				const p = scene.byId.get(id)
+				if (p) {
+					sx += p.x
+					sy += p.y
+					count++
+				}
+			}
+			if (count === 0) return null
+			return { x: sx / count, y: sy / count }
+		},
+		[scene],
+	)
+
+	// Draw a single replay frame at time `ms`. Only this path uses glow.
+	const drawReplay = useCallback(
+		(ms: number) => {
+			const canvas = canvasRef.current
+			if (!canvas || !scene || fixations.length === 0) return
+			const ctx = canvas.getContext("2d")
+			if (!ctx) return
+
+			const dpr = window.devicePixelRatio || 1
+			const w = width
+			const h = HEIGHT
+			canvas.width = Math.round(w * dpr)
+			canvas.height = Math.round(h * dpr)
+			canvas.style.width = `${w}px`
+			canvas.style.height = `${h}px`
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+			ctx.clearRect(0, 0, w, h)
+
+			const css = getComputedStyle(document.documentElement)
+			const cMuted = css.getPropertyValue("--muted-foreground").trim() || "#7a7a7a"
+			const cForeground = css.getPropertyValue("--foreground").trim() || "#0d0d0d"
+
+			const idx = Math.min(fixations.length - 1, Math.floor(ms / REPLAY_STEP_MS))
+			const local = Math.max(0, Math.min(1, (ms - idx * REPLAY_STEP_MS) / REPLAY_STEP_MS))
+
+			// 1) Dim base graph — faint reference chords + dim dots, no glow.
+			ctx.lineWidth = 0.5
+			for (const e of scene.refEdges) {
+				ctx.strokeStyle = withAlpha(cMuted, 0.05)
+				ctx.beginPath()
+				ctx.moveTo(e.a.x, e.a.y)
+				ctx.quadraticCurveTo(scene.cx, scene.cy, e.b.x, e.b.y)
+				ctx.stroke()
+			}
+			for (const p of scene.points) {
+				ctx.beginPath()
+				ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
+				ctx.fillStyle = withAlpha(colorFor(p.node.cluster), 0.12)
+				ctx.fill()
+			}
+
+			// 2) Fading heatmap — every touched-so-far node keeps a glow that decays
+			//    with recency; the current fixation is brightest.
+			const heat = new Map<string, { intensity: number; tool: string }>()
+			for (let j = 0; j <= idx; j++) {
+				const f = fixations[j]
+				const intensity = j === idx ? 0.6 + 0.4 * local : Math.max(0.08, 0.7 * 0.78 ** (idx - j))
+				for (const id of f.nodeIds) {
+					const cur = heat.get(id)
+					if (!cur || cur.intensity < intensity) heat.set(id, { intensity, tool: f.tool })
+				}
+			}
+
+			// 3) Ember trails — faint completed hops, plus the current hop drawn in as
+			//    the fixation animates (quadratic bézier bowed away from centre).
+			const drawTrail = (
+				from: { x: number; y: number },
+				to: { x: number; y: number },
+				progress: number,
+				alpha: number,
+			) => {
+				const mx = (from.x + to.x) / 2
+				const my = (from.y + to.y) / 2
+				const dx = to.x - from.x
+				const dy = to.y - from.y
+				const len = Math.hypot(dx, dy) || 1
+				const bow = Math.min(60, len * 0.28)
+				// Perpendicular, pushed away from the graph centre for a consistent bow.
+				let nx = -dy / len
+				let ny = dx / len
+				if ((mx - scene.cx) * nx + (my - scene.cy) * ny < 0) {
+					nx = -nx
+					ny = -ny
+				}
+				const ctrl = { x: mx + nx * bow, y: my + ny * bow }
+				ctx.strokeStyle = withAlpha(EMBER_COLOR, alpha)
+				ctx.lineWidth = 1.6
+				ctx.shadowColor = withAlpha(EMBER_COLOR, alpha)
+				ctx.shadowBlur = 8
+				ctx.beginPath()
+				const steps = 24
+				const end = Math.max(0.0001, progress)
+				for (let s = 0; s <= steps; s++) {
+					const t = (s / steps) * end
+					const pt = quadPoint(from, ctrl, to, t)
+					if (s === 0) ctx.moveTo(pt.x, pt.y)
+					else ctx.lineTo(pt.x, pt.y)
+				}
+				ctx.stroke()
+				ctx.shadowBlur = 0
+			}
+			for (let j = 1; j <= idx; j++) {
+				const a = fixationPoint(fixations[j - 1])
+				const b = fixationPoint(fixations[j])
+				if (a && b) drawTrail(a, b, 1, 0.18)
+			}
+			if (idx >= 1) {
+				const a = fixationPoint(fixations[idx - 1])
+				const b = fixationPoint(fixations[idx])
+				if (a && b) drawTrail(a, b, local, 0.85)
+			}
+
+			// 4) Glowing nodes for the heatmap.
+			for (const p of scene.points) {
+				const hot = heat.get(p.node.id)
+				if (!hot) continue
+				const color = toolGlowColor(hot.tool)
+				const rad = p.r + (hot.intensity > 0.55 ? 2 : 0.5)
+				ctx.shadowColor = withAlpha(color, hot.intensity)
+				ctx.shadowBlur = 6 + hot.intensity * 12
+				ctx.beginPath()
+				ctx.arc(p.x, p.y, rad, 0, Math.PI * 2)
+				ctx.fillStyle = withAlpha(color, Math.min(1, 0.35 + hot.intensity * 0.65))
+				ctx.fill()
+				ctx.shadowBlur = 0
+			}
+
+			// 5) Caption the current file near its centroid.
+			const cur = fixations[idx]
+			const pt = fixationPoint(cur)
+			if (pt) {
+				ctx.font = "10px 'Inter Variable', Inter, sans-serif"
+				ctx.textAlign = "center"
+				ctx.textBaseline = "bottom"
+				ctx.fillStyle = withAlpha(cForeground, 0.9)
+				ctx.fillText(cur.repFile, pt.x, pt.y - 10)
+			}
+			ctx.globalAlpha = 1
+		},
+		[scene, fixations, width, fixationPoint],
+	)
+
 	const toggleCluster = (name: string) => {
 		setHiddenClusters((prev) => {
 			const next = new Set(prev)
@@ -194,6 +463,8 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 	// Draw the active scene. Re-runs on any visual change; each pass resolves
 	// live theme colours so the graph respects light/dark.
 	useEffect(() => {
+		// In Replay mode the dedicated replay effects own the canvas.
+		if (canReplay) return
 		const canvas = canvasRef.current
 		if (!canvas) return
 		const ctx = canvas.getContext("2d")
@@ -292,7 +563,36 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 
 		// Border ignored for drawing but resolved above keeps lint honest.
 		void cBorder
-	}, [scene, width, hiddenClusters, matchingIds, selected, hovered, layoutMode])
+	}, [scene, width, hiddenClusters, matchingIds, selected, hovered, layoutMode, canReplay])
+
+	// Replay playback loop — advances the clock and redraws each frame while playing.
+	useEffect(() => {
+		if (!canReplay || !replayPlaying) return
+		const total = fixations.length * REPLAY_STEP_MS
+		let raf = 0
+		let last = performance.now()
+		const tick = (now: number) => {
+			const dt = now - last
+			last = now
+			replayMsRef.current = Math.min(total, replayMsRef.current + dt)
+			setReplayMs(replayMsRef.current)
+			drawReplay(replayMsRef.current)
+			if (replayMsRef.current >= total) {
+				setReplayPlaying(false)
+				return
+			}
+			raf = requestAnimationFrame(tick)
+		}
+		raf = requestAnimationFrame(tick)
+		return () => cancelAnimationFrame(raf)
+	}, [canReplay, replayPlaying, fixations, drawReplay])
+
+	// Static replay frame — draws the current scrub position while paused (and on
+	// scrub / layout change). The playback loop owns drawing while playing.
+	useEffect(() => {
+		if (!canReplay || replayPlaying) return
+		drawReplay(replayMsRef.current)
+	}, [canReplay, replayPlaying, replayMs, drawReplay])
 
 	// Nearest-node hit-test in canvas-local (CSS px) coordinates.
 	const hitTest = (clientX: number, clientY: number): RepoGraphNode | null => {
@@ -317,6 +617,37 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		return best
 	}
 
+	const totalReplayMs = fixations.length * REPLAY_STEP_MS
+	const replayIdx = fixations.length ? Math.min(fixations.length - 1, Math.floor(replayMs / REPLAY_STEP_MS)) : 0
+
+	const enterReplay = () => {
+		replayMsRef.current = 0
+		setReplayMs(0)
+		setReplayActive(true)
+		setReplayPlaying(fixations.length > 0)
+	}
+	const exitReplay = () => {
+		setReplayPlaying(false)
+		setReplayActive(false)
+	}
+	const toggleReplayPlay = () => {
+		if (replayPlaying) {
+			setReplayPlaying(false)
+			return
+		}
+		// Restart from the top if we're parked at the end.
+		if (replayMsRef.current >= totalReplayMs) {
+			replayMsRef.current = 0
+			setReplayMs(0)
+		}
+		setReplayPlaying(true)
+	}
+	const scrubReplay = (ms: number) => {
+		replayMsRef.current = ms
+		setReplayMs(ms)
+		setReplayPlaying(false)
+	}
+
 	return (
 		<div className="flex h-full flex-col bg-background">
 			<div className="flex items-center justify-between border-border border-b px-3 py-2">
@@ -337,18 +668,56 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 				</button>
 			</div>
 			<div className="flex flex-1 overflow-hidden">
-				<div ref={containerRef} className="relative flex-1 overflow-hidden">
+				<div ref={containerRef} className="relative flex flex-1 flex-col overflow-hidden">
 					{!data ? (
 						<div className="flex h-full items-center justify-center text-muted-foreground text-sm">Scanning…</div>
 					) : (
 						// biome-ignore lint: canvas interactive surface; keyboard users use the sidebar list/search instead
 						<canvas
 							ref={canvasRef}
-							onClick={(e) => setSelected(hitTest(e.clientX, e.clientY))}
-							onMouseMove={(e) => setHovered(hitTest(e.clientX, e.clientY)?.id ?? null)}
+							onClick={(e) => {
+								// Selection is disabled during replay so clicks don't fight the animation.
+								if (replayActive) return
+								setSelected(hitTest(e.clientX, e.clientY))
+							}}
+							onMouseMove={(e) => {
+								if (replayActive) return
+								setHovered(hitTest(e.clientX, e.clientY)?.id ?? null)
+							}}
 							onMouseLeave={() => setHovered(null)}
-							style={{ cursor: hovered ? "pointer" : "default" }}
+							style={{ cursor: replayActive ? "default" : hovered ? "pointer" : "default" }}
 						/>
+					)}
+					{data && replayActive && (
+						<div className="border-border border-t px-3 py-2">
+							{fixations.length === 0 ? (
+								<div className="text-muted-foreground text-xs">No recent session activity to replay</div>
+							) : (
+								<div className="flex items-center gap-2">
+									<button
+										type="button"
+										onClick={toggleReplayPlay}
+										className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted"
+										aria-label={replayPlaying ? "Pause replay" : "Play replay"}
+									>
+										{replayPlaying ? <PauseIcon className="size-3.5" /> : <PlayIcon className="size-3.5" />}
+									</button>
+									<input
+										type="range"
+										min={0}
+										max={Math.max(1, totalReplayMs)}
+										step={10}
+										value={Math.min(replayMs, totalReplayMs)}
+										onChange={(e) => scrubReplay(Number(e.target.value))}
+										className="h-1 flex-1 cursor-pointer accent-[color:var(--ring)]"
+										aria-label="Replay position"
+									/>
+									<span className="shrink-0 tabular-nums text-muted-foreground text-xs">
+										{replayIdx + 1}/{fixations.length}
+									</span>
+								</div>
+							)}
+						</div>
 					)}
 				</div>
 				<div className="w-56 shrink-0 overflow-y-auto border-border border-l p-3">
@@ -368,6 +737,18 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 							</button>
 						))}
 					</div>
+					<button
+						type="button"
+						onClick={replayActive ? exitReplay : enterReplay}
+						className={`mb-3 flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs transition-colors ${
+							replayActive
+								? "border-[color:var(--ring)] bg-[color:var(--ring)]/10 text-foreground"
+								: "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+						}`}
+					>
+						<PlayIcon className="size-3" />
+						{replayActive ? "Exit replay" : "Replay session"}
+					</button>
 					<div className="relative mb-3">
 						<SearchIcon className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
 						<input

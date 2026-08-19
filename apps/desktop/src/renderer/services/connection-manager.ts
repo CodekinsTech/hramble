@@ -7,6 +7,8 @@ import {
 	SESSIONS_PAGE_SIZE,
 	setProjectPaginationLoadingAtom,
 	setSessionsAtom,
+	TOOL_EVENT_LOG_CAP,
+	toolEventLogAtom,
 	updateProjectPaginationAtom,
 } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
@@ -447,13 +449,24 @@ function maybeEmitToolEvent(event: Event): void {
 		const input = (part.state.input ?? {}) as Record<string, unknown>
 		const filePath = (input.filePath ?? input.path) as string | undefined
 		const command = input.command as string | undefined
+		const resolvedPath = typeof filePath === "string" ? filePath : undefined
+		const seq = ++toolEventSeq
 		appStore.set(lastToolEventAtom, {
 			id: part.id,
 			tool: part.tool,
-			filePath: typeof filePath === "string" ? filePath : undefined,
+			filePath: resolvedPath,
 			command: typeof command === "string" ? command : undefined,
-			seq: ++toolEventSeq,
+			seq,
 		})
+		// Replay trace: record file touches (events with a path) so the codebase
+		// graph can play back the session. Skip pathless tools (bash, etc.) and
+		// cap the log to the most recent entries so it never grows unbounded.
+		if (resolvedPath) {
+			const prev = appStore.get(toolEventLogAtom)
+			const entry = { tool: part.tool, filePath: resolvedPath, ts: performance.now(), seq }
+			const next = prev.length >= TOOL_EVENT_LOG_CAP ? [...prev.slice(prev.length - TOOL_EVENT_LOG_CAP + 1), entry] : [...prev, entry]
+			appStore.set(toolEventLogAtom, next)
+		}
 	} catch {
 		// Never disturb the event pipeline on narration bookkeeping.
 	}
