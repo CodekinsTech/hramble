@@ -16,6 +16,7 @@ import {
 import { useNavigate } from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
+	ArchiveIcon,
 	ArrowRightIcon,
 	BookOpenIcon,
 	CheckIcon,
@@ -780,7 +781,18 @@ function BringItLiveView({
 }
 
 /** The Vault — a browsable record of everything that's been added to the Brain. */
-function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
+function BrainVaultView({
+	onTeach,
+	vaultAction,
+	onVaultActionHandled,
+}: {
+	onTeach: (prompt: string) => void
+	// When the hero toolbar routes here, it names the flow to auto-open (share /
+	// import / clean; "open" = just land on the vault). Optional so the vault can
+	// still be rendered without the hero driving it.
+	vaultAction?: null | "open" | "share" | "import" | "clean"
+	onVaultActionHandled?: () => void
+}) {
 	const [entries, setEntries] = useState<BrainVaultEntry[] | null>(null)
 	const [registry, setRegistry] = useState<BrainRegistryEntry[]>([])
 	const [filter, setFilter] = useState<"all" | BrainVaultEntry["type"]>("all")
@@ -1171,6 +1183,22 @@ function BrainVaultView({ onTeach }: { onTeach: (prompt: string) => void }) {
 		setCleanList(null)
 		setCleanChecked({})
 	}
+
+	// Hero toolbar bridge — when the Teach hero routes here with a named action,
+	// auto-open the matching existing flow, then clear it so it fires only once.
+	// "open" needs nothing extra (just being on the vault is enough). Guarded so
+	// the vault still works when rendered without these props.
+	useEffect(() => {
+		if (!vaultAction) return
+		if (vaultAction === "share") openWizard()
+		else if (vaultAction === "clean") void openClean()
+		else if (vaultAction === "import") setGitImportOpen(true)
+		// "open" → nothing extra.
+		onVaultActionHandled?.()
+		// Only react to a new action; the flow openers are stable enough here and
+		// re-adding them would just re-fire the same one-shot.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [vaultAction])
 
 	// Removes each checked cleanup candidate one at a time, swallowing per-item
 	// errors so one failure doesn't abort the rest, then refreshes the vault.
@@ -2330,6 +2358,9 @@ export function BrainPage() {
 	const [input, setInput] = useState("")
 	const [starting, setStarting] = useState(false)
 	const [tab, setTab] = useState<"teach" | "vault">("teach")
+	// Which vault flow the hero toolbar asked to open on landing (null = none).
+	// Consumed + cleared by BrainVaultView via onVaultActionHandled.
+	const [vaultAction, setVaultAction] = useState<null | "open" | "share" | "import" | "clean">(null)
 	// Bumped whenever the brain is fed, so the connector "current" pulses.
 	const [feedPulse, setFeedPulse] = useState(0)
 	// Folder chosen for the Files arm, held pending confirmation before a scan starts.
@@ -2540,7 +2571,11 @@ export function BrainPage() {
 			</div>
 
 			{tab === "vault" ? (
-				<BrainVaultView onTeach={(p) => void start(p)} />
+				<BrainVaultView
+					onTeach={(p) => void start(p)}
+					vaultAction={vaultAction}
+					onVaultActionHandled={() => setVaultAction(null)}
+				/>
 			) : (
 				<div className="flex w-full flex-1 flex-col items-center justify-center gap-8">
 					<div className="text-center">
@@ -2552,6 +2587,32 @@ export function BrainPage() {
 
 					{/* Brain at the centre, connected to its feed-arms by curved lines. */}
 					<BrainCluster renderArm={armCard} pulse={feedPulse} />
+
+					{/* Quick toolbar — jumps to the Vault tab and opens the matching
+					    existing flow (Vault list / Share wizard / GitHub import / Clean). */}
+					<div className="flex flex-wrap items-center justify-center gap-2">
+						{(
+							[
+								{ action: "open", label: "Vault", icon: ArchiveIcon },
+								{ action: "share", label: "Share", icon: Share2Icon },
+								{ action: "import", label: "Import", icon: DownloadIcon },
+								{ action: "clean", label: "Clean", icon: Trash2Icon },
+							] as const
+						).map(({ action, label, icon: Icon }) => (
+							<button
+								key={action}
+								type="button"
+								onClick={() => {
+									setVaultAction(action)
+									setTab("vault")
+								}}
+								className="flex h-9 items-center gap-1.5 rounded-lg border border-[#e3e7ee] bg-white px-3 text-[13px] font-medium text-foreground transition-colors hover:border-[#5B8FFF] hover:text-[#5B8FFF] dark:border-border dark:bg-card"
+							>
+								<Icon className="size-4 text-[#5B8FFF]" />
+								{label}
+							</button>
+						))}
+					</div>
 
 					{/* Docs arm — after a LOCAL file is picked, choose how to feed it
 					    before any chat opens: extract its knowledge, or keep it whole. */}
