@@ -1588,7 +1588,35 @@ export function NewChat() {
 									)}
 									{hyperSteps.length > 0 && graphView && (
 										<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background/40">
-											<GraphView directory={hyperRunForDir?.directory ?? selectedDirectory} sessionId={hyperRunForDir?.id ?? null} />
+											<div className="flex shrink-0 items-center gap-2 border-border/60 border-b px-3 py-2">
+												{hyperNotLaunched && !badFolder && !hyperNeedsRunModeChoice && (
+													<button
+														type="button"
+														onClick={hyperLaunchAll}
+														disabled={hyperRunning}
+														className="rounded-lg bg-primary px-3 py-1 font-medium text-primary-foreground text-xs disabled:opacity-50"
+													>
+														Run
+													</button>
+												)}
+												<button
+													type="button"
+													onClick={() => {
+														setHyperRun(null)
+														setHyperCollapsed(false)
+													}}
+													disabled={hyperRunning}
+													className="rounded-lg border border-border px-3 py-1 text-muted-foreground text-xs hover:text-foreground disabled:opacity-50"
+												>
+													Reset
+												</button>
+												{hyperRunning && <HyperloopSpinner className="ml-auto h-3.5 w-auto text-primary" />}
+											</div>
+											<GraphView
+												className="min-h-0 flex-1"
+												directory={hyperRunForDir?.directory ?? selectedDirectory}
+												sessionId={hyperRunForDir?.id ?? null}
+											/>
 										</div>
 									)}
 									{hyperSteps.length > 0 && hyperCollapsed && !graphView && (
