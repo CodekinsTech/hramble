@@ -15,6 +15,16 @@
  * simpler standalone reimplementation of the agent's repo_map plugin logic
  * (different runtime, no shared import possible — see repo-graph.ts for why).
  */
+import {
+	forceCenter,
+	forceCollide,
+	forceLink,
+	forceManyBody,
+	forceSimulation,
+	type Simulation,
+	type SimulationLinkDatum,
+	type SimulationNodeDatum,
+} from "d3-force"
 import { useAtomValue } from "jotai"
 import { PauseIcon, PlayIcon, SearchIcon, XIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -39,7 +49,37 @@ interface RepoGraphData {
 	truncated: boolean
 }
 
-type LayoutMode = "ring" | "tree"
+type LayoutMode = "force" | "3d" | "ring" | "tree"
+
+const LAYOUT_MODES: { id: LayoutMode; label: string }[] = [
+	{ id: "force", label: "Force" },
+	{ id: "3d", label: "3D" },
+	{ id: "ring", label: "Ring" },
+	{ id: "tree", label: "Tree" },
+]
+
+/** A d3-force simulation node — real symbol node plus live x/y/velocity fields. */
+interface ForceNode extends SimulationNodeDatum {
+	id: string
+	node: RepoGraphNode
+	r: number
+}
+interface ForceLinkDatum extends SimulationLinkDatum<ForceNode> {
+	source: string | ForceNode
+	target: string | ForceNode
+}
+
+/** A node in the hand-rolled 3D force layout (canvas-projected, no 3D lib). */
+interface Node3D {
+	node: RepoGraphNode
+	r: number
+	x: number
+	y: number
+	z: number
+	vx: number
+	vy: number
+	vz: number
+}
 
 interface PositionedNode {
 	node: RepoGraphNode
@@ -167,7 +207,19 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 	const [hovered, setHovered] = useState<string | null>(null)
 	const [query, setQuery] = useState("")
 	const [hiddenClusters, setHiddenClusters] = useState<Set<string>>(new Set())
-	const [layoutMode, setLayoutMode] = useState<LayoutMode>("ring")
+	const [layoutMode, setLayoutMode] = useState<LayoutMode>("force")
+	// 3D auto-orbit play/pause (state drives the button; ref feeds the draw loop).
+	const [autoOrbit, setAutoOrbit] = useState(true)
+	const autoOrbitRef = useRef(true)
+	autoOrbitRef.current = autoOrbit
+
+	// Live positions from the Force layout's running simulation. Kept in a ref so
+	// hit-testing and replay can read the current (or settled) node coordinates
+	// without re-subscribing. Frozen (not cleared) when we hand off to replay.
+	const forceNodesRef = useRef<ForceNode[] | null>(null)
+	// Imperative handles the sidebar controls call into the active Force loop.
+	const redrawForceRef = useRef<(() => void) | null>(null)
+	const reheatForceRef = useRef<(() => void) | null>(null)
 
 	// Replay mode — animates the session's file touches over the active layout.
 	const toolLog = useAtomValue(toolEventLogAtom)
@@ -216,11 +268,19 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		return new Set(data.nodes.filter((n) => n.name.toLowerCase().includes(queryLower)).map((n) => n.id))
 	}, [data, queryLower])
 
-	// Deterministic layout for the active mode. Positions are computed over ALL
-	// nodes (hiding a cluster just skips drawing it), so the picture never
-	// re-flows when clusters are toggled.
-	const scene = useMemo<Scene | null>(() => {
+	// Latest interaction state, mirrored into a ref so the long-lived Force / 3D
+	// draw loops can read it each frame without being torn down and rebuilt on
+	// every hover / selection / search change.
+	const drawStateRef = useRef({ hovered, selected, matchingIds, hiddenClusters })
+	drawStateRef.current = { hovered, selected, matchingIds, hiddenClusters }
+
+	// Deterministic layout for the two STATIC modes (Ring / Tree). Positions are
+	// computed over ALL nodes (hiding a cluster just skips drawing it), so the
+	// picture never re-flows when clusters are toggled. The LIVE modes (Force /
+	// 3D) run their own simulation loops and don't use this memo (→ null).
+	const staticScene = useMemo<Scene | null>(() => {
 		if (!data || data.nodes.length === 0) return null
+		if (layoutMode !== "ring" && layoutMode !== "tree") return null
 		const w = width
 		const h = HEIGHT
 		const cx = w / 2
@@ -233,6 +293,34 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		}
 		return buildTree(data, cx, cy, R, byId)
 	}, [data, width, layoutMode])
+
+	// The scene that hit-testing and replay should read for the ACTIVE layout:
+	//   • ring / tree → the deterministic static scene above.
+	//   • force       → a live scene assembled from the simulation's current
+	//                    (or settled/frozen) node positions.
+	//   • 3d          → null (replay + 2D hit-testing are disabled in 3D v1).
+	const getScene = useCallback((): Scene | null => {
+		if (layoutMode === "ring" || layoutMode === "tree") return staticScene
+		if (layoutMode === "force") {
+			const fnodes = forceNodesRef.current
+			if (!data || !fnodes || fnodes.length === 0) return null
+			const points: PositionedNode[] = []
+			const byId = new Map<string, PositionedNode>()
+			for (const fn of fnodes) {
+				const p: PositionedNode = { node: fn.node, x: fn.x ?? 0, y: fn.y ?? 0, r: fn.r }
+				points.push(p)
+				byId.set(fn.node.id, p)
+			}
+			const refEdges: RefEdge[] = []
+			for (const e of data.edges) {
+				const A = byId.get(e.source)
+				const B = byId.get(e.target)
+				if (A && B) refEdges.push({ a: A, b: B })
+			}
+			return { points, byId, refEdges, branches: [], labels: [], cx: width / 2, cy: HEIGHT / 2 }
+		}
+		return null
+	}, [layoutMode, staticScene, data, width])
 
 	// Build the replay trace: turn the session's logged file touches into an
 	// ordered list of fixations, each mapped to the symbol-nodes in that file.
@@ -295,13 +383,13 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		return out
 	}, [data, toolLog])
 
-	const canReplay = replayActive && fixations.length > 0
+	// Replay is a 2D-only affordance: it's disabled in the 3D layout for now.
+	const canReplay = replayActive && fixations.length > 0 && layoutMode !== "3d"
 
-	// Centroid of a fixation's nodes in the current layout (positions come from
-	// `scene`, so this tracks whichever layout is active).
+	// Centroid of a fixation's nodes in a given scene (Ring / Tree static scene,
+	// or the Force layout's live scene) — tracks whichever 2D layout is active.
 	const fixationPoint = useCallback(
-		(f: Fixation): { x: number; y: number } | null => {
-			if (!scene) return null
+		(f: Fixation, scene: Scene): { x: number; y: number } | null => {
 			let sx = 0
 			let sy = 0
 			let count = 0
@@ -316,13 +404,14 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			if (count === 0) return null
 			return { x: sx / count, y: sy / count }
 		},
-		[scene],
+		[],
 	)
 
 	// Draw a single replay frame at time `ms`. Only this path uses glow.
 	const drawReplay = useCallback(
 		(ms: number) => {
 			const canvas = canvasRef.current
+			const scene = getScene()
 			if (!canvas || !scene || fixations.length === 0) return
 			const ctx = canvas.getContext("2d")
 			if (!ctx) return
@@ -411,13 +500,13 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 				ctx.shadowBlur = 0
 			}
 			for (let j = 1; j <= idx; j++) {
-				const a = fixationPoint(fixations[j - 1])
-				const b = fixationPoint(fixations[j])
+				const a = fixationPoint(fixations[j - 1], scene)
+				const b = fixationPoint(fixations[j], scene)
 				if (a && b) drawTrail(a, b, 1, 0.18)
 			}
 			if (idx >= 1) {
-				const a = fixationPoint(fixations[idx - 1])
-				const b = fixationPoint(fixations[idx])
+				const a = fixationPoint(fixations[idx - 1], scene)
+				const b = fixationPoint(fixations[idx], scene)
 				if (a && b) drawTrail(a, b, local, 0.85)
 			}
 
@@ -438,7 +527,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 
 			// 5) Caption the current file near its centroid.
 			const cur = fixations[idx]
-			const pt = fixationPoint(cur)
+			const pt = fixationPoint(cur, scene)
 			if (pt) {
 				ctx.font = "10px 'Inter Variable', Inter, sans-serif"
 				ctx.textAlign = "center"
@@ -448,7 +537,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			}
 			ctx.globalAlpha = 1
 		},
-		[scene, fixations, width, fixationPoint],
+		[getScene, fixations, width, fixationPoint],
 	)
 
 	const toggleCluster = (name: string) => {
@@ -465,6 +554,9 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 	useEffect(() => {
 		// In Replay mode the dedicated replay effects own the canvas.
 		if (canReplay) return
+		// The LIVE modes (Force / 3D) own the canvas via their own loops below.
+		if (layoutMode === "force" || layoutMode === "3d") return
+		const scene = staticScene
 		const canvas = canvasRef.current
 		if (!canvas) return
 		const ctx = canvas.getContext("2d")
@@ -490,26 +582,17 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		const isVisible = (n: RepoGraphNode) => !hiddenClusters.has(n.cluster)
 		const searching = !!matchingIds
 
-		// 1) Reference edges as chords bowing through the centre. With hundreds of
-		//    files, drawing every edge washes the centre into an unreadable hairball,
-		//    so only draw the edges that touch the focused node (hover/select) or a
-		//    search match. Idle = a clean ring of dots, no chords.
-		const focusId = hovered ?? selected?.id ?? null
-		if (focusId || searching) {
-			ctx.lineWidth = 1
-			for (const e of scene.refEdges) {
-				if (!isVisible(e.a.node) || !isVisible(e.b.node)) continue
-				const touchesFocus =
-					e.a.node.id === focusId ||
-					e.b.node.id === focusId ||
-					(searching && (matchingIds?.has(e.a.node.id) || matchingIds?.has(e.b.node.id)))
-				if (!touchesFocus) continue
-				ctx.strokeStyle = withAlpha(colorFor(e.a.node.cluster), 0.4)
-				ctx.beginPath()
-				ctx.moveTo(e.a.x, e.a.y)
-				ctx.quadraticCurveTo(scene.cx, scene.cy, e.b.x, e.b.y)
-				ctx.stroke()
-			}
+		// 1) Reference edges as chords bowing through the centre. Faint, tinted
+		//    toward the source cluster so it stays readable behind the dots.
+		ctx.lineWidth = layoutMode === "ring" ? 0.8 : 0.6
+		const edgeAlpha = layoutMode === "ring" ? 0.14 : 0.06
+		for (const e of scene.refEdges) {
+			if (!isVisible(e.a.node) || !isVisible(e.b.node)) continue
+			ctx.strokeStyle = withAlpha(colorFor(e.a.node.cluster), edgeAlpha)
+			ctx.beginPath()
+			ctx.moveTo(e.a.x, e.a.y)
+			ctx.quadraticCurveTo(scene.cx, scene.cy, e.b.x, e.b.y)
+			ctx.stroke()
 		}
 
 		// 2) Tree branch links (parent → child). Dim + neutral.
@@ -553,15 +636,8 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			ctx.globalAlpha = 1
 		}
 
-		// 5) Node labels — restrained: selection / search-match / hover, plus only
-		//    the top few hubs by connectivity. Labelling every well-connected node
-		//    stacks hundreds of overlapping names, so cap it to the biggest hubs.
-		const HUB_LABEL_COUNT = 14
-		const refDesc = scene.points
-			.filter((p) => isVisible(p.node))
-			.map((p) => p.node.refCount)
-			.sort((a, b) => b - a)
-		const hubCutoff = refDesc.length > HUB_LABEL_COUNT ? refDesc[HUB_LABEL_COUNT] : -1
+		// 5) Node labels — restrained: only selection / search-match / hover /
+		//    high-connectivity get a label.
 		ctx.font = "9px 'Inter Variable', Inter, sans-serif"
 		ctx.textAlign = "center"
 		ctx.textBaseline = "bottom"
@@ -571,7 +647,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			const isSelected = selected?.id === p.node.id
 			const isMatch = matchingIds?.has(p.node.id) ?? false
 			const isHover = hovered === p.node.id
-			if (!(isSelected || isMatch || isHover || p.node.refCount > hubCutoff)) continue
+			if (!(isSelected || isMatch || isHover || p.node.refCount >= 4)) continue
 			ctx.globalAlpha = searching && !isMatch && !isSelected ? 0.35 : 1
 			ctx.fillText(p.node.name, p.x, p.y - p.r - 3)
 			ctx.globalAlpha = 1
@@ -579,7 +655,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 
 		// Border ignored for drawing but resolved above keeps lint honest.
 		void cBorder
-	}, [scene, width, hiddenClusters, matchingIds, selected, hovered, layoutMode, canReplay])
+	}, [staticScene, width, hiddenClusters, matchingIds, selected, hovered, layoutMode, canReplay])
 
 	// Replay playback loop — advances the clock and redraws each frame while playing.
 	useEffect(() => {
@@ -610,9 +686,456 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		drawReplay(replayMsRef.current)
 	}, [canReplay, replayPlaying, replayMs, drawReplay])
 
+	// ── FORCE layout (2D, default) ──────────────────────────────────────────────
+	// A live Obsidian-style d3-force simulation, ticked by a requestAnimationFrame
+	// loop until it cools (alphaMin) and then idles. The loop owns the canvas while
+	// Force is the active, non-replay mode. Interaction state is read from a ref so
+	// this effect is NOT rebuilt on every hover/select (which would restart the sim).
+	useEffect(() => {
+		if (layoutMode !== "force" || canReplay) return
+		if (!data || data.nodes.length === 0) return
+		const canvas = canvasRef.current
+		if (!canvas) return
+		const ctx = canvas.getContext("2d")
+		if (!ctx) return
+
+		const w = width
+		const h = HEIGHT
+		const cx = w / 2
+		const cy = h / 2
+
+		// Seed on a small ring around centre so nodes expand outward smoothly
+		// (avoids the default top-left phyllotaxis spiral jumping into frame).
+		const nodes: ForceNode[] = data.nodes.map((n, i) => {
+			const ang = (i / Math.max(1, data.nodes.length)) * Math.PI * 2
+			const rad = 24 + (i % 9) * 5
+			return {
+				id: n.id,
+				node: n,
+				r: dotRadius(n.refCount),
+				x: cx + Math.cos(ang) * rad,
+				y: cy + Math.sin(ang) * rad,
+			}
+		})
+		const links: ForceLinkDatum[] = data.edges.map((e) => ({ source: e.source, target: e.target }))
+		forceNodesRef.current = nodes
+
+		const sim: Simulation<ForceNode, ForceLinkDatum> = forceSimulation<ForceNode>(nodes)
+			.force("charge", forceManyBody<ForceNode>().strength(-34))
+			.force(
+				"link",
+				forceLink<ForceNode, ForceLinkDatum>(links)
+					.id((d) => d.id)
+					.distance(30)
+					.strength(0.5),
+			)
+			.force("center", forceCenter<ForceNode>(cx, cy))
+			.force("collide", forceCollide<ForceNode>().radius((d) => d.r + 3))
+			.alphaMin(0.02)
+			.alphaDecay(0.035)
+		sim.stop() // we drive ticks by hand via rAF
+
+		const draw = () => {
+			const dpr = window.devicePixelRatio || 1
+			canvas.width = Math.round(w * dpr)
+			canvas.height = Math.round(h * dpr)
+			canvas.style.width = `${w}px`
+			canvas.style.height = `${h}px`
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+			ctx.clearRect(0, 0, w, h)
+
+			const css = getComputedStyle(document.documentElement)
+			const cForeground = css.getPropertyValue("--foreground").trim() || "#0d0d0d"
+			const cRing = css.getPropertyValue("--ring").trim() || "#0080bd"
+
+			const { hovered, selected, matchingIds, hiddenClusters } = drawStateRef.current
+			const isVisible = (n: RepoGraphNode) => !hiddenClusters.has(n.cluster)
+			const searching = !!matchingIds
+
+			// Links — faint, tinted toward the source cluster.
+			ctx.lineWidth = 0.7
+			for (const l of links) {
+				const a = l.source
+				const b = l.target
+				if (typeof a === "string" || typeof b === "string") continue
+				if (!isVisible(a.node) || !isVisible(b.node)) continue
+				ctx.strokeStyle = withAlpha(colorFor(a.node.cluster), 0.1)
+				ctx.beginPath()
+				ctx.moveTo(a.x ?? 0, a.y ?? 0)
+				ctx.lineTo(b.x ?? 0, b.y ?? 0)
+				ctx.stroke()
+			}
+
+			// Dots.
+			for (const nd of nodes) {
+				if (!isVisible(nd.node)) continue
+				const isSelected = selected?.id === nd.node.id
+				const isMatch = matchingIds?.has(nd.node.id) ?? false
+				const isHover = hovered === nd.node.id
+				const dim = searching && !isMatch && !isSelected
+				ctx.globalAlpha = dim ? 0.22 : 1
+				ctx.beginPath()
+				ctx.arc(nd.x ?? 0, nd.y ?? 0, nd.r, 0, Math.PI * 2)
+				ctx.fillStyle = colorFor(nd.node.cluster)
+				ctx.fill()
+				if (isSelected || isMatch || isHover) {
+					ctx.strokeStyle = cRing
+					ctx.lineWidth = isSelected ? 2.5 : 1.5
+					ctx.stroke()
+				}
+				ctx.globalAlpha = 1
+			}
+
+			// Restrained labels — selection / search-match / hover / high refCount.
+			ctx.font = "9px 'Inter Variable', Inter, sans-serif"
+			ctx.textAlign = "center"
+			ctx.textBaseline = "bottom"
+			ctx.fillStyle = cForeground
+			for (const nd of nodes) {
+				if (!isVisible(nd.node)) continue
+				const isSelected = selected?.id === nd.node.id
+				const isMatch = matchingIds?.has(nd.node.id) ?? false
+				const isHover = hovered === nd.node.id
+				if (!(isSelected || isMatch || isHover || nd.node.refCount >= 4)) continue
+				ctx.globalAlpha = searching && !isMatch && !isSelected ? 0.35 : 1
+				ctx.fillText(nd.node.name, nd.x ?? 0, (nd.y ?? 0) - nd.r - 3)
+				ctx.globalAlpha = 1
+			}
+		}
+
+		let raf = 0
+		const frame = () => {
+			raf = 0
+			const settled = sim.alpha() < 0.02
+			if (!settled) sim.tick()
+			draw()
+			if (!settled) raf = requestAnimationFrame(frame)
+		}
+		const ensureLoop = () => {
+			if (!raf) raf = requestAnimationFrame(frame)
+		}
+		ensureLoop()
+
+		// Expose imperative handles: redraw on interaction change, reheat on demand.
+		redrawForceRef.current = draw
+		reheatForceRef.current = () => {
+			sim.alpha(0.7)
+			ensureLoop()
+		}
+
+		// Optional: drag a node to reposition + reheat (fix while dragging).
+		let dragging: ForceNode | null = null
+		const nodeAt = (clientX: number, clientY: number): ForceNode | null => {
+			const rect = canvas.getBoundingClientRect()
+			const px = clientX - rect.left
+			const py = clientY - rect.top
+			let best: ForceNode | null = null
+			let bestDist = Number.POSITIVE_INFINITY
+			for (const nd of nodes) {
+				if (drawStateRef.current.hiddenClusters.has(nd.node.cluster)) continue
+				const dx = px - (nd.x ?? 0)
+				const dy = py - (nd.y ?? 0)
+				const d = Math.hypot(dx, dy)
+				const threshold = Math.max(nd.r + 5, 9)
+				if (d <= threshold && d < bestDist) {
+					bestDist = d
+					best = nd
+				}
+			}
+			return best
+		}
+		const onDown = (e: MouseEvent) => {
+			const nd = nodeAt(e.clientX, e.clientY)
+			if (!nd) return
+			dragging = nd
+			sim.alpha(0.5)
+			ensureLoop()
+		}
+		const onMove = (e: MouseEvent) => {
+			if (!dragging) return
+			const rect = canvas.getBoundingClientRect()
+			dragging.fx = e.clientX - rect.left
+			dragging.fy = e.clientY - rect.top
+			sim.alpha(0.5)
+			ensureLoop()
+		}
+		const onUp = () => {
+			if (!dragging) return
+			dragging.fx = null
+			dragging.fy = null
+			dragging = null
+		}
+		canvas.addEventListener("mousedown", onDown)
+		window.addEventListener("mousemove", onMove)
+		window.addEventListener("mouseup", onUp)
+
+		return () => {
+			if (raf) cancelAnimationFrame(raf)
+			sim.stop()
+			canvas.removeEventListener("mousedown", onDown)
+			window.removeEventListener("mousemove", onMove)
+			window.removeEventListener("mouseup", onUp)
+			redrawForceRef.current = null
+			reheatForceRef.current = null
+			// forceNodesRef is intentionally NOT cleared — replay reads the settled
+			// positions after handing off, and the next Force entry rebuilds it.
+		}
+	}, [layoutMode, canReplay, data, width])
+
+	// While Force idles (settled), push a one-off redraw when interaction state
+	// changes so hover / selection / search / cluster-hide stay responsive.
+	useEffect(() => {
+		if (layoutMode !== "force" || canReplay) return
+		redrawForceRef.current?.()
+	}, [layoutMode, canReplay, hovered, selected, matchingIds, hiddenClusters, width])
+
+	// ── 3D layout ───────────────────────────────────────────────────────────────
+	// Hand-rolled 3D force (no external 3D lib — CSP blocks CDNs): pairwise
+	// repulsion with a distance cutoff, link springs, mild gravity, damped velocity
+	// and alpha decay. Rendered by rotating each node (Y then X), projecting with
+	// perspective, depth-sorting back-to-front, and fogging far nodes. Drag orbits;
+	// a gentle auto-orbit runs when idle. Hover/select are skipped in 3D v1.
+	useEffect(() => {
+		if (layoutMode !== "3d") return
+		if (!data || data.nodes.length === 0) return
+		const canvas = canvasRef.current
+		if (!canvas) return
+		const ctx = canvas.getContext("2d")
+		if (!ctx) return
+
+		const w = width
+		const h = HEIGHT
+		const cx = w / 2
+		const cy = h / 2
+		const focal = 520
+
+		// Deterministic pseudo-random seed so the cloud is stable across renders.
+		const rand = (seed: number) => {
+			const x = Math.sin(seed * 12.9898) * 43758.5453
+			return x - Math.floor(x)
+		}
+		const nodes: Node3D[] = data.nodes.map((n, i) => ({
+			node: n,
+			r: dotRadius(n.refCount),
+			x: (rand(i + 1) - 0.5) * 220,
+			y: (rand(i + 97) - 0.5) * 220,
+			z: (rand(i + 211) - 0.5) * 220,
+			vx: 0,
+			vy: 0,
+			vz: 0,
+		}))
+		const index = new Map<string, number>()
+		nodes.forEach((nd, i) => index.set(nd.node.id, i))
+		const links: [number, number][] = []
+		for (const e of data.edges) {
+			const a = index.get(e.source)
+			const b = index.get(e.target)
+			if (a !== undefined && b !== undefined && a !== b) links.push([a, b])
+		}
+
+		// Physics constants.
+		const REST = 46
+		const CUTOFF = 200
+		const CUTOFF2 = CUTOFF * CUTOFF
+		const REPULSION = 900
+		const SPRING = 0.02
+		const GRAVITY = 0.008
+		const DAMPING = 0.86
+		const ALPHA_DECAY = 0.018
+		const ALPHA_MIN = 0.02
+		let alpha = 1
+
+		const step = () => {
+			// Pairwise repulsion (distance-cutoff limited).
+			for (let i = 0; i < nodes.length; i++) {
+				const a = nodes[i]
+				for (let j = i + 1; j < nodes.length; j++) {
+					const b = nodes[j]
+					let dx = a.x - b.x
+					let dy = a.y - b.y
+					let dz = a.z - b.z
+					const d2 = dx * dx + dy * dy + dz * dz
+					if (d2 > CUTOFF2) continue
+					let d = Math.sqrt(d2)
+					if (d < 0.01) {
+						dx = rand(i + j + 1) - 0.5
+						dy = rand(i * 3 + j + 2) - 0.5
+						dz = rand(i + j * 3 + 3) - 0.5
+						d = 1
+					}
+					const f = ((REPULSION / d2) * alpha) / d
+					a.vx += dx * f
+					a.vy += dy * f
+					a.vz += dz * f
+					b.vx -= dx * f
+					b.vy -= dy * f
+					b.vz -= dz * f
+				}
+			}
+			// Link springs toward a rest length.
+			for (const [i, j] of links) {
+				const a = nodes[i]
+				const b = nodes[j]
+				const dx = b.x - a.x
+				const dy = b.y - a.y
+				const dz = b.z - a.z
+				const d = Math.hypot(dx, dy, dz) || 0.01
+				const f = ((d - REST) * SPRING * alpha) / d
+				a.vx += dx * f
+				a.vy += dy * f
+				a.vz += dz * f
+				b.vx -= dx * f
+				b.vy -= dy * f
+				b.vz -= dz * f
+			}
+			// Gravity to origin, integrate, damp.
+			for (const nd of nodes) {
+				nd.vx -= nd.x * GRAVITY * alpha
+				nd.vy -= nd.y * GRAVITY * alpha
+				nd.vz -= nd.z * GRAVITY * alpha
+				nd.vx *= DAMPING
+				nd.vy *= DAMPING
+				nd.vz *= DAMPING
+				nd.x += nd.vx
+				nd.y += nd.vy
+				nd.z += nd.vz
+			}
+		}
+
+		let rotX = 0.5
+		let rotY = 0.4
+		let dragging = false
+		let lastX = 0
+		let lastY = 0
+
+		const draw = () => {
+			const dpr = window.devicePixelRatio || 1
+			canvas.width = Math.round(w * dpr)
+			canvas.height = Math.round(h * dpr)
+			canvas.style.width = `${w}px`
+			canvas.style.height = `${h}px`
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+			ctx.clearRect(0, 0, w, h)
+
+			const { matchingIds, hiddenClusters } = drawStateRef.current
+			const searching = !!matchingIds
+
+			if (autoOrbitRef.current && !dragging) rotY += 0.0035
+			const cosY = Math.cos(rotY)
+			const sinY = Math.sin(rotY)
+			const cosX = Math.cos(rotX)
+			const sinX = Math.sin(rotX)
+
+			const proj = nodes.map((nd) => {
+				// Rotate around Y, then around X.
+				const x1 = nd.x * cosY - nd.z * sinY
+				const z1 = nd.x * sinY + nd.z * cosY
+				const y2 = nd.y * cosX - z1 * sinX
+				const z2 = nd.y * sinX + z1 * cosX
+				const scale = focal / (focal + z2)
+				return { nd, sx: cx + x1 * scale, sy: cy + y2 * scale, z: z2, scale }
+			})
+
+			let zmin = Number.POSITIVE_INFINITY
+			let zmax = Number.NEGATIVE_INFINITY
+			for (const p of proj) {
+				if (p.z < zmin) zmin = p.z
+				if (p.z > zmax) zmax = p.z
+			}
+			const zspan = zmax - zmin || 1
+			// Near (small z) bright, far (large z) dim — fog.
+			const fog = (z: number) => 1 - ((z - zmin) / zspan) * 0.72
+
+			// Links first, faint, fogged by the nearer endpoint.
+			ctx.lineWidth = 0.6
+			for (const [i, j] of links) {
+				const a = proj[i]
+				const b = proj[j]
+				if (hiddenClusters.has(a.nd.node.cluster) || hiddenClusters.has(b.nd.node.cluster)) continue
+				const alp = Math.min(fog(a.z), fog(b.z)) * 0.12
+				ctx.strokeStyle = withAlpha(colorFor(a.nd.node.cluster), alp)
+				ctx.beginPath()
+				ctx.moveTo(a.sx, a.sy)
+				ctx.lineTo(b.sx, b.sy)
+				ctx.stroke()
+			}
+
+			// Dots back-to-front (farthest first).
+			const order = proj.map((_, i) => i).sort((i, j) => proj[j].z - proj[i].z)
+			for (const oi of order) {
+				const p = proj[oi]
+				if (hiddenClusters.has(p.nd.node.cluster)) continue
+				const isMatch = matchingIds?.has(p.nd.node.id) ?? false
+				let a = fog(p.z)
+				if (searching && !isMatch) a *= 0.3
+				a = Math.max(0.05, Math.min(1, a))
+				const rad = Math.max(1, p.nd.r * p.scale)
+				// Soft glow on high-connectivity hubs.
+				if (p.nd.node.refCount >= 4) {
+					ctx.shadowColor = withAlpha(colorFor(p.nd.node.cluster), a * 0.7)
+					ctx.shadowBlur = 6
+				}
+				ctx.globalAlpha = a
+				ctx.beginPath()
+				ctx.arc(p.sx, p.sy, rad, 0, Math.PI * 2)
+				ctx.fillStyle = colorFor(p.nd.node.cluster)
+				ctx.fill()
+				ctx.shadowBlur = 0
+				ctx.globalAlpha = 1
+			}
+		}
+
+		let raf = 0
+		const frame = () => {
+			if (alpha > ALPHA_MIN) {
+				step()
+				alpha *= 1 - ALPHA_DECAY
+			}
+			draw()
+			raf = requestAnimationFrame(frame) // keep looping for auto-orbit
+		}
+		raf = requestAnimationFrame(frame)
+
+		const onDown = (e: MouseEvent) => {
+			dragging = true
+			lastX = e.clientX
+			lastY = e.clientY
+		}
+		const onMove = (e: MouseEvent) => {
+			if (!dragging) return
+			rotY += (e.clientX - lastX) * 0.01
+			rotX += (e.clientY - lastY) * 0.01
+			rotX = Math.max(-1.4, Math.min(1.4, rotX))
+			lastX = e.clientX
+			lastY = e.clientY
+		}
+		const onUp = () => {
+			dragging = false
+		}
+		canvas.addEventListener("mousedown", onDown)
+		window.addEventListener("mousemove", onMove)
+		window.addEventListener("mouseup", onUp)
+
+		return () => {
+			if (raf) cancelAnimationFrame(raf)
+			canvas.removeEventListener("mousedown", onDown)
+			window.removeEventListener("mousemove", onMove)
+			window.removeEventListener("mouseup", onUp)
+		}
+	}, [layoutMode, data, width])
+
+	// Replay is 2D-only: leaving for the 3D layout tears any active replay down.
+	useEffect(() => {
+		if (layoutMode === "3d" && replayActive) {
+			setReplayPlaying(false)
+			setReplayActive(false)
+		}
+	}, [layoutMode, replayActive])
+
 	// Nearest-node hit-test in canvas-local (CSS px) coordinates.
 	const hitTest = (clientX: number, clientY: number): RepoGraphNode | null => {
 		const canvas = canvasRef.current
+		const scene = getScene()
 		if (!canvas || !scene) return null
 		const rect = canvas.getBoundingClientRect()
 		const px = clientX - rect.left
@@ -704,6 +1227,27 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 							style={{ cursor: replayActive ? "default" : hovered ? "pointer" : "default" }}
 						/>
 					)}
+					{/* 3D auto-orbit pause/play. */}
+					{data && layoutMode === "3d" && (
+						<button
+							type="button"
+							onClick={() => setAutoOrbit((v) => !v)}
+							className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-md border border-border bg-background/80 px-2 py-1 text-muted-foreground text-xs backdrop-blur hover:text-foreground"
+						>
+							{autoOrbit ? <PauseIcon className="size-3" /> : <PlayIcon className="size-3" />}
+							Orbit
+						</button>
+					)}
+					{/* Force: nudge the simulation to re-settle. */}
+					{data && layoutMode === "force" && !replayActive && (
+						<button
+							type="button"
+							onClick={() => reheatForceRef.current?.()}
+							className="absolute bottom-2 left-2 rounded-md border border-border bg-background/80 px-2 py-1 text-muted-foreground text-xs backdrop-blur hover:text-foreground"
+						>
+							Re-settle
+						</button>
+					)}
 					{data && replayActive && (
 						<div className="border-border border-t px-3 py-2">
 							{fixations.length === 0 ? (
@@ -738,33 +1282,36 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 				</div>
 				<div className="w-56 shrink-0 overflow-y-auto border-border border-l p-3">
 					<div className="mb-3 inline-flex w-full rounded-md border border-border bg-muted/40 p-0.5">
-						{(["ring", "tree"] as const).map((mode) => (
+						{LAYOUT_MODES.map(({ id, label }) => (
 							<button
-								key={mode}
+								key={id}
 								type="button"
-								onClick={() => setLayoutMode(mode)}
-								className={`flex-1 rounded-[5px] px-2 py-1 text-xs capitalize transition-colors ${
-									layoutMode === mode
+								onClick={() => setLayoutMode(id)}
+								className={`flex-1 rounded-[5px] px-1.5 py-1 text-xs transition-colors ${
+									layoutMode === id
 										? "bg-background text-foreground shadow-sm"
 										: "text-muted-foreground hover:text-foreground"
 								}`}
 							>
-								{mode}
+								{label}
 							</button>
 						))}
 					</div>
-					<button
-						type="button"
-						onClick={replayActive ? exitReplay : enterReplay}
-						className={`mb-3 flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs transition-colors ${
-							replayActive
-								? "border-[color:var(--ring)] bg-[color:var(--ring)]/10 text-foreground"
-								: "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
-						}`}
-					>
-						<PlayIcon className="size-3" />
-						{replayActive ? "Exit replay" : "Replay session"}
-					</button>
+					{/* Replay is a 2D-only affordance — hidden while the 3D layout is active. */}
+					{layoutMode !== "3d" && (
+						<button
+							type="button"
+							onClick={replayActive ? exitReplay : enterReplay}
+							className={`mb-3 flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs transition-colors ${
+								replayActive
+									? "border-[color:var(--ring)] bg-[color:var(--ring)]/10 text-foreground"
+									: "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+							}`}
+						>
+							<PlayIcon className="size-3" />
+							{replayActive ? "Exit replay" : "Replay session"}
+						</button>
+					)}
 					<div className="relative mb-3">
 						<SearchIcon className="-translate-y-1/2 absolute top-1/2 left-2.5 size-3.5 text-muted-foreground" />
 						<input
