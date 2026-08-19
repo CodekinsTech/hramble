@@ -1561,6 +1561,9 @@ function ChatInputSection({
 				scratchId,
 				`Break this goal into up to ${STEP_COUNT} concrete, ordered implementation steps. Reply ONLY as a numbered list (\`1.\`, \`2.\`, …), one step per line — no preamble, no sub-bullets.\n\nGoal: ${g}`,
 				engineModelOf(effectiveModel),
+				// Plan mode: read-only, so the model answers with the list instead of
+				// starting to implement (and can't touch the real project).
+				{ agent: "plan" },
 			)
 			await waitForEngineSessionIdle(scratchId)
 			const text = await lastAssistantText(scratchId)
@@ -1594,6 +1597,8 @@ function ChatInputSection({
 				scratchId,
 				`Break this goal into exactly 7 concrete implementation steps that can be worked on in PARALLEL by separate agents (each step touches different files/areas). Make each step a precise, self-contained instruction — include file names and what to do. At the end of each line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nReply ONLY as a numbered list (1., 2., …), one step per line. No preamble, no sub-bullets.\n\nExample line: 1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${g}`,
 				engineModelOf(effectiveModel),
+				// Plan mode: read-only, so it answers with the list instead of building.
+				{ agent: "plan" },
 			)
 			await waitForEngineSessionIdle(scratchId)
 			const text = await lastAssistantText(scratchId)

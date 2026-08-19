@@ -809,6 +809,9 @@ export function NewChat() {
 				scratchId,
 				`First, in ONE short sentence, judge whether this goal is a small, medium, or large task and say roughly how many implementation steps it needs — for example "This is a medium task — I'll use 9 steps across 2 loops of 7." A loop holds ${HYPER_LOOP_SIZE} steps; use as many loops as the task genuinely needs, up to ${HYPER_MAX_STEPS} steps total. Do NOT pad or force a specific count — use exactly as many steps as the task needs.\n\nThen on a new line, list the steps as a numbered list (1., 2., …), one step per line. Make each step a precise, self-contained instruction that can be worked on in PARALLEL by separate agents (each step touches different files/areas) — include file names and what to do. At the end of each step line add a realistic time estimate in the format [~X min].\n\nCRITICAL: All file paths MUST be RELATIVE to the current project folder (e.g. index.html, src/app.js, backend/server.js). NEVER use absolute paths, a leading slash, ~, or /tmp — never write files outside the project directory. Do NOT create a new top-level subfolder to hold the site; put files directly in the project root unless the goal clearly needs subfolders.\n\nNo preamble besides that one sizing sentence, no sub-bullets.\n\nExample:\nThis is a small task — I'll use 4 steps.\n1. Create backend/server.js with Express setup [~5 min]\n\nGoal: ${hyperGoal}`,
 				engineModelOf(effectiveModel),
+				// Plan mode: read-only, so the model answers with the step list instead
+				// of starting to implement (and can't mutate the real project).
+				{ agent: "plan" },
 			)
 			await waitForEngineSessionIdle(scratchId, { shouldStop: () => hyperDecomposeAbort.current })
 			const text = await engineLastAssistantText(scratchId)
