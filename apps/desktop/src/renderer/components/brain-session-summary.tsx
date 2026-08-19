@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router"
 import { useAtomValue } from "jotai"
+import { useEffect, useState } from "react"
 import { type BrainContribution, brainContributionFamily } from "../atoms/brain-contribution"
 
 const BRAND_BLUE = "#5B8FFF"
@@ -84,6 +85,17 @@ export function BrainSessionSummary({ sessionId }: { sessionId: string }) {
 	const contributions = useAtomValue(brainContributionFamily(sessionId))
 	const items = Array.isArray(contributions) ? contributions : []
 
+	// The empty "aware of your library" line is just reassurance — auto-collapse it
+	// after a few seconds so it doesn't sit atop the chat forever. Real contribution
+	// chips always stay. Resets per session and whenever contributions arrive.
+	const [emptyHidden, setEmptyHidden] = useState(false)
+	useEffect(() => {
+		setEmptyHidden(false)
+		if (items.length > 0) return
+		const t = setTimeout(() => setEmptyHidden(true), 6000)
+		return () => clearTimeout(t)
+	}, [items.length, sessionId])
+
 	const openBrain = () => {
 		void navigate({ to: "/brain" })
 	}
@@ -91,7 +103,13 @@ export function BrainSessionSummary({ sessionId }: { sessionId: string }) {
 	// Empty state — no per-task items, but the Brain is still docked & aware.
 	if (items.length === 0) {
 		return (
-			<div className="flex items-center gap-2.5 border-b border-[#e3e7ee] bg-white px-4 py-2">
+			<div
+				className={`flex items-center gap-2.5 overflow-hidden border-[#e3e7ee] bg-white transition-all duration-500 ${
+					emptyHidden
+						? "max-h-0 border-b-0 px-4 py-0 opacity-0"
+						: "max-h-16 border-b px-4 py-2 opacity-100"
+				}`}
+			>
 				<button
 					type="button"
 					onClick={openBrain}
