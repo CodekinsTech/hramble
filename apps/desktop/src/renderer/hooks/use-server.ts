@@ -1,5 +1,6 @@
 import { useAtomValue } from "jotai"
 import { useCallback } from "react"
+import { type BrainContribution, brainContributionFamily } from "../atoms/brain-contribution"
 import { connectionAtom } from "../atoms/connection"
 import { messagesFamily, upsertMessageAtom } from "../atoms/messages"
 import { upsertPartAtom } from "../atoms/parts"
@@ -55,24 +56,40 @@ export function stopHyperloop(sessionId: string) {
 // is prepended as a SEPARATE text part so the user's own visible message (the
 // optimistic text part) stays clean and unmodified. Returns null when the
 // toggle is off, nothing matches, or the bridge isn't available.
-async function buildBrainRecallPart(text: string): Promise<{ type: "text"; text: string } | null> {
+/** Map a saved Brain item's free-form `type` onto a known contribution kind. */
+function toContributionKind(type: string): BrainContribution["kind"] {
+	const t = (type || "").toLowerCase()
+	if (t === "repo" || t === "docs" || t === "tool" || t === "model" || t === "connector") return t
+	return "skill"
+}
+
+async function buildBrainRecallPart(
+	text: string,
+): Promise<{ part: { type: "text"; text: string } | null; contributions: BrainContribution[] }> {
 	try {
 		const recall = window.hramble?.recallBrain
-		if (!recall) return null
+		if (!recall) return { part: null, contributions: [] }
 		const matches = await recall(text, { limit: 5 })
-		if (!Array.isArray(matches) || matches.length === 0) return null
+		if (!Array.isArray(matches) || matches.length === 0) return { part: null, contributions: [] }
 		const lines = matches.map((m) => {
 			const how = m.source ? `  [how to use: ${m.source}]` : ""
 			return `- ${m.name} (${m.type}): ${m.description}${how}`
 		})
+		const contributions: BrainContribution[] = matches.map((m) => ({
+			kind: toContributionKind(m.type),
+			label: m.name,
+			detail: m.description || m.source || undefined,
+		}))
 		return {
-			type: "text",
-			text: `[Brain — relevant to this task, use if helpful:\n${lines.join("\n")}]`,
+			part: {
+				type: "text",
+				text: `[Brain — relevant to this task, use if helpful:\n${lines.join("\n")}]`,
+			},
+			contributions,
 		}
 	} catch (err) {
-		// A recall problem must never block sending the message.
 		log.debug("brain recall skipped", { error: err instanceof Error ? err.message : String(err) })
-		return null
+		return { part: null, contributions: [] }
 	}
 }
 
@@ -82,26 +99,35 @@ async function buildBrainRecallPart(text: string): Promise<{ type: "text"; text:
 // happened last time" pointer. Like Layer 2 it's a SEPARATE agent-only text part
 // so the user's visible message stays untouched. Returns null when the toggle is
 // off, nothing matches, or the bridge isn't available.
-async function buildEpisodeRecallPart(text: string): Promise<{ type: "text"; text: string } | null> {
+async function buildEpisodeRecallPart(
+	text: string,
+): Promise<{ part: { type: "text"; text: string } | null; contributions: BrainContribution[] }> {
 	try {
 		const recall = window.hramble?.recallEpisodes
-		if (!recall) return null
+		if (!recall) return { part: null, contributions: [] }
 		const matches = await recall(text, { limit: 2 })
-		if (!Array.isArray(matches) || matches.length === 0) return null
+		if (!Array.isArray(matches) || matches.length === 0) return { part: null, contributions: [] }
 		const lines = matches.map((m) => {
 			// Keep each match to one line: trimmed task, its outcome, and a lesson.
 			const task = m.task.length > 100 ? `${m.task.slice(0, 99).trimEnd()}…` : m.task
 			const lesson = m.lesson ? ` ${m.lesson}` : ""
 			return `- "${task}" → ${m.outcome}.${lesson}`
 		})
+		const contributions: BrainContribution[] = matches.map((m) => {
+			const task = m.task.length > 64 ? `${m.task.slice(0, 63).trimEnd()}…` : m.task
+			return { kind: "episode", label: task, detail: m.outcome }
+		})
 		return {
-			type: "text",
-			text: `[Brain memory — similar past task(s):\n${lines.join("\n")}\n]`,
+			part: {
+				type: "text",
+				text: `[Brain memory — similar past task(s):\n${lines.join("\n")}\n]`,
+			},
+			contributions,
 		}
 	} catch (err) {
 		// Never let an episodic-memory hiccup block sending the message.
 		log.debug("episode recall skipped", { error: err instanceof Error ? err.message : String(err) })
-		return null
+		return { part: null, contributions: [] }
 	}
 }
 
@@ -221,10 +247,31 @@ export function useAgentActions() {
 			// above keeps the user's raw message, so their visible bubble is never
 			// mangled. Layer 2 = relevant Brain items; Layer 3 = similar past task(s).
 			// Each is an independent, separately-marked part gated by its own toggle.
-			const [recallPart, episodePart] =
+			const [recallResult, episodeResult] =
 				isFirstMessage && text.trim()
 					? await Promise.all([buildBrainRecallPart(text), buildEpisodeRecallPart(text)])
-					: [null, null]
+					: [
+							{ part: null, contributions: [] as BrainContribution[] },
+							{ part: null, contributions: [] as BrainContribution[] },
+						]
+			const recallPart = recallResult.part
+			const episodePart = episodeResult.part
+
+			// DISPLAY-ONLY — mirror what the Brain contributed into a per-session atom
+			// so the docked-Brain header can list it. Never throws; empty when recall
+			// is off or nothing matched. Only touched on the first-message path.
+			if (isFirstMessage) {
+				try {
+					appStore.set(brainContributionFamily(sessionId), [
+						...recallResult.contributions,
+						...episodeResult.contributions,
+					])
+				} catch (err) {
+					log.debug("brain contribution capture skipped", {
+						error: err instanceof Error ? err.message : String(err),
+					})
+				}
+			}
 
 			// Build parts array for the API call
 			const parts: Array<{ type: "text"; text: string } | FilePartInput> = [
