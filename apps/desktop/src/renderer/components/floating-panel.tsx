@@ -135,7 +135,10 @@ export function FloatingPanel({
 					<GripVerticalIcon className="size-3.5 shrink-0 opacity-60" />
 					<span className="truncate">{title}</span>
 				</span>
-				<div className="flex shrink-0 items-center gap-0.5">
+				<div
+					className="flex shrink-0 items-center gap-0.5"
+					onPointerDown={(e) => e.stopPropagation()}
+				>
 					<button
 						type="button"
 						onClick={() => setMinimized((m) => !m)}
