@@ -11,8 +11,7 @@ import { isMockModeAtom } from "../atoms/mock-mode"
 import { partsFamily } from "../atoms/parts"
 import { appStore } from "../atoms/store"
 import { streamingVersionFamily } from "../atoms/streaming"
-import type { Message, Part } from "../lib/types"
-import { getProjectClient } from "../services/connection-manager"
+import type { Part } from "../lib/types"
 import { getEngineSession } from "../services/engine-client"
 import { mapEngineMessagesToEntries, type EngineMessage } from "../services/engine-history"
 
@@ -39,7 +38,7 @@ export function useSessionChat(
 ) {
 	const isMockMode = useAtomValue(isMockModeAtom)
 	const [loading, setLoading] = useState(false)
-	const [loadingEarlier, setLoadingEarlier] = useState(false)
+	const [loadingEarlier] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const syncedRef = useRef<string | null>(null)
 	const turnsRef = useRef<ChatTurn[]>([])
@@ -102,32 +101,9 @@ export function useSessionChat(
 		[directory],
 	)
 
-	// Load all messages (for "load earlier" button)
-	const loadEarlier = useCallback(async () => {
-		if (!sessionId || !directory || loadingEarlier) return
-		const client = getProjectClient(directory)
-		if (!client) return
-
-		setLoadingEarlier(true)
-		try {
-			const result = await client.session.messages({
-				sessionID: sessionId,
-			})
-			const raw = (result.data ?? []) as Array<{ info: Message; parts: Part[] }>
-			hasEarlierRef.current = false
-
-			const messages = raw.map((m) => m.info)
-			const parts: Record<string, Part[]> = {}
-			for (const m of raw) {
-				parts[m.info.id] = m.parts
-			}
-			appStore.set(setMessagesAtom, { sessionId, messages, parts })
-		} catch (err) {
-			console.error("Failed to load earlier messages:", err)
-		} finally {
-			setLoadingEarlier(false)
-		}
-	}, [sessionId, directory, loadingEarlier])
+	// The engine hydrates the full transcript on load (hasEarlierRef stays false, so
+	// the "load earlier" control is hidden), leaving this a stable no-op.
+	const loadEarlier = useCallback(async () => {}, [])
 
 	// Trigger initial fetch when session changes (skip in mock mode -- data is pre-hydrated)
 	useEffect(() => {

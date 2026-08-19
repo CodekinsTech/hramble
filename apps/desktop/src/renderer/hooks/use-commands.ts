@@ -5,8 +5,6 @@ import { partsFamily } from "../atoms/parts"
 import { sessionFamily } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import type { Session, TextPart } from "../lib/types"
-import { getProjectClient } from "../services/connection-manager"
-import { useServerCommands } from "./use-opencode-data"
 import { engineConnectedAtom } from "../atoms/engine"
 import {
 	abortEngineSession,
@@ -116,11 +114,6 @@ export function useSessionRevert(
 			return userText
 		}
 
-		const client = getProjectClient(directory)
-		if (!client) return undefined
-		if (busy) await client.session.abort({ sessionID: sessionId })
-		await client.session.revert({ sessionID: sessionId, messageID: targetId })
-		return userText
 	}, [directory, sessionId, revertInfo])
 
 	const redo = useCallback(async () => {
@@ -133,13 +126,6 @@ export function useSessionRevert(
 			return
 		}
 
-		const client = getProjectClient(directory)
-		if (!client) return
-		if (nextTarget) {
-			await client.session.revert({ sessionID: sessionId, messageID: nextTarget })
-		} else {
-			await client.session.unrevert({ sessionID: sessionId })
-		}
 	}, [directory, sessionId, revertInfo])
 
 	const revertToMessage = useCallback(
@@ -153,10 +139,6 @@ export function useSessionRevert(
 				return
 			}
 
-			const client = getProjectClient(directory)
-			if (!client) return
-			if (busy) await client.session.abort({ sessionID: sessionId })
-			await client.session.revert({ sessionID: sessionId, messageID: messageId })
 		},
 		[directory, sessionId],
 	)
@@ -176,7 +158,6 @@ export function useCommands(
 	},
 ): AppCommand[] {
 	const { canUndo, canRedo, undo, redo } = useSessionRevert(directory, sessionId)
-	const serverCommands = useServerCommands(directory)
 	const entry = useAtomValue(sessionFamily(sessionId ?? ""))
 	const sessionStatus = entry?.status
 	const isIdle = sessionStatus?.type === "idle" || !sessionStatus
@@ -223,9 +204,6 @@ export function useCommands(
 					await summarizeEngineSession(sessionId)
 					return
 				}
-				const client = getProjectClient(directory)
-				if (!client) return
-				await client.session.summarize({ sessionID: sessionId })
 			},
 		})
 
@@ -243,25 +221,10 @@ export function useCommands(
 	])
 
 	const allCommands = useMemo<AppCommand[]>(() => {
-		const serverCmds: AppCommand[] = serverCommands.map((cmd) => ({
-			name: cmd.name,
-			label: cmd.name.charAt(0).toUpperCase() + cmd.name.slice(1),
-			description: cmd.description ?? `Run /${cmd.name}`,
-			enabled: !!directory && !!sessionId && isIdle,
-			source: "server" as const,
-			execute: async () => {
-				if (!directory || !sessionId) return
-				const client = getProjectClient(directory)
-				if (!client) return
-				await client.session.command({
-					sessionID: sessionId,
-					command: cmd.name,
-					arguments: "",
-				})
-			},
-		}))
-		return [...clientCommands, ...serverCmds]
-	}, [clientCommands, serverCommands, directory, sessionId, isIdle])
+		// The engine has no custom server-side slash commands, so the command list
+		// is just the built-in client commands.
+		return clientCommands
+	}, [clientCommands])
 
 	return allCommands
 }
