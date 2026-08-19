@@ -96,6 +96,7 @@ import { BranchPicker } from "./branch-picker"
 import { PromptAttachmentPreview } from "./chat/prompt-attachments"
 import { PromptToolbar, StatusBar } from "./chat/prompt-toolbar"
 import { HrambleLogo } from "./hramble-logo"
+import { BrainSessionSummary } from "./brain-session-summary"
 import { GraphView } from "./graph-view"
 import { HyperloopSpinner } from "./hyperloop-spinner"
 
@@ -1423,6 +1424,9 @@ export function NewChat() {
 							/>
 							{hyperPanelOpen && (
 								<div className="mb-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-primary/30 bg-muted/30 p-3">
+									<div className="-mx-3 -mt-3 mb-2 overflow-hidden rounded-t-xl">
+										<BrainSessionSummary sessionId={hyperRunForDir?.id ?? "hyperloop"} />
+									</div>
 									<div className="mb-2 flex items-center justify-between">
 										<span className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
 											{hyperRunning ? (

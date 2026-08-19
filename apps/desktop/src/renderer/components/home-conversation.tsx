@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react"
 import { agentFamily } from "../atoms/derived/agents"
 import { useSessionChat } from "../hooks/use-session-chat"
 import { useAgentActions } from "../hooks/use-server"
+import { BrainSessionSummary } from "./brain-session-summary"
 import { ChatTurnComponent } from "./chat/chat-turn"
 
 export function HomeConversation({ sessionId }: { sessionId: string }) {
@@ -42,6 +43,7 @@ export function HomeConversation({ sessionId }: { sessionId: string }) {
 
 	return (
 		<div className="flex h-full flex-col">
+			<BrainSessionSummary sessionId={sessionId} />
 			<div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
 				<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6">
 					{turns.map((turn, i) => (
