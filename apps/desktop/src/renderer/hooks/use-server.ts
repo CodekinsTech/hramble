@@ -15,7 +15,6 @@ import type {
 	TextPart,
 	UserMessage,
 } from "../lib/types"
-import { getProjectClient } from "../services/connection-manager"
 import { engineConnectedAtom } from "../atoms/engine"
 import { chatModeAtom } from "../atoms/chat-mode"
 import {
@@ -40,7 +39,6 @@ const log = createLogger("use-server")
 // Autonomous mode: keep working, round after round, until the task is done.
 // Safety is non-negotiable — a hard round cap prevents runaway cost, and any
 // abort (Escape-to-stop) flags the session so the loop exits between rounds.
-const HYPERLOOP_MAX_ROUNDS = 15
 const hyperloopStopped = new Set<string>()
 
 /** Called by abort paths so a running Hyperloop stops at the next round. */
@@ -48,25 +46,7 @@ export function stopHyperloop(sessionId: string) {
 	hyperloopStopped.add(sessionId)
 }
 
-const HYPERLOOP_CONTINUE =
-	"Continue working on the task. Resume exactly where you left off and complete the remaining steps. Never run destructive or irreversible commands (deleting files/dirs, force-pushing, dropping databases, disk operations) — if a step seems to need one, stop and report instead."
 
-// Guardrail: destructive / irreversible shell commands. If one of these shows up
-// in the agent's tool calls during Hyperloop, halt the loop immediately so it
-// can't compound. Broad on purpose — in autonomous mode we favour false stops
-// over real damage.
-const DANGEROUS_COMMAND =
-	/\brm\s+-[rf]{1,2}\b|\bsudo\s+rm\b|git\s+push[^\n]*--force|--force[^\n]*push|\bgit\s+reset\s+--hard\b|\bdd\s+if=|\bmkfs\b|drop\s+(table|database)\b|truncate\s+table\b|>\s*\/dev\/(sd|disk|null\/)|:\s*\(\s*\)\s*\{|\bshutdown\b|\breboot\b|\bhalt\b/i
-const HYPERLOOP_CHECK =
-	"Is the ORIGINAL task now fully complete? If the project has tests, run them now. Reply with ONLY the single word DONE if everything the task required is finished and any tests pass. Otherwise reply CONTINUE followed by one short line describing what still remains."
-
-/** Read the DONE/CONTINUE verdict from the latest assistant message. */
-function isHyperloopDone(text: string): boolean {
-	const v = text.toUpperCase()
-	if (/\bCONTINUE\b/.test(v)) return false
-	if (/NOT\s+(YET\s+)?(DONE|COMPLETE|FINISHED)/.test(v)) return false
-	return /\bDONE\b/.test(v)
-}
 
 // ── Layer 2 — Brain Auto-Recall ──────────────────────────────────────────────
 // For the FIRST message of a session, ask the main process which saved Brain
@@ -140,7 +120,7 @@ export function useServerConnection() {
  * Hook for agent actions (stop, approve, deny, etc.).
  */
 export function useAgentActions() {
-	const abort = useCallback(async (directory: string, sessionId: string) => {
+	const abort = useCallback(async (_directory: string, sessionId: string) => {
 		log.debug("abort", { sessionId })
 		stopHyperloop(sessionId)
 		try {
@@ -148,9 +128,6 @@ export function useAgentActions() {
 				await abortEngineSession(sessionId)
 				return
 			}
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
-			await client.session.abort({ sessionID: sessionId })
 		} catch (err) {
 			log.error("abort failed", { sessionId }, err)
 			throw err
@@ -187,12 +164,8 @@ export function useAgentActions() {
 				hasFiles: !!(options?.files && options.files.length > 0),
 			})
 
-			// The engine path needs no OpenCode client. Only require one when the
-			// engine isn't connected (OpenCode fallback) — otherwise a null client
-			// (OpenCode removed) wrongly failed engine prompts with "Not connected".
-			const client = getProjectClient(directory)
-			if (!client && !appStore.get(engineConnectedAtom)) {
-				log.error("sendPrompt: no backend for directory", { directory })
+			if (!appStore.get(engineConnectedAtom)) {
+				log.error("sendPrompt: engine not connected", { directory })
 				throw new Error("Not connected to server")
 			}
 
@@ -268,10 +241,6 @@ export function useAgentActions() {
 				})
 			}
 
-			const model = options?.model
-				? { providerID: options.model.providerID, modelID: options.model.modelID }
-				: undefined
-
 			log.debug("sendPrompt: calling promptAsync", {
 				sessionId,
 				agent: options?.agent,
@@ -314,182 +283,6 @@ export function useAgentActions() {
 				})
 				return
 			}
-
-			// OpenCode fallback path — needs a client.
-			if (!client) throw new Error("Not connected to server")
-
-			// One unit of work. When `withPlan`, it thinks first (plan agent, edits
-			// disabled) then executes (build agent) in the same session; otherwise a
-			// single normal turn.
-			type Part = { type: "text"; text: string } | FilePartInput
-			const runWorkTurn = async (turnParts: Part[], withPlan: boolean) => {
-				if (withPlan) {
-					await client.session.promptAsync({
-						sessionID: sessionId,
-						parts: [
-							...turnParts,
-							{
-								type: "text",
-								text: "\n\nFirst, write a short numbered plan of the exact steps and file edits required. Do not make any changes yet — only the plan.",
-							},
-						],
-						model,
-						agent: "plan",
-						variant: options?.variant,
-					})
-					await client.session.promptAsync({
-						sessionID: sessionId,
-						parts: [
-							{
-								type: "text",
-								text: "Now carry out that plan exactly — make all the file edits and run any commands needed.",
-							},
-						],
-						model,
-						agent: "build",
-						variant: options?.variant,
-					})
-				} else {
-					await client.session.promptAsync({
-						sessionID: sessionId,
-						parts: turnParts,
-						model,
-						agent: options?.agent,
-						variant: options?.variant,
-					})
-				}
-			}
-
-			// Read the latest assistant text (used for the Hyperloop DONE/CONTINUE check).
-			const readLastAssistantText = async (): Promise<string> => {
-				try {
-					const res = await client.session.messages({ sessionID: sessionId })
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const msgs: any[] = res.data ?? []
-					const assistants = msgs.filter((m) => (m.info || m).role === "assistant")
-					const lastParts = assistants[assistants.length - 1]?.parts ?? []
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					return lastParts
-						.filter((p: any) => p.type === "text")
-						.map((p: any) => p.text || "")
-						.join(" ")
-				} catch {
-					return ""
-				}
-			}
-
-			// Count tool executions so far — used to detect a stuck loop (a round
-			// that runs no tools = the agent talked but didn't act). Returns -1 on
-			// error so the caller can skip the check that round.
-			const countTools = async (): Promise<number> => {
-				try {
-					const res = await client.session.messages({ sessionID: sessionId })
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const msgs: any[] = res.data ?? []
-					let n = 0
-					for (const m of msgs)
-						for (const p of m.parts ?? [])
-							if (p.type === "tool" || p.type === "tool-invocation") n++
-					return n
-				} catch {
-					return -1
-				}
-			}
-
-			// Scan the most recent tool calls for a destructive command.
-			const scanDanger = async (): Promise<string | null> => {
-				try {
-					const res = await client.session.messages({ sessionID: sessionId })
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const msgs: any[] = res.data ?? []
-					const recent = msgs
-						.filter((m) => (m.info || m).role === "assistant")
-						.slice(-2)
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						.flatMap((m: any) => m.parts ?? [])
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						.filter((p: any) => p.type === "tool" || p.type === "tool-invocation")
-					const blob = JSON.stringify(recent)
-					const match = blob.match(DANGEROUS_COMMAND)
-					return match ? match[0] : null
-				} catch {
-					return null
-				}
-			}
-
-			try {
-				if (options?.hyperloop) {
-					// Autonomous loop: work → guardrails → check done → repeat, up to the cap.
-					hyperloopStopped.delete(sessionId)
-					let round = 0
-					let stuckRounds = 0
-					let stopReason = "max-rounds"
-					for (; round < HYPERLOOP_MAX_ROUNDS; round++) {
-						if (hyperloopStopped.has(sessionId)) {
-							stopReason = "stopped"
-							break
-						}
-						const first = round === 0
-						const beforeTools = await countTools()
-						await runWorkTurn(
-							first ? parts : [{ type: "text", text: HYPERLOOP_CONTINUE }],
-							first && !!options?.planMode,
-						)
-						if (hyperloopStopped.has(sessionId)) {
-							stopReason = "stopped"
-							break
-						}
-
-						// Guardrail #2 — destructive command ran: halt immediately.
-						const danger = await scanDanger()
-						if (danger) {
-							stopReason = `blocked-dangerous:${danger}`
-							log.warn("hyperloop halted — dangerous command detected", { sessionId, danger })
-							break
-						}
-
-						// Guardrail #1 — stuck: two rounds in a row with zero tool activity
-						// means it's talking, not doing. Stop rather than burn the cap.
-						const afterTools = await countTools()
-						if (beforeTools >= 0 && afterTools >= 0 && afterTools === beforeTools) {
-							stuckRounds++
-							if (stuckRounds >= 2) {
-								stopReason = "stuck-no-progress"
-								log.warn("hyperloop halted — no progress for 2 rounds", { sessionId })
-								break
-							}
-						} else {
-							stuckRounds = 0
-						}
-
-						// Completion check (A: self-assess + B: run tests).
-						await client.session.promptAsync({
-							sessionID: sessionId,
-							parts: [{ type: "text", text: HYPERLOOP_CHECK }],
-							model,
-							agent: "build",
-							variant: options?.variant,
-						})
-						if (isHyperloopDone(await readLastAssistantText())) {
-							stopReason = "done"
-							break
-						}
-					}
-					hyperloopStopped.delete(sessionId)
-					log.debug("sendPrompt: hyperloop finished", {
-						sessionId,
-						rounds: round + 1,
-						stopReason,
-					})
-				} else if (options?.planMode) {
-					await runWorkTurn(parts, true)
-				} else {
-					await runWorkTurn(parts, false)
-				}
-			} catch (err) {
-				log.error("sendPrompt: promptAsync failed", { sessionId, agent: options?.agent }, err)
-				throw err
-			}
 		},
 		[],
 	)
@@ -514,22 +307,13 @@ export function useAgentActions() {
 					} as unknown as import("../lib/types").Session
 				}
 
-				const client = getProjectClient(directory)
-				if (!client) throw new Error("Not connected to server")
-				const result = await client.session.create(permission ? { title, permission } : { title })
-				const session = result.data
-				if (session) {
-					appStore.set(upsertSessionAtom, { session, directory })
-				}
-				log.debug("createSession succeeded", { sessionId: session?.id })
-				return session
 			} catch (err) {
 				log.error("createSession failed", { directory, title }, err)
 				throw err
 			}
 		}, [])
 
-	const renameSession = useCallback(async (directory: string, sessionId: string, title: string) => {
+	const renameSession = useCallback(async (_directory: string, sessionId: string, title: string) => {
 		log.debug("renameSession", { sessionId, title })
 
 		// Optimistic update
@@ -546,17 +330,9 @@ export function useAgentActions() {
 			return
 		}
 
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
-		try {
-			await client.session.update({ sessionID: sessionId, title })
-		} catch (err) {
-			log.error("renameSession failed", { sessionId, title }, err)
-			throw err
-		}
 	}, [])
 
-	const deleteSession = useCallback(async (directory: string, sessionId: string) => {
+	const deleteSession = useCallback(async (_directory: string, sessionId: string) => {
 		log.debug("deleteSession", { sessionId })
 
 		if (appStore.get(engineConnectedAtom)) {
@@ -566,27 +342,13 @@ export function useAgentActions() {
 			// on the next OpenCode-backed reload.
 			appStore.set(removeSessionAtom, sessionId)
 			await deleteEngineSession(sessionId)
-			try {
-				await getProjectClient(directory)?.session.delete({ sessionID: sessionId })
-			} catch {
-				// Not in OpenCode (engine-only session) — fine.
-			}
 			return
-		}
-
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
-		try {
-			await client.session.delete({ sessionID: sessionId })
-		} catch (err) {
-			log.error("deleteSession failed", { sessionId }, err)
-			throw err
 		}
 	}, [])
 
 	const respondToPermission = useCallback(
 		async (
-			directory: string,
+			_directory: string,
 			sessionId: string,
 			permissionId: string,
 			response: "once" | "always" | "reject",
@@ -601,13 +363,6 @@ export function useAgentActions() {
 					}
 					return
 				}
-				const client = getProjectClient(directory)
-				if (!client) throw new Error("Not connected to server")
-				await client.permission.respond({
-					sessionID: sessionId,
-					permissionID: permissionId,
-					response,
-				})
 			} catch (err) {
 				log.error("respondToPermission failed", { sessionId, permissionId, response }, err)
 				throw err
@@ -617,33 +372,19 @@ export function useAgentActions() {
 	)
 
 	const replyToQuestion = useCallback(
-		async (directory: string, requestId: string, answers: QuestionAnswer[]) => {
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
-			log.debug("replyToQuestion", { requestId })
-			try {
-				await client.question.reply({ requestID: requestId, answers })
-			} catch (err) {
-				log.error("replyToQuestion failed", { requestId }, err)
-				throw err
-			}
+		async (_directory: string, _requestId: string, _answers: QuestionAnswer[]) => {
+			// The engine has no structured-question feature — never reached in engine mode.
+			throw new Error("Structured questions are not supported by the engine.")
 		},
 		[],
 	)
 
-	const rejectQuestion = useCallback(async (directory: string, requestId: string) => {
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
-		log.debug("rejectQuestion", { requestId })
-		try {
-			await client.question.reject({ requestID: requestId })
-		} catch (err) {
-			log.error("rejectQuestion failed", { requestId }, err)
-			throw err
-		}
+	const rejectQuestion = useCallback(async (_directory: string, _requestId: string) => {
+		// The engine has no structured-question feature — never reached in engine mode.
+		throw new Error("Structured questions are not supported by the engine.")
 	}, [])
 
-	const revert = useCallback(async (directory: string, sessionId: string, messageId: string) => {
+	const revert = useCallback(async (_directory: string, sessionId: string, messageId: string) => {
 		log.debug("revert", { sessionId, messageId })
 
 		if (appStore.get(engineConnectedAtom)) {
@@ -651,22 +392,9 @@ export function useAgentActions() {
 			return
 		}
 
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
-		try {
-			const entry = appStore.get(sessionFamily(sessionId))
-			if (entry?.status?.type === "busy") {
-				log.debug("revert: aborting busy session first", { sessionId })
-				await client.session.abort({ sessionID: sessionId })
-			}
-			await client.session.revert({ sessionID: sessionId, messageID: messageId })
-		} catch (err) {
-			log.error("revert failed", { sessionId, messageId }, err)
-			throw err
-		}
 	}, [])
 
-	const unrevert = useCallback(async (directory: string, sessionId: string) => {
+	const unrevert = useCallback(async (_directory: string, sessionId: string) => {
 		log.debug("unrevert", { sessionId })
 
 		if (appStore.get(engineConnectedAtom)) {
@@ -674,36 +402,17 @@ export function useAgentActions() {
 			return
 		}
 
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
-		try {
-			await client.session.unrevert({ sessionID: sessionId })
-		} catch (err) {
-			log.error("unrevert failed", { sessionId }, err)
-			throw err
-		}
 	}, [])
 
 	const executeCommand = useCallback(
-		async (directory: string, sessionId: string, command: string, args: string) => {
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
-			log.debug("executeCommand", { sessionId, command })
-			try {
-				await client.session.command({
-					sessionID: sessionId,
-					command,
-					arguments: args,
-				})
-			} catch (err) {
-				log.error("executeCommand failed", { sessionId, command }, err)
-				throw err
-			}
+		async (_directory: string, _sessionId: string, _command: string, _args: string) => {
+			// The engine has no custom slash-command feature — never reached in engine mode.
+			throw new Error("Server-side commands are not supported by the engine.")
 		},
 		[],
 	)
 
-	const summarize = useCallback(async (directory: string, sessionId: string) => {
+	const summarize = useCallback(async (_directory: string, sessionId: string) => {
 		log.debug("summarize", { sessionId })
 
 		if (appStore.get(engineConnectedAtom)) {
@@ -711,18 +420,10 @@ export function useAgentActions() {
 			return
 		}
 
-		const client = getProjectClient(directory)
-		if (!client) throw new Error("Not connected to server")
-		try {
-			await client.session.summarize({ sessionID: sessionId })
-		} catch (err) {
-			log.error("summarize failed", { sessionId }, err)
-			throw err
-		}
 	}, [])
 
 	const deletePart = useCallback(
-		async (directory: string, sessionId: string, messageId: string, partId: string) => {
+		async (_directory: string, sessionId: string, messageId: string, partId: string) => {
 			log.debug("deletePart", { sessionId, messageId, partId })
 
 			if (appStore.get(engineConnectedAtom)) {
@@ -731,14 +432,6 @@ export function useAgentActions() {
 				return
 			}
 
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
-			try {
-				await client.part.delete({ sessionID: sessionId, messageID: messageId, partID: partId })
-			} catch (err) {
-				log.error("deletePart failed", { sessionId, messageId, partId }, err)
-				throw err
-			}
 		},
 		[],
 	)
@@ -755,23 +448,7 @@ export function useAgentActions() {
 				return session
 			}
 
-			const client = getProjectClient(directory)
-			if (!client) throw new Error("Not connected to server")
-			try {
-				const result = await client.session.fork({
-					sessionID: sessionId,
-					messageID: messageId,
-				})
-				const session = result.data as Session
-				if (session) {
-					appStore.set(upsertSessionAtom, { session, directory })
-				}
-				log.debug("forkSession succeeded", { forkedSessionId: session?.id })
-				return session
-			} catch (err) {
-				log.error("forkSession failed", { sessionId, messageId }, err)
-				throw err
-			}
+			throw new Error("Session not found")
 		},
 		[],
 	)
