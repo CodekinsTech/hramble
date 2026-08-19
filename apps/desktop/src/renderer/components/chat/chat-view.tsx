@@ -63,6 +63,7 @@ import {
 } from "../../atoms/permission-rules"
 import { promptHistoryAtom, pushPromptHistory } from "../../atoms/prompt-history"
 import { pendingSessionStepsAtom } from "../../atoms/chat"
+import { CHAT_MODE_ORDER, CHAT_MODES, chatModeAtom } from "../../atoms/chat-mode"
 import { fallbackModelAtom } from "../../atoms/fallback-model"
 import { useDraftActions, useDraftSnapshot } from "../../hooks/use-draft"
 import type {
@@ -497,7 +498,6 @@ interface ChatViewProps {
 			variant?: string
 			files?: FileAttachment[]
 			hyperloop?: boolean
-			steps?: string[]
 		},
 	) => Promise<void>
 	/** Callback to stop/abort the running session */
@@ -1051,6 +1051,12 @@ function ChatInputSection({
 }: ChatInputSectionProps) {
 	const [sending, setSending] = useState(false)
 
+	const [chatMode, setChatMode] = useAtom(chatModeAtom)
+	const cycleMode = useCallback(() => {
+		const i = CHAT_MODE_ORDER.indexOf(chatMode)
+		setChatMode(CHAT_MODE_ORDER[(i + 1) % CHAT_MODE_ORDER.length])
+	}, [chatMode, setChatMode])
+
 	// Tree-scoped interactive requests — bubbles up from sub-agent sessions.
 	// These replace the direct `agent.permissions` / `agent.questions` arrays
 	// so the parent session's UI can respond on behalf of any descendant.
@@ -1381,9 +1387,6 @@ function ChatInputSection({
 			const arr = ((msgs?.data as Array<{ parts: ToolPart[] }>) ?? []).slice(sinceIndex)
 			const toolParts = arr.flatMap((m) => m.parts ?? []).filter((p) => p.type === "tool")
 
-			if (toolParts.length === 0) {
-				return { ok: false, reason: "No tool call was made — the model replied with text instead of doing the work" }
-			}
 			// OpenCode represents "the model called a tool that doesn't exist" as a
 			// synthetic tool part named "invalid" with status "completed" (not
 			// "error") — so status alone won't catch it; check the tool name too.
@@ -1879,13 +1882,11 @@ function ChatInputSection({
 			const finalText = commentPrefix ? `${commentPrefix}${text.trim()}` : text.trim()
 
 			try {
-				const activeSteps = steps.filter(Boolean)
 				await onSendBackground(finalText, {
 					model: effectiveModel ?? undefined,
 					agentName: selectedAgent || undefined,
 					variant: selectedVariant,
 					files,
-					steps: activeSteps.length > 0 ? activeSteps : undefined,
 				})
 				clearDraft()
 				setMentions([])
@@ -1903,7 +1904,6 @@ function ChatInputSection({
 			clearDraft,
 			diffComments,
 			setDiffComments,
-			steps,
 		],
 	)
 
@@ -2711,6 +2711,8 @@ function ChatInputSection({
 												selectedVariant={selectedVariant}
 												onSelectVariant={setSelectedVariant}
 												disabled={!isConnected}
+												chatMode={chatMode}
+												onCycleMode={cycleMode}
 											/>
 										</PromptInputTools>
 										<PromptInputSubmit

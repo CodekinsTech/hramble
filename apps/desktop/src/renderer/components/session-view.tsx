@@ -13,7 +13,6 @@ import { useNavigate, useParams } from "@tanstack/react-router"
 import { useAtomValue, useSetAtom } from "jotai"
 import { useCallback, useEffect, useState } from "react"
 import { agentFamily, sessionNameFamily } from "../atoms/derived/agents"
-import { pendingSessionStepsAtom } from "../atoms/chat"
 import { upsertSessionAtom } from "../atoms/sessions"
 import { appStore } from "../atoms/store"
 import { viewedSessionIdAtom } from "../atoms/ui"
@@ -52,7 +51,6 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	// Track which session is currently viewed so background sessions can
 	// skip expensive metric recomputation.
 	const setViewedSessionId = useSetAtom(viewedSessionIdAtom)
-	const setPendingSessionSteps = useSetAtom(pendingSessionStepsAtom)
 	useEffect(() => {
 		setViewedSessionId(sessionId)
 		return () => setViewedSessionId(null)
@@ -271,7 +269,6 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				variant?: string
 				files?: FileAttachment[]
 				hyperloop?: boolean
-				steps?: string[]
 			},
 		) => {
 			if (!selectedAgent || !message.trim()) return
@@ -285,12 +282,6 @@ export function SessionView({ sessionId }: SessionViewProps) {
 					// Fail gracefully — don't throw and break the composer.
 					log.error("handleSendBackground: createSession returned null", { directory })
 					return
-				}
-				if (options?.steps?.length) {
-					setPendingSessionSteps((prev) => ({
-						...prev,
-						[newSession.id]: { steps: options.steps!, autoRun: true },
-					}))
 				}
 				await sendPrompt(newSession.directory ?? directory, newSession.id, message, {
 					model: options?.model,
@@ -306,7 +297,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
 				log.error("handleSendBackground failed", { directory }, err)
 			}
 		},
-		[selectedAgent, createSession, sendPrompt, setPendingSessionSteps],
+		[selectedAgent, createSession, sendPrompt],
 	)
 
 	// Session not yet resolved — show spinner while the fallback fetch runs
