@@ -231,6 +231,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const canvasRef = useRef<HTMLCanvasElement | null>(null)
 	const [width, setWidth] = useState(760)
+	const [height, setHeight] = useState(HEIGHT)
 
 	useEffect(() => {
 		let cancelled = false
@@ -248,7 +249,10 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 	useEffect(() => {
 		const el = containerRef.current
 		if (!el) return
-		const update = () => setWidth(Math.max(240, el.clientWidth))
+		const update = () => {
+			setWidth(Math.max(240, el.clientWidth))
+			setHeight(Math.max(240, el.clientHeight))
+		}
 		update()
 		const ro = new ResizeObserver(update)
 		ro.observe(el)
@@ -282,7 +286,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		if (!data || data.nodes.length === 0) return null
 		if (layoutMode !== "ring" && layoutMode !== "tree") return null
 		const w = width
-		const h = HEIGHT
+		const h = height
 		const cx = w / 2
 		const cy = h / 2
 		const R = Math.max(40, Math.min(w, h) / 2 - 72)
@@ -292,7 +296,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			return buildRing(data, cx, cy, R, byId)
 		}
 		return buildTree(data, cx, cy, R, byId)
-	}, [data, width, layoutMode])
+	}, [data, width, height, layoutMode])
 
 	// The scene that hit-testing and replay should read for the ACTIVE layout:
 	//   • ring / tree → the deterministic static scene above.
@@ -317,10 +321,10 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 				const B = byId.get(e.target)
 				if (A && B) refEdges.push({ a: A, b: B })
 			}
-			return { points, byId, refEdges, branches: [], labels: [], cx: width / 2, cy: HEIGHT / 2 }
+			return { points, byId, refEdges, branches: [], labels: [], cx: width / 2, cy: height / 2 }
 		}
 		return null
-	}, [layoutMode, staticScene, data, width])
+	}, [layoutMode, staticScene, data, width, height])
 
 	// Build the replay trace: turn the session's logged file touches into an
 	// ordered list of fixations, each mapped to the symbol-nodes in that file.
@@ -418,7 +422,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 
 			const dpr = window.devicePixelRatio || 1
 			const w = width
-			const h = HEIGHT
+			const h = height
 			canvas.width = Math.round(w * dpr)
 			canvas.height = Math.round(h * dpr)
 			canvas.style.width = `${w}px`
@@ -537,7 +541,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			}
 			ctx.globalAlpha = 1
 		},
-		[getScene, fixations, width, fixationPoint],
+		[getScene, fixations, width, height, fixationPoint],
 	)
 
 	const toggleCluster = (name: string) => {
@@ -564,7 +568,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 
 		const dpr = window.devicePixelRatio || 1
 		const w = width
-		const h = HEIGHT
+		const h = height
 		canvas.width = Math.round(w * dpr)
 		canvas.height = Math.round(h * dpr)
 		canvas.style.width = `${w}px`
@@ -655,7 +659,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 
 		// Border ignored for drawing but resolved above keeps lint honest.
 		void cBorder
-	}, [staticScene, width, hiddenClusters, matchingIds, selected, hovered, layoutMode, canReplay])
+	}, [staticScene, width, height, hiddenClusters, matchingIds, selected, hovered, layoutMode, canReplay])
 
 	// Replay playback loop — advances the clock and redraws each frame while playing.
 	useEffect(() => {
@@ -700,7 +704,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		if (!ctx) return
 
 		const w = width
-		const h = HEIGHT
+		const h = height
 		const cx = w / 2
 		const cy = h / 2
 
@@ -880,14 +884,14 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			// forceNodesRef is intentionally NOT cleared — replay reads the settled
 			// positions after handing off, and the next Force entry rebuilds it.
 		}
-	}, [layoutMode, canReplay, data, width])
+	}, [layoutMode, canReplay, data, width, height])
 
 	// While Force idles (settled), push a one-off redraw when interaction state
 	// changes so hover / selection / search / cluster-hide stay responsive.
 	useEffect(() => {
 		if (layoutMode !== "force" || canReplay) return
 		redrawForceRef.current?.()
-	}, [layoutMode, canReplay, hovered, selected, matchingIds, hiddenClusters, width])
+	}, [layoutMode, canReplay, hovered, selected, matchingIds, hiddenClusters, width, height])
 
 	// ── 3D layout ───────────────────────────────────────────────────────────────
 	// Hand-rolled 3D force (no external 3D lib — CSP blocks CDNs): pairwise
@@ -904,7 +908,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 		if (!ctx) return
 
 		const w = width
-		const h = HEIGHT
+		const h = height
 		const cx = w / 2
 		const cy = h / 2
 		const focal = 520
@@ -1122,7 +1126,7 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 			window.removeEventListener("mousemove", onMove)
 			window.removeEventListener("mouseup", onUp)
 		}
-	}, [layoutMode, data, width])
+	}, [layoutMode, data, width, height])
 
 	// Replay is 2D-only: leaving for the 3D layout tears any active replay down.
 	useEffect(() => {
