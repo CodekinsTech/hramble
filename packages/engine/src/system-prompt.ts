@@ -37,6 +37,7 @@ You are working in the project directory: ${directory}
 - Shell for the bash tool: ${shell}
 - Today's date: ${today}
 - Write commands in ${isWin ? "Windows cmd.exe syntax (use \\ paths, %VAR%, `dir`, `type`)" : "POSIX sh syntax"}.
+- CRITICAL — do not use the bash tool for file work. Use the dedicated \`read\`, \`grep\`, and \`glob\` tools to read, search, and find files: they are cross-platform and always work.${isWin ? " This machine is Windows, so Unix commands like `cat`, `head`, `tail`, `ls`, `find`, `grep`, and `sed` are NOT available in the shell and will fail — do not call them." : ""} Reserve the bash tool ONLY for running programs: builds, tests, type-checks, git, and package managers.
 
 ## Core behavior
 
