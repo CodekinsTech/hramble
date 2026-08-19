@@ -1210,8 +1210,8 @@ export function CodebaseGraph({ directory, onClose }: { directory: string; onClo
 					<XIcon className="size-4" />
 				</button>
 			</div>
-			<div className="flex flex-1 overflow-hidden">
-				<div ref={containerRef} className="relative flex flex-1 flex-col overflow-hidden">
+			<div className="flex min-h-0 flex-1 overflow-hidden">
+				<div ref={containerRef} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
 					{!data ? (
 						<div className="flex h-full items-center justify-center text-muted-foreground text-sm">Scanning…</div>
 					) : (
