@@ -1,7 +1,7 @@
 /**
  * File explorer — a lazy-loading project file tree for the session view.
  *
- * Uses the xot engine's /files endpoint to browse the project, and opens a
+ * Uses the zyot engine's /files endpoint to browse the project, and opens a
  * clicked file in the existing diff/review panel (viewFileInDiffPanelAtom). This
  * is the "feels like a real coding tool" piece — you can see and open the code,
  * not just chat about it.

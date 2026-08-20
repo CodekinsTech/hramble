@@ -120,9 +120,9 @@ export function initDb(): void {
 		try {
 			migrateFromJson(LEGACY_JSON)
 			fs.renameSync(LEGACY_JSON, `${LEGACY_JSON}.migrated-${nanoid(6)}`)
-			console.log("[xot-engine] migrated sessions.json → engine.db")
+			console.log("[zyot-engine] migrated sessions.json → engine.db")
 		} catch (err) {
-			console.error(`[xot-engine] sessions.json migration failed (left in place): ${err instanceof Error ? err.message : err}`)
+			console.error(`[zyot-engine] sessions.json migration failed (left in place): ${err instanceof Error ? err.message : err}`)
 		}
 	}
 
@@ -143,7 +143,7 @@ function openOrRecover(): SqlDatabase {
 		} catch {
 			// ignore
 		}
-		console.error(`[xot-engine] engine.db was unreadable; backed it up and started fresh: ${err instanceof Error ? err.message : err}`)
+		console.error(`[zyot-engine] engine.db was unreadable; backed it up and started fresh: ${err instanceof Error ? err.message : err}`)
 		return new DatabaseCtor(DB_FILE)
 	}
 }

@@ -120,7 +120,7 @@ export function randomWorktreeName(): string {
 // ============================================================
 // Worktree operations (inert)
 //
-// Worktrees were backed by OpenCode's experimental worktree API. The xot engine
+// Worktrees were backed by OpenCode's experimental worktree API. The zyot engine
 // has no worktree support, and the UI hides worktree mode when the engine is the
 // backend, so these are inert stubs: a clear error / empty result if ever reached.
 // ============================================================

@@ -16,7 +16,7 @@ import { engineSessionToSession, engineSessionStatus, engineProjectToProject } f
 
 const log = createLogger("connection-manager")
 
-// The xot engine is the sole backend. The legacy OpenCode server connection, its
+// The zyot engine is the sole backend. The legacy OpenCode server connection, its
 // SSE event loop, and the per-project client pool have been removed — the client
 // accessors below are inert stubs kept only until the last OpenCode call sites are
 // deleted (each already gates on engineConnectedAtom and ignores the result).
@@ -102,12 +102,12 @@ export function disconnect(): void {
 	appStore.set(serverConnectedAtom, false)
 }
 
-// ── xot engine connection ───────────────────────────────────────────────────
+// ── zyot engine connection ───────────────────────────────────────────────────
 
 let engineEventSource: EventSource | null = null
 
 /**
- * Open the SSE connection to the xot engine and process its events. Resolves on
+ * Open the SSE connection to the zyot engine and process its events. Resolves on
  * open (or a 4s timeout) so discovery can await the engine before loading.
  */
 export function connectToEngine(): Promise<boolean> {
@@ -116,7 +116,7 @@ export function connectToEngine(): Promise<boolean> {
 		engineEventSource = null
 		appStore.set(engineConnectedAtom, false)
 	}
-	log.info("Connecting to xot engine SSE stream")
+	log.info("Connecting to zyot engine SSE stream")
 	const es = openEngineEventStream()
 	engineEventSource = es
 	return new Promise<boolean>((resolve) => {
@@ -128,7 +128,7 @@ export function connectToEngine(): Promise<boolean> {
 			}
 		}
 		es.addEventListener("open", () => {
-			log.info("xot engine SSE connected")
+			log.info("zyot engine SSE connected")
 			appStore.set(engineConnectedAtom, true)
 			settle(true)
 		})
@@ -141,7 +141,7 @@ export function connectToEngine(): Promise<boolean> {
 		})
 		es.addEventListener("error", () => {
 			// EventSource auto-reconnects; keep engineConnectedAtom true once opened.
-			log.warn("xot engine SSE error (auto-reconnecting)")
+			log.warn("zyot engine SSE error (auto-reconnecting)")
 		})
 		setTimeout(() => settle(false), 4000)
 	})

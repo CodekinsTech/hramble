@@ -190,7 +190,7 @@ contextBridge.exposeInMainWorld("hramble", {
 	/** Get the current chrome tier (pull-based, avoids race with push event). */
 	getChromeTier: () => ipcRenderer.invoke("chrome-tier:get"),
 
-	/** Ensures the xot engine is running. Spawns it if not. Returns { url, pid }. */
+	/** Ensures the zyot engine is running. Spawns it if not. Returns { url, pid }. */
 	ensureEngine: () => ipcRenderer.invoke("engine:ensure"),
 	/** Gets the engine URL if running, or null. */
 	getEngineUrl: () => ipcRenderer.invoke("engine:url"),

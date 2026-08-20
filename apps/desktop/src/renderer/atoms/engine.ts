@@ -1,7 +1,7 @@
 import { atom } from "jotai"
 
 /**
- * Tracks the xot engine connection state.
+ * Tracks the zyot engine connection state.
  */
 export const engineConnectedAtom = atom(false)
 export const engineUrlAtom = atom<string | null>(null)

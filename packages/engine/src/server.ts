@@ -113,7 +113,7 @@ export async function startServer(): Promise<void> {
 	const app = Fastify({ logger: false })
 
 	// ── Health ──────────────────────────────────────────────────────────
-	app.get("/health", async () => ({ ok: true, engine: "xot", version: "0.1.0" }))
+	app.get("/health", async () => ({ ok: true, engine: "zyot", version: "0.1.0" }))
 
 		app.get("/providers", async () => {
 			const providers = getAllProviders().map((p) => ({
@@ -594,7 +594,7 @@ export async function startServer(): Promise<void> {
 	})
 
 	await app.listen({ port: PORT, host: "127.0.0.1" })
-	console.log(`[xot-engine] running on http://127.0.0.1:${PORT}`)
+	console.log(`[zyot-engine] running on http://127.0.0.1:${PORT}`)
 }
 
 export function stopServer(): void {

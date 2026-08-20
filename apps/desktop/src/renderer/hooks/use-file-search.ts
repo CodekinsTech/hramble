@@ -1,5 +1,5 @@
 /**
- * Hook for searching files in the project via the xot engine.
+ * Hook for searching files in the project via the zyot engine.
  * Provides debounced file search with caching.
  * When query is empty, fetches an initial set of files.
  */

@@ -1397,7 +1397,7 @@ export function registerIpcHandlers(): void {
 		withLogging("opencode:restart", async () => await restartServer()),
 	)
 
-	// --- xot engine lifecycle ---
+	// --- zyot engine lifecycle ---
 
 	ipcMain.handle(
 		"engine:ensure",

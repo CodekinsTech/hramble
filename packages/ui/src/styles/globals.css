@@ -866,3 +866,31 @@
     background-position: 250% 0;
   }
 }
+
+/* Brain hub — pulse the neural glow and sweep a "current" over the blue lines.
+   The sweep uses mix-blend-mode:screen, which brightens the brain's blue lines
+   while leaving its near-white body almost untouched, and is masked to the
+   brain silhouette (mask-image set inline to the imported PNG). */
+@keyframes brain-glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 16px rgba(43, 109, 255, 0.45)) brightness(1); }
+  50%      { filter: drop-shadow(0 0 30px rgba(64, 150, 255, 0.8)) brightness(1.08); }
+}
+@keyframes brain-current-sweep {
+  0%   { background-position: 130% 0; }
+  100% { background-position: -130% 0; }
+}
+.brain-glow-pulse { animation: brain-glow-pulse 3.4s ease-in-out infinite; }
+.brain-current-sweep {
+  background-image: linear-gradient(115deg, transparent 43%, rgba(130, 185, 255, 0.9) 50%, transparent 57%);
+  background-size: 230% 100%;
+  background-repeat: no-repeat;
+  mix-blend-mode: screen;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center;  mask-position: center;
+  -webkit-mask-size: contain;     mask-size: contain;
+  animation: brain-current-sweep 3.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-glow-pulse, .brain-current-sweep { animation: none; }
+  .brain-current-sweep { display: none; }
+}

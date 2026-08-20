@@ -65,7 +65,7 @@ export function useDiscovery() {
 
 		;(async () => {
 			try {
-				// Connect to the xot engine — the sole backend. Reflect its state on
+				// Connect to the zyot engine — the sole backend. Reflect its state on
 				// serverConnectedAtom so the connection indicator tracks the engine.
 				setPhase("connecting")
 				const engineReady = await connectToEngine()

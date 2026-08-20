@@ -51,7 +51,7 @@ export async function ensureEngine(): Promise<EngineServer> {
 }
 
 async function spawnEngine(): Promise<EngineServer> {
-	log.info("Starting xot engine at", ENGINE_ENTRY)
+	log.info("Starting zyot engine at", ENGINE_ENTRY)
 
 	const env = { ...process.env }
 
@@ -70,12 +70,12 @@ async function spawnEngine(): Promise<EngineServer> {
 
 	engineProcess.stdout?.on("data", (d: Buffer) => {
 		for (const line of d.toString().trim().split("\n")) {
-			if (line) log.info(`[xot] ${line}`)
+			if (line) log.info(`[zyot] ${line}`)
 		}
 	})
 	engineProcess.stderr?.on("data", (d: Buffer) => {
 		for (const line of d.toString().trim().split("\n")) {
-			if (line) log.warn(`[xot:err] ${line}`)
+			if (line) log.warn(`[zyot:err] ${line}`)
 		}
 	})
 	engineProcess.on("exit", (code) => {
@@ -101,12 +101,12 @@ async function spawnEngine(): Promise<EngineServer> {
 
 	engineProcess?.kill()
 	engineProcess = null
-	throw new Error("xot engine failed to start within 30 seconds")
+	throw new Error("zyot engine failed to start within 30 seconds")
 }
 
 export function stopEngine(): void {
 	if (engineProcess) {
-		log.info("Stopping xot engine")
+		log.info("Stopping zyot engine")
 		engineProcess.kill()
 		engineProcess = null
 	}

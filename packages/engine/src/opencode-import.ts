@@ -124,8 +124,8 @@ export function maybeImportOpenCode(): void {
 		const sessions = readOpenCodeSessions()
 		if (!sessions || sessions.length === 0) return
 		const n = importOpenCodeSessions(sessions)
-		if (n > 0) console.log(`[xot-engine] imported ${n} session(s) from OpenCode`)
+		if (n > 0) console.log(`[zyot-engine] imported ${n} session(s) from OpenCode`)
 	} catch (err) {
-		console.error(`[xot-engine] OpenCode import skipped: ${err instanceof Error ? err.message : err}`)
+		console.error(`[zyot-engine] OpenCode import skipped: ${err instanceof Error ? err.message : err}`)
 	}
 }

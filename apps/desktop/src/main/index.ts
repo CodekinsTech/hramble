@@ -376,7 +376,7 @@ if (!gotLock) {
 		registerGraphStore()
 		registerSleepMonitor()
 		startExtensionBridge()
-		ensureEngine().catch((err) => log.warn("xot engine failed to start", err))
+		ensureEngine().catch((err) => log.warn("zyot engine failed to start", err))
 		initAutomations().catch(console.error)
 		startMdnsScanner().catch((err) => log.warn("mDNS scanner failed to start", err))
 		createWindow()

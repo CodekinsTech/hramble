@@ -298,7 +298,7 @@ export function useAgentActions() {
 			})
 
 			// ── Engine routing ──────────────────────────────────────────────
-			// When the xot engine is connected, send the prompt there instead
+			// When the zyot engine is connected, send the prompt there instead
 			// of going through the OpenCode SDK.
 			if (appStore.get(engineConnectedAtom)) {
 				const engineModel: EngineModelRef | undefined = options?.model

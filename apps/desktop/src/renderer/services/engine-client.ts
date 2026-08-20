@@ -1,5 +1,5 @@
 /**
- * Typed fetch client for the xot engine REST API (port 4200).
+ * Typed fetch client for the zyot engine REST API (port 4200).
  *
  * All calls go through plain `fetch` — no SDK, no IPC proxy.
  * The engine always runs locally so we don't need to bypass

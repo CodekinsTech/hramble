@@ -1,5 +1,5 @@
 /**
- * Maps xot engine SSE events to the existing Jotai atom structure.
+ * Maps zyot engine SSE events to the existing Jotai atom structure.
  *
  * The engine emits simple events (message.delta, tool.start, etc.).
  * This module translates them into the same atom updates that the
@@ -32,7 +32,7 @@ import { createLogger } from "../lib/logger"
 
 const log = createLogger("engine-event-processor")
 
-// ── xot engine event types (mirrors packages/engine/src/types.ts) ─────────
+// ── zyot engine event types (mirrors packages/engine/src/types.ts) ─────────
 
 type EngineEvent =
 	| { type: "session.created"; sessionId: string; title: string; directory: string }

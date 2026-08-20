@@ -202,7 +202,7 @@ export const queryKeys = {
 }
 
 // ============================================================
-// Hooks (TanStack Query) — all backed by the xot engine
+// Hooks (TanStack Query) — all backed by the zyot engine
 // ============================================================
 
 export function useProviders(directory: string | null): {

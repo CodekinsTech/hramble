@@ -54,6 +54,7 @@ import {
 } from "../atoms/community"
 import { workspaceModeAtom } from "../atoms/workspace"
 import { createCommunityPost } from "../lib/community-client"
+import brainNeural from "../brain-neural.png"
 import { BrainTracedIcon } from "./brain-traced-icon"
 import { useAgentActions } from "../hooks/use-server"
 import { HomeConversation } from "./home-conversation"
@@ -2202,7 +2203,7 @@ function BrainVaultView({
 // SVG lines drawn from the brain's edge to each card. Positions are measured
 // from the real DOM (and re-measured on resize), so the lines stay attached
 // however the layout wraps.
-type BrainLine = { d: string; cx: number; cy: number }
+type BrainLine = { d: string; cx: number; cy: number; ax: number; ay: number }
 
 function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => React.ReactNode; pulse?: number }) {
 	const clusterRef = useRef<HTMLDivElement>(null)
@@ -2210,6 +2211,27 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 	const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 	const [lines, setLines] = useState<BrainLine[]>([])
 	const [flowing, setFlowing] = useState(true)
+	// Loop: the cube plays its full traced motion, very slowly dissolves into the
+	// neural brain, holds, then dissolves back to the cube. Reduced-motion rests
+	// on the brain.
+	const [showBrain, setShowBrain] = useState(false)
+	useEffect(() => {
+		if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			setShowBrain(true)
+			return
+		}
+		let timer: ReturnType<typeof setTimeout>
+		let brain = false
+		const tick = () => {
+			brain = !brain
+			setShowBrain(brain)
+			// cube phase = one full traced-motion cycle; brain phase = a calm hold
+			timer = setTimeout(tick, brain ? 5000 : 8710)
+		}
+		// Start on the cube; flip to the brain after it completes a full cycle.
+		timer = setTimeout(tick, 8710)
+		return () => clearTimeout(timer)
+	}, [])
 	const left = ["skill", "tool", "rules", "files"]
 	const right = ["repo", "docs", "connect"]
 
@@ -2228,39 +2250,32 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 			if (!cluster || !brain) return
 			const c = cluster.getBoundingClientRect()
 			const b = brain.getBoundingClientRect()
-			const brainMidX = b.left + b.width / 2
-			const brainY = b.top + b.height / 2 - c.top
-			const next: BrainLine[] = []
-			for (const id of [...left, ...right]) {
-				const el = cardRefs.current[id]
-				if (!el) continue
-				const r = el.getBoundingClientRect()
-				const isLeft = r.left + r.width / 2 < brainMidX
-				const brainX = (isLeft ? b.left : b.right) - c.left
-				const cardX = (isLeft ? r.right : r.left) - c.left
-				const cardY = r.top + r.height / 2 - c.top
-				// Elbow: straight out from the brain, one rounded corner, straight in.
-				const mx = (brainX + cardX) / 2
-				let d: string
-				if (Math.abs(cardY - brainY) < 3) {
-					d = `M ${brainX.toFixed(1)} ${brainY.toFixed(1)} L ${cardX.toFixed(1)} ${cardY.toFixed(1)}`
-				} else {
-					const hdir = Math.sign(mx - brainX) || 1
-					const hdir2 = Math.sign(cardX - mx) || 1
-					const vdir = Math.sign(cardY - brainY)
-					const rr = Math.min(12, Math.abs(cardY - brainY) / 2, Math.abs(mx - brainX), Math.abs(cardX - mx))
-					d = [
-						`M ${brainX.toFixed(1)} ${brainY.toFixed(1)}`,
-						`H ${(mx - hdir * rr).toFixed(1)}`,
-						`Q ${mx.toFixed(1)} ${brainY.toFixed(1)} ${mx.toFixed(1)} ${(brainY + vdir * rr).toFixed(1)}`,
-						`V ${(cardY - vdir * rr).toFixed(1)}`,
-						`Q ${mx.toFixed(1)} ${cardY.toFixed(1)} ${(mx + hdir2 * rr).toFixed(1)} ${cardY.toFixed(1)}`,
-						`H ${cardX.toFixed(1)}`,
-					].join(" ")
+				const brainTop = b.top - c.top
+				const faceH = b.height
+				const next: BrainLine[] = []
+				// Fan each column's lines out of DISTINCT points along the brain's edge
+				// so they never stack at the centre, then draw a smooth S-curve.
+				const build = (ids: string[], isLeft: boolean) => {
+					const brainX = (isLeft ? b.left : b.right) - c.left
+					const n = ids.length
+					ids.forEach((id, i) => {
+						const el = cardRefs.current[id]
+						if (!el) return
+						const r = el.getBoundingClientRect()
+						const cardX = (isLeft ? r.right : r.left) - c.left
+						const cardY = r.top + r.height / 2 - c.top
+						const t = n === 1 ? 0.5 : 0.2 + 0.6 * (i / (n - 1))
+						const anchorY = brainTop + faceH * t
+						const dx = Math.max(30, Math.abs(cardX - brainX) * 0.5)
+						const c1x = isLeft ? brainX - dx : brainX + dx
+						const c2x = isLeft ? cardX + dx : cardX - dx
+						const d = `M ${brainX.toFixed(1)} ${anchorY.toFixed(1)} C ${c1x.toFixed(1)} ${anchorY.toFixed(1)} ${c2x.toFixed(1)} ${cardY.toFixed(1)} ${cardX.toFixed(1)} ${cardY.toFixed(1)}`
+						next.push({ d, cx: cardX, cy: cardY, ax: brainX, ay: anchorY })
+					})
 				}
-				next.push({ d, cx: cardX, cy: cardY })
-			}
-			setLines(next)
+				build(left, true)
+				build(right, false)
+				setLines(next)
 		}
 		const raf = requestAnimationFrame(compute)
 		const ro = new ResizeObserver(compute)
@@ -2327,13 +2342,35 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 				{lines.map((l, i) => (
 					<circle key={`d${i}`} cx={l.cx} cy={l.cy} r={2.5} fill="#2B6CFF" fillOpacity={0.7} />
 				))}
+					{/* anchor dots at the brain edge */}
+					{lines.map((l, i) => (
+						<circle key={`a${i}`} cx={l.ax} cy={l.ay} r={2} fill="#2B6CFF" fillOpacity={0.5} />
+					))}
 			</svg>
 			{col(left, -1)}
 			<div
 				ref={brainRef}
-				className="relative z-10 flex size-36 items-center justify-center overflow-hidden rounded-3xl border border-primary/20 bg-card shadow-[0_0_40px_-12px_rgba(43,109,255,0.35)] ring-1 ring-primary/5"
+				className="relative z-10 flex size-36 items-center justify-center"
 			>
-				<BrainTracedIcon className="h-44 w-44" />
+				<BrainTracedIcon
+						className={`absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-[4000ms] ${showBrain ? "opacity-0" : "opacity-100"}`}
+					/>
+					<div
+						className={`absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-[4000ms] ${showBrain ? "opacity-100" : "opacity-0"}`}
+					>
+						<img
+							src={brainNeural}
+							alt=""
+							draggable={false}
+							className="brain-glow-pulse h-full w-full object-contain"
+						/>
+						{/* Light "current" travelling over the brain's blue lines. */}
+						<div
+							aria-hidden="true"
+							className="brain-current-sweep pointer-events-none absolute inset-0"
+							style={{ WebkitMaskImage: `url(${brainNeural})`, maskImage: `url(${brainNeural})` }}
+						/>
+					</div>
 			</div>
 			{col(right, 1)}
 		</div>

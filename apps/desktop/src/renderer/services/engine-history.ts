@@ -1,5 +1,5 @@
 /**
- * Maps the xot engine's stored transcript (message-grained content blocks) into
+ * Maps the zyot engine's stored transcript (message-grained content blocks) into
  * the OpenCode-shaped { info: Message, parts: Part[] } entries the chat UI and
  * session atoms consume — so loading an EXISTING engine session renders exactly
  * like an OpenCode one. Live streaming is handled separately by

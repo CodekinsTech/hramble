@@ -8,7 +8,7 @@ import { killAllBackgroundShells } from "./tools/background.js"
 ensureToolsOnPath()
 
 startServer().catch((err) => {
-	console.error("[xot-engine] failed to start:", err)
+	console.error("[zyot-engine] failed to start:", err)
 	process.exit(1)
 })
 
@@ -21,7 +21,7 @@ async function shutdown(): Promise<void> {
 }
 
 process.on("SIGTERM", () => {
-	console.log("[xot-engine] shutting down")
+	console.log("[zyot-engine] shutting down")
 	void shutdown()
 })
 

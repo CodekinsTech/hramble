@@ -103,7 +103,7 @@ import { GraphView } from "./graph-view"
 import { HyperloopSpinner } from "./hyperloop-spinner"
 
 // ============================================================
-// Engine helpers (Hyperloop runs on the xot engine)
+// Engine helpers (Hyperloop runs on the zyot engine)
 // ============================================================
 
 /** Engine model ref from the UI's selected model (empty apiKey → engine uses its env keys). */
