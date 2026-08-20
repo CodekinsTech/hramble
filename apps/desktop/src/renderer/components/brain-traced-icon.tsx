@@ -14,7 +14,7 @@ import {
 	BRAIN_TRACE_WIDTH,
 } from "../lib/brain-traced-frames"
 
-const FRAME_MS = 65
+const FRAME_MS = 83 // 12 fps — matches the reference gallery; full 134-frame cycle ≈ 11.1s
 
 export function BrainTracedIcon({ className }: { className?: string }) {
 	const layerARef = useRef<SVGGElement>(null)

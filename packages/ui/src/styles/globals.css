@@ -490,7 +490,7 @@
   border-bottom-left-radius: var(--radius-xl);
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
-  box-shadow: -1px 0 3px -1px rgba(0,0,0,0.08);
+  box-shadow: none;
   min-height: 0;
   overflow: clip;
   transition: margin-left 250ms ease-in-out;
@@ -872,8 +872,8 @@
    while leaving its near-white body almost untouched, and is masked to the
    brain silhouette (mask-image set inline to the imported PNG). */
 @keyframes brain-glow-pulse {
-  0%, 100% { filter: drop-shadow(0 0 16px rgba(43, 109, 255, 0.45)) brightness(1); }
-  50%      { filter: drop-shadow(0 0 30px rgba(64, 150, 255, 0.8)) brightness(1.08); }
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(43, 109, 255, 0.45)) brightness(1.02); }
+  50%      { filter: drop-shadow(0 0 26px rgba(43, 109, 255, 0.85)) brightness(1.08); }
 }
 @keyframes brain-current-sweep {
   0%   { background-position: 130% 0; }
@@ -890,7 +890,14 @@
   -webkit-mask-size: contain;     mask-size: contain;
   animation: brain-current-sweep 3.2s linear infinite;
 }
-@media (prefers-reduced-motion: reduce) {
-  .brain-glow-pulse, .brain-current-sweep { animation: none; }
-  .brain-current-sweep { display: none; }
+/* The brain glow + current run regardless of reduced-motion — the design depends
+   on them and they're gentle/ambient. */
+
+/* Brain hub — the ring stage slowly orbits around the mark on the podium. */
+@keyframes brain-orbit-spin { to { transform: rotate(360deg); } }
+.brain-orbit {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: brain-orbit-spin 28s linear infinite;
 }
+@media (prefers-reduced-motion: reduce) { .brain-orbit { animation: none; } }

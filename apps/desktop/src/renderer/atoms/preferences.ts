@@ -133,6 +133,9 @@ export const draftsAtom = atomWithStorage<Record<string, string>>("hramble:draft
  */
 export const ollamaBaseUrlAtom = atomWithStorage<string>("hramble:ollamaBaseURL", "")
 
+/** Customer-editable name shown under the Brain hub stage. Default "zyot brain". */
+export const brainNameAtom = atomWithStorage<string>("hramble:brainName", "Zyot Brain")
+
 export const projectModelsAtom = atomWithStorage<Record<string, PersistedModelRef>>(
 	"hramble:projectModels",
 	{},

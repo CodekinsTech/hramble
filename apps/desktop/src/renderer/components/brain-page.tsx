@@ -46,6 +46,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { agentFamily } from "../atoms/derived/agents"
 import { brainSessionAtom, brainSessionIdsAtom, brainSessionListAtom } from "../atoms/brain"
+import { brainNameAtom } from "../atoms/preferences"
 import {
 	communityBackendEnabledAtom,
 	type CommunityPost,
@@ -2203,7 +2204,7 @@ function BrainVaultView({
 // SVG lines drawn from the brain's edge to each card. Positions are measured
 // from the real DOM (and re-measured on resize), so the lines stay attached
 // however the layout wraps.
-type BrainLine = { d: string; cx: number; cy: number; ax: number; ay: number }
+type BrainLine = { d: string; cx: number; cy: number; ax: number; ay: number; w: number }
 
 function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => React.ReactNode; pulse?: number }) {
 	const clusterRef = useRef<HTMLDivElement>(null)
@@ -2215,24 +2216,36 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 	// neural brain, holds, then dissolves back to the cube. Reduced-motion rests
 	// on the brain.
 	const [showBrain, setShowBrain] = useState(false)
+	// Customer-editable brain name shown under the stage (click to rename).
+	const [brainName, setBrainName] = useAtom(brainNameAtom)
+	const [nameEditing, setNameEditing] = useState(false)
+	const [nameDraft, setNameDraft] = useState(brainName)
+	const commitName = useCallback(() => {
+		setBrainName(nameDraft.trim() || "Zyot Brain")
+		setNameEditing(false)
+	}, [nameDraft, setBrainName])
 	useEffect(() => {
-		if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
-			setShowBrain(true)
-			return
-		}
 		let timer: ReturnType<typeof setTimeout>
 		let brain = false
 		const tick = () => {
 			brain = !brain
 			setShowBrain(brain)
 			// cube phase = one full traced-motion cycle; brain phase = a calm hold
-			timer = setTimeout(tick, brain ? 5000 : 8710)
+			timer = setTimeout(tick, brain ? 38000 : 20000)
 		}
-		// Start on the cube; flip to the brain after it completes a full cycle.
-		timer = setTimeout(tick, 8710)
+		// Start on the cube; reveal the brain after ~10s of cube animation.
+		timer = setTimeout(tick, 20000)
 		return () => clearTimeout(timer)
 	}, [])
-	const left = ["skill", "tool", "rules", "files"]
+		// When the brain is about to reveal, run a glow current along the wires that
+		// converges into the brain — as if the cube's processing flowed into it.
+		useEffect(() => {
+			if (!showBrain) return
+			setFlowing(true)
+			const t = setTimeout(() => setFlowing(false), 9000)
+			return () => clearTimeout(t)
+		}, [showBrain])
+		const left = ["skill", "tool", "rules", "files"]
 	const right = ["repo", "docs", "connect"]
 
 	// Fan the cards: the further a card sits from its column's middle, the
@@ -2269,8 +2282,11 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 						const dx = Math.max(30, Math.abs(cardX - brainX) * 0.5)
 						const c1x = isLeft ? brainX - dx : brainX + dx
 						const c2x = isLeft ? cardX + dx : cardX - dx
+						// A near-level line (the middle card) renders dead straight; thicken it so
+						// it isn't thinner than the curved ones (axis-aligned strokes anti-alias thin).
+						const w = Math.abs(cardY - anchorY) < 16 ? 2.2 : 1.75
 						const d = `M ${brainX.toFixed(1)} ${anchorY.toFixed(1)} C ${c1x.toFixed(1)} ${anchorY.toFixed(1)} ${c2x.toFixed(1)} ${cardY.toFixed(1)} ${cardX.toFixed(1)} ${cardY.toFixed(1)}`
-						next.push({ d, cx: cardX, cy: cardY, ax: brainX, ay: anchorY })
+						next.push({ d, cx: cardX, cy: cardY, ax: brainX, ay: anchorY, w })
 					})
 				}
 				build(left, true)
@@ -2328,7 +2344,7 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 				))}
 				{/* base line */}
 				{lines.map((l, i) => (
-					<path key={`b${i}`} d={l.d} fill="none" stroke="url(#brain-line)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+					<path key={`b${i}`} d={l.d} fill="none" stroke={l.w > 2 ? "rgba(43,109,255,0.5)" : "url(#brain-line)"} strokeWidth={l.w} strokeLinecap="round" strokeLinejoin="round" />
 				))}
 				{/* flowing current — a bright dash travelling toward the brain, only while active */}
 				{flowing &&
@@ -2348,29 +2364,63 @@ function BrainCluster({ renderArm, pulse = 0 }: { renderArm: (id: string) => Rea
 					))}
 			</svg>
 			{col(left, -1)}
-			<div
+						<div
 				ref={brainRef}
-				className="relative z-10 flex size-36 items-center justify-center"
+				className="relative z-10 flex size-56 items-center justify-center"
 			>
-				<BrainTracedIcon
-						className={`absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-[4000ms] ${showBrain ? "opacity-0" : "opacity-100"}`}
-					/>
+				{/* Round stage the mark stands on — blue disc with a light top face (3D). */}
+				<svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+					<ellipse cx="50" cy="85.5" rx="22" ry="4.2" fill="#000000" fillOpacity="0.22" />
+					<ellipse cx="50" cy="83.5" rx="22" ry="5.6" fill="#ffffff" fillOpacity="0.13" stroke="#dce6ff" strokeOpacity="0.55" strokeWidth="0.6" />
+					<ellipse cx="50" cy="82" rx="19" ry="4.2" fill="#ffffff" fillOpacity="0.28" stroke="#ffffff" strokeOpacity="0.3" strokeWidth="0.35" />
+					<ellipse cx="50" cy="81" rx="12" ry="2.2" fill="#ffffff" fillOpacity="0.6" />
+				</svg>
+				{/* The cube mark crossfades with the neural brain, on the podium, inside the box. */}
+				<div className="absolute left-1/2 top-[42%] size-44 -translate-x-1/2 -translate-y-1/2">
+<div
+						className="absolute inset-0"
+						style={{ transition: "opacity 5000ms ease-out", opacity: showBrain ? 0 : 1, transform: "scale(1.4)" }}
+					>
+						<BrainTracedIcon className="h-full w-full" />
+					</div>
 					<div
-						className={`absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-[4000ms] ${showBrain ? "opacity-100" : "opacity-0"}`}
+className="absolute inset-0"
+						style={{ transition: "opacity 6000ms ease-out", opacity: showBrain ? 1 : 0 }}
 					>
 						<img
 							src={brainNeural}
 							alt=""
 							draggable={false}
-							className="brain-glow-pulse h-full w-full object-contain"
-						/>
-						{/* Light "current" travelling over the brain's blue lines. */}
-						<div
-							aria-hidden="true"
-							className="brain-current-sweep pointer-events-none absolute inset-0"
-							style={{ WebkitMaskImage: `url(${brainNeural})`, maskImage: `url(${brainNeural})` }}
+							className="h-full w-full object-contain"
 						/>
 					</div>
+				</div>
+				{/* Customer-editable brain name under the stage — logo (Quadrangle) font. */}
+				{nameEditing ? (
+					<input
+						// biome-ignore lint/a11y/noAutofocus: intentional focus on rename
+						autoFocus
+						value={nameDraft}
+						onChange={(e) => setNameDraft(e.target.value)}
+						onBlur={commitName}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") commitName()
+							else if (e.key === "Escape") { setNameDraft(brainName); setNameEditing(false) }
+						}}
+						style={{ fontFamily: '"Quadrangle", sans-serif', color: "#2B6CFF" }}
+						className="absolute -bottom-9 left-1/2 w-44 -translate-x-1/2 rounded-md border border-border bg-background px-2 py-1 text-center text-primary text-sm tracking-wide outline-none focus:ring-1 focus:ring-primary"
+					/>
+				) : (
+					<button
+						type="button"
+						onClick={() => { setNameDraft(brainName); setNameEditing(true) }}
+						title="Click to rename"
+						style={{ fontFamily: '"Quadrangle", sans-serif', color: "#2B6CFF" }}
+						className="absolute -bottom-9 left-1/2 -translate-x-1/2 whitespace-nowrap text-primary/85 text-lg leading-none tracking-wide transition-colors hover:text-primary"
+					>
+						{brainName}
+					</button>
+				)}
 			</div>
 			{col(right, 1)}
 		</div>

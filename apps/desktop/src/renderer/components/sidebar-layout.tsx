@@ -568,7 +568,7 @@ export function SidebarLayout() {
 					 * When default sidebar is active, AppSidebarContent renders its own footer. */}
 					{slotFooter !== false && slotFooter}
 				</Sidebar>
-				<SidebarInset>
+				<SidebarInset className="bg-sidebar">
 					<UpdateBanner />
 					<AppBar rightSlot={!isMac && isElectronEnv ? <WinTitleBar /> : undefined} />
 					{/* Flex-1 + min-h-0 wrapper: pages use h-full which would
@@ -578,7 +578,7 @@ export function SidebarLayout() {
 					<div className="flex min-h-0 flex-1 overflow-hidden">
 						<div
 							data-slot="content-area"
-							className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+							className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-tl-2xl bg-background"
 						>
 							<Outlet />
 						</div>
