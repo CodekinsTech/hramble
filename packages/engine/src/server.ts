@@ -3,6 +3,7 @@ import Fastify from "fastify"
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages.js"
 import { nanoid } from "nanoid"
 import type { EngineEvent, ModelRef, PermissionRequest, PermissionResolution, PermissionMode, ContentBlock } from "./types.js"
+import { engineEventToAGUI } from "./agui.js"
 import { runAgentLoop } from "./agent.js"
 import { resolveApiKey } from "./auth.js"
 import { getProvider, getModel, getAllProviders } from "./providers.js"
@@ -205,6 +206,48 @@ export async function startServer(): Promise<void> {
 
 		const write = (event: EngineEvent) => {
 			reply.raw.write(`data: ${JSON.stringify(event)}\n\n`)
+		}
+
+		const client = { write }
+		sseClients.add(client)
+
+		// Keepalive ping every 15s
+		const ping = setInterval(() => {
+			try {
+				reply.raw.write(": ping\n\n")
+			} catch {
+				clearInterval(ping)
+				sseClients.delete(client)
+			}
+		}, 15000)
+
+		req.raw.on("close", () => {
+			clearInterval(ping)
+			sseClients.delete(client)
+		})
+
+		// Don't let Fastify end the response
+		return reply
+	})
+
+	// ── AG-UI event stream ───────────────────────────────────────────────
+	// Mirrors /events exactly, but each engine event is passed through the
+	// AG-UI adapter and every resulting AG-UI event is written as its own
+	// `data:` frame. /events and the EngineEvent broadcast are untouched.
+	app.get("/agui", (req, reply) => {
+		reply.raw.setHeader("Content-Type", "text/event-stream")
+		reply.raw.setHeader("Cache-Control", "no-cache")
+		reply.raw.setHeader("Connection", "keep-alive")
+		reply.raw.setHeader("Access-Control-Allow-Origin", "*")
+		// Defeat any proxy/stream buffering so each event flushes immediately.
+		reply.raw.setHeader("X-Accel-Buffering", "no")
+		reply.raw.flushHeaders()
+		reply.raw.socket?.setNoDelay(true)
+
+		const write = (event: EngineEvent) => {
+			for (const aguiEvent of engineEventToAGUI(event)) {
+				reply.raw.write(`data: ${JSON.stringify(aguiEvent)}\n\n`)
+			}
 		}
 
 		const client = { write }
